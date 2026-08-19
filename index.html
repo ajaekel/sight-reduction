@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#121212">
+  <title>Offline Sight Reduction</title>
+  <style>
+    :root {
+      --bg: #121212;
+      --card: #1e1e1e;
+      --text: #e0e0e0;
+      --accent: #00bcd4;
+      --border: #333;
+      --danger: #ff5252;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 16px;
+      display: flex;
+      justify-content: center;
+    }
+    .app-container {
+      width: 100%;
+      max-width: 520px;
+    }
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: 1.3rem;
+      color: var(--accent);
+      margin: 0;
+    }
+    .btn-clear-all {
+      background: transparent;
+      border: 1px solid var(--danger);
+      color: var(--danger);
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: 1.05rem;
+      font-weight: bold;
+      color: var(--accent);
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 4px;
+    }
+    .sub-title {
+      font-size: 0.9rem;
+      font-weight: bold;
+      color: #aaa;
+      margin: 12px 0 6px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .form-group {
+      margin-bottom: 12px;
+    }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      margin-bottom: 4px;
+      color: #aaa;
+    }
+    .input-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    input, select {
+      background: #2a2a2a;
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 1rem; /* 16px prevents automatic iOS zoom */
+      width: 100%;
+      box-sizing: border-box;
+      -webkit-appearance: none;
+    }
+    /* Hide native spinner controls */
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type=number] {
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+    select {
+      width: 110px;
+    }
+    .time-box {
+      width: 48px;
+      text-align: center;
+      padding: 8px 4px;
+    }
+    .btn-add {
+      background: transparent;
+      border: 1px dashed var(--accent);
+      color: var(--accent);
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 6px;
+    }
+    .btn-del {
+      background: var(--danger);
+      color: #fff;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .btn-calc {
+      width: 100%;
+      background: var(--accent);
+      color: #000;
+      font-weight: bold;
+      border: none;
+      padding: 12px;
+      border-radius: 4px;
+      font-size: 1rem;
+      cursor: pointer;
+      margin-top: 12px;
+    }
+    .summary-box {
+      background: #252525;
+      padding: 10px;
+      border-radius: 6px;
+      border-left: 3px solid var(--accent);
+      margin-top: 10px;
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+    .results {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    .res-box {
+      background: #252525;
+      padding: 12px;
+      border-radius: 6px;
+      border-left: 3px solid var(--accent);
+    }
+    .res-label {
+      font-size: 0.75rem;
+      color: #888;
+      text-transform: uppercase;
+    }
+    .res-value {
+      font-size: 1.1rem;
+      font-weight: bold;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-container">
+  <div class="header-row">
+    <h1>Sight Reduction Calculator</h1>
+    <button class="btn-clear-all" id="btnClearAll">Clear All</button>
+  </div>
+
+  <!-- SECTION 1: HEADER & DR POSITION -->
+  <div class="card">
+    <div class="section-title">1. Trip Info & DR Position</div>
+    
+    <div class="form-group">
+      <label>Date</label>
+      <input type="date" id="sightDate">
+    </div>
+
+    <div class="form-group">
+      <label>Body Type & Name</label>
+      <div class="input-row">
+        <select id="bodyType" style="width: 120px;">
+          <option value="sun">Sun</option>
+          <option value="moon">Moon</option>
+          <option value="planet">Planet</option>
+          <option value="star">Star</option>
+        </select>
+        <input type="text" id="bodyName" placeholder="Name of Body" style="display: none;">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>DR Latitude (Deg / Min / N-S)</label>
+      <div class="input-row">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" id="latDeg" placeholder="32">
+        <input type="text" inputmode="decimal" id="latMin" placeholder="00.0">
+        <select id="latNS">
+          <option value="N">N</option>
+          <option value="S">S</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>DR Longitude (Deg / Min / E-W)</label>
+      <div class="input-row">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" id="lonDeg" placeholder="064">
+        <input type="text" inputmode="decimal" id="lonMin" placeholder="00.0">
+        <select id="lonEW">
+          <option value="W">W</option>
+          <option value="E">E</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Timezone Offset (UTC Offset in Hours)</label>
+      <div class="input-row">
+        <input type="text" inputmode="decimal" id="tzOffset" placeholder="-4" value="-4">
+      </div>
+      <label style="font-size: 0.75rem; margin-top:2px;">e.g., -4 for EDT, -5 for EST, +0 for UTC</label>
+    </div>
+  </div>
+
+  <!-- SECTION 2: SIGHTINGS & CORRECTIONS -->
+  <div class="card">
+    <div class="section-title">2. Sightings & Corrections</div>
+    <div id="sightingsContainer">
+      <!-- Dynamic Sight Lines Injected Here -->
+    </div>
+    <button class="btn-add" id="btnAddSight">+ Add Another Sight</button>
+
+    <!-- ALTITUDE CORRECTIONS -->
+    <div class="sub-title">Sextant Altitude Corrections</div>
+    
+    <div class="form-group">
+      <label>Index Error (IE) [Minutes / On-Off Arc]</label>
+      <div class="input-row">
+        <input type="text" inputmode="decimal" id="ieMin" placeholder="2.0" value="0.0">
+        <select id="ieSign">
+          <option value="on">On the Arc (-)</option>
+          <option value="off">Off the Arc (+)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Dip Correction [Minutes (-)]</label>
+      <div class="input-row">
+        <input type="text" inputmode="decimal" id="dipMin" placeholder="3.8" value="0.0">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Altitude Correction / Refraction [Minutes / (+/-)]</label>
+      <div class="input-row">
+        <input type="text" inputmode="decimal" id="altCorrMin" placeholder="12.4" value="0.0">
+        <select id="altCorrSign">
+          <option value="+">+</option>
+          <option value="-">-</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Additional Altitude Correction [Minutes / (+/-)]</label>
+      <div class="input-row">
+        <input type="text" inputmode="decimal" id="addAltCorrMin" placeholder="0.2" value="0.0">
+        <select id="addAltCorrSign">
+          <option value="+">+</option>
+          <option value="-">-</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Computed Sightings Summary -->
+    <div class="summary-box">
+      <div><strong>Avg Local Time:</strong> <span id="avgLocalTime">--:--:--</span></div>
+      <div><strong>Avg UTC Time:</strong> <span id="avgUtcTime">--:--:-- UTC</span></div>
+      <div><strong>Avg Raw Sextant (Hs):</strong> <span id="avgHs">--° --.-'</span></div>
+      <div><strong>Observed Altitude (Ho):</strong> <span id="computedHo">--° --.-'</span></div>
+    </div>
+  </div>
+
+  <!-- SECTION 3: NAUTICAL ALMANAC DATA -->
+  <div class="card">
+    <div class="section-title">3. Nautical Almanac Data</div>
+    
+    <!-- STAR FORM FIELDS -->
+    <div id="starFields" style="display: none;">
+      <div class="form-group">
+        <label>GHA Aries at Base UTC Hour (<span class="lblBaseHour">00</span>:00)</label>
+        <div class="input-row">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaAriesBaseDeg" placeholder="100">
+          <input type="text" inputmode="decimal" id="ghaAriesBaseMin" placeholder="00.0">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>GHA Aries at Next UTC Hour (<span class="lblNextHour">01</span>:00)</label>
+        <div class="input-row">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaAriesNextDeg" placeholder="115">
+          <input type="text" inputmode="decimal" id="ghaAriesNextMin" placeholder="02.5">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Sidereal Hour Angle (SHA)</label>
+        <div class="input-row">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="shaDeg" placeholder="140">
+          <input type="text" inputmode="decimal" id="shaMin" placeholder="12.4">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Declination (Deg / Min / N-S)</label>
+        <div class="input-row">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="decStarDeg" placeholder="15">
+          <input type="text" inputmode="decimal" id="decStarMin" placeholder="00.0">
+          <select id="decStarNS">
+            <option value="N">N</option>
+            <option value="S">S</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- NON-STAR FORM FIELDS -->
+    <div id="nonStarFields">
+      <div class="form-group">
+        <label>GHA at Base UTC Hour (<span class="lblBaseHour">00</span>:00)</label>
+        <div class="input-row">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaBaseDeg" placeholder="100">
+          <input type="text" inputmode="decimal" id="ghaBaseMin" placeholder="00.0">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>GHA at Next UTC Hour (<span class="lblNextHour">01</span>:00)</label>
+        <div class="input-row">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaNextDeg" placeholder="115">
+          <input type="text" inputmode="decimal" id="ghaNextMin" placeholder="02.5">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Declination at Base UTC Hour (<span class="lblBaseHour">00</span>:00)</label>
+        <div class="input-row">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="decBaseDeg" placeholder="15">
+          <input type="text" inputmode="decimal" id="decBaseMin" placeholder="00.0">
+          <select id="decBaseNS">
+            <option value="N">N</option>
+            <option value="S">S</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Declination at Next UTC Hour (<span class="lblNextHour">01</span>:00)</label>
+        <div class="input-row">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="decNextDeg" placeholder="15">
+          <input type="text" inputmode="decimal" id="decNextMin" placeholder="01.2">
+          <select id="decNextNS">
+            <option value="N">N</option>
+            <option value="S">S</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-calc" id="btnCalc">Calculate Reduction</button>
+  </div>
+
+  <!-- RESULTS CARD -->
+  <div class="card" id="outputCard" style="display:none;">
+    <div class="section-title">Reduction Results</div>
+    <div class="results">
+      <div class="res-box">
+        <div class="res-label">Interpolated GHA</div>
+        <div class="res-value" id="resGHA">--</div>
+      </div>
+      <div class="res-box">
+        <div class="res-label">LHA</div>
+        <div class="res-value" id="resLHA">--</div>
+      </div>
+      <div class="res-box">
+        <div class="res-label">Calculated Altitude (Hc)</div>
+        <div class="res-value" id="resHc">--</div>
+      </div>
+      <div class="res-box">
+        <div class="res-label">Intercept (a)</div>
+        <div class="res-value" id="resIntercept">--</div>
+      </div>
+      <div class="res-box" style="grid-column: span 2;">
+        <div class="res-label">True Azimuth (Zn)</div>
+        <div class="res-value" id="resZn">--</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  var sightingCount = 0;
+
+  // iOS-compatible init listener
+  document.addEventListener('DOMContentLoaded', initApp);
+
+  function initApp() {
+    try {
+      document.getElementById('sightDate').value = new Date().toISOString().split('T')[0];
+    } catch (e) {}
+
+    // Explicit event bindings
+    document.getElementById('bodyType').addEventListener('change', handleBodyTypeChange);
+    document.getElementById('btnAddSight').addEventListener('click', addSightingLine);
+    document.getElementById('btnClearAll').addEventListener('click', clearAllData);
+    document.getElementById('btnCalc').addEventListener('click', calculateSight);
+
+    // Inputs triggering live averages
+    ['tzOffset', 'ieMin', 'dipMin', 'altCorrMin', 'addAltCorrMin'].forEach(function(id) {
+      document.getElementById(id).addEventListener('input', updateAverages);
+    });
+    ['ieSign', 'altCorrSign', 'addAltCorrSign'].forEach(function(id) {
+      document.getElementById(id).addEventListener('change', updateAverages);
+    });
+
+    addSightingLine();
+    handleBodyTypeChange();
+  }
+
+  function handleBodyTypeChange() {
+    var type = document.getElementById('bodyType').value;
+    var nameInput = document.getElementById('bodyName');
+    var starFields = document.getElementById('starFields');
+    var nonStarFields = document.getElementById('nonStarFields');
+
+    if (type === 'star' || type === 'planet') {
+      nameInput.style.display = 'block';
+    } else {
+      nameInput.style.display = 'none';
+      nameInput.value = '';
+    }
+
+    if (type === 'star') {
+      starFields.style.display = 'block';
+      nonStarFields.style.display = 'none';
+    } else {
+      starFields.style.display = 'none';
+      nonStarFields.style.display = 'block';
+    }
+  }
+
+  function addSightingLine() {
+    sightingCount++;
+    var container = document.getElementById('sightingsContainer');
+    var div = document.createElement('div');
+    div.className = 'form-group sighting-item';
+    div.id = 'sightLine_' + sightingCount;
+    
+    div.innerHTML = 
+      '<label>Sight ' + sightingCount + ' — 24h Time (HH : MM : SS) | Height (Deg / Min)</label>' +
+      '<div class="input-row">' +
+        '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-h" placeholder="12" maxlength="2">' +
+        '<span>:</span>' +
+        '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-m" placeholder="00" maxlength="2">' +
+        '<span>:</span>' +
+        '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-s" placeholder="00" maxlength="2">' +
+        '<input type="text" inputmode="numeric" pattern="[0-9]*" class="s-deg" placeholder="31" style="margin-left: 6px;">' +
+        '<input type="text" inputmode="decimal" class="s-min" placeholder="08.1">' +
+        (sightingCount > 1 ? '<button class="btn-del" type="button">✕</button>' : '') +
+      '</div>';
+
+    container.appendChild(div);
+
+    var th = div.querySelector('.t-h');
+    var tm = div.querySelector('.t-m');
+    var ts = div.querySelector('.t-s');
+    var sd = div.querySelector('.s-deg');
+    var sm = div.querySelector('.s-min');
+
+    th.addEventListener('input', function() { autoFocusNext(th, 2, tm); });
+    tm.addEventListener('input', function() { autoFocusNext(tm, 2, ts); });
+    ts.addEventListener('input', function() { autoFocusNext(ts, 2, null); });
+
+    [th, tm, ts, sd, sm].forEach(function(input) {
+      input.addEventListener('input', updateAverages);
+      input.addEventListener('focus', function() { this.select(); });
+    });
+
+    if (sightingCount > 1) {
+      var delBtn = div.querySelector('.btn-del');
+      delBtn.addEventListener('click', function() {
+        div.remove();
+        updateAverages();
+      });
+    }
+
+    updateAverages();
+  }
+
+  function autoFocusNext(el, maxChars, nextEl) {
+    if (el.value.length >= maxChars) {
+      if (el.value.length > maxChars) {
+        el.value = el.value.slice(0, maxChars);
+      }
+      if (nextEl) nextEl.focus();
+    }
+    updateAverages();
+  }
+
+  function getLineSeconds(row) {
+    var h = parseInt(row.querySelector('.t-h').value, 10) || 0;
+    var m = parseInt(row.querySelector('.t-m').value, 10) || 0;
+    var s = parseInt(row.querySelector('.t-s').value, 10) || 0;
+    return h * 3600 + m * 60 + s;
+  }
+
+  function secondsToTimeString(sec) {
+    sec = (sec % 86400 + 86400) % 86400;
+    var h = Math.floor(sec / 3600).toString().padStart(2, '0');
+    var m = Math.floor((sec % 3600) / 60).toString().padStart(2, '0');
+    var s = Math.round(sec % 60).toString().padStart(2, '0');
+    return h + ':' + m + ':' + s;
+  }
+
+  function getCalculatedHo(avgHsDeg) {
+    var ieVal = parseFloat(document.getElementById('ieMin').value) || 0;
+    var ieSign = document.getElementById('ieSign').value;
+    var ieCorr = (ieSign === 'on') ? -ieVal : ieVal;
+
+    var dipVal = parseFloat(document.getElementById('dipMin').value) || 0;
+    var dipCorr = -dipVal;
+
+    var altVal = parseFloat(document.getElementById('altCorrMin').value) || 0;
+    var altSign = document.getElementById('altCorrSign').value;
+    var altCorr = (altSign === '-') ? -altVal : altVal;
+
+    var addAltVal = parseFloat(document.getElementById('addAltCorrMin').value) || 0;
+    var addAltSign = document.getElementById('addAltCorrSign').value;
+    var addAltCorr = (addAltSign === '-') ? -addAltVal : addAltVal;
+
+    var totalCorrDeg = (ieCorr + dipCorr + altCorr + addAltCorr) / 60;
+    return avgHsDeg + totalCorrDeg;
+  }
+
+  function updateAverages() {
+    var rows = document.querySelectorAll('.sighting-item');
+    var totalSec = 0, totalHsDeg = 0, count = 0;
+
+    rows.forEach(function(row) {
+      var tSec = getLineSeconds(row);
+      var deg = parseFloat(row.querySelector('.s-deg').value) || 0;
+      var min = parseFloat(row.querySelector('.s-min').value) || 0;
+      var hDeg = deg + (min / 60);
+
+      totalSec += tSec;
+      totalHsDeg += hDeg;
+      count++;
+    });
+
+    if (count === 0) return;
+
+    var avgSec = totalSec / count;
+    var avgHs = totalHsDeg / count;
+    var ho = getCalculatedHo(avgHs);
+
+    var tzOffset = parseFloat(document.getElementById('tzOffset').value) || 0;
+    var avgUtcSec = avgSec - (tzOffset * 3600);
+
+    document.getElementById('avgLocalTime').innerText = secondsToTimeString(avgSec);
+    document.getElementById('avgUtcTime').innerText = secondsToTimeString(avgUtcSec) + ' UTC';
+    document.getElementById('avgHs').innerText = formatDegMin(avgHs);
+    document.getElementById('computedHo').innerText = formatDegMin(ho);
+
+    var baseUtcHour = Math.floor(((avgUtcSec % 86400 + 86400) % 86400) / 3600);
+    var nextUtcHour = (baseUtcHour + 1) % 24;
+
+    var baseStr = baseUtcHour.toString().padStart(2, '0');
+    var nextStr = nextUtcHour.toString().padStart(2, '0');
+
+    document.querySelectorAll('.lblBaseHour').forEach(function(el) { el.innerText = baseStr; });
+    document.querySelectorAll('.lblNextHour').forEach(function(el) { el.innerText = nextStr; });
+  }
+
+  var rad = function(deg) { return deg * (Math.PI / 180); };
+  var deg = function(rad) { return rad * (180 / Math.PI); };
+
+  function calculateSight() {
+    var rows = document.querySelectorAll('.sighting-item');
+    var totalSec = 0, totalHs = 0, count = 0;
+
+    rows.forEach(function(row) {
+      totalSec += getLineSeconds(row);
+      var d = parseFloat(row.querySelector('.s-deg').value) || 0;
+      var m = parseFloat(row.querySelector('.s-min').value) || 0;
+      totalHs += d + (m / 60);
+      count++;
+    });
+
+    if (count === 0) return;
+
+    var avgSec = totalSec / count;
+    var avgHs = totalHs / count;
+    var ho = getCalculatedHo(avgHs);
+
+    var tzOffset = parseFloat(document.getElementById('tzOffset').value) || 0;
+    var avgUtcSec = (avgSec - (tzOffset * 3600) + 86400) % 86400;
+    var minSecFractionHours = (avgUtcSec % 3600) / 3600;
+
+    var bodyType = document.getElementById('bodyType').value;
+    var interpolatedGha = 0;
+    var interpolatedDec = 0;
+
+    if (bodyType === 'star') {
+      var ghaAriesBase = (parseFloat(document.getElementById('ghaAriesBaseDeg').value) || 0) + 
+                         (parseFloat(document.getElementById('ghaAriesBaseMin').value) || 0) / 60;
+      var ghaAriesNext = (parseFloat(document.getElementById('ghaAriesNextDeg').value) || 0) + 
+                         (parseFloat(document.getElementById('ghaAriesNextMin').value) || 0) / 60;
+      if (ghaAriesNext < ghaAriesBase) ghaAriesNext += 360;
+
+      var ghaAriesInterp = ghaAriesBase + (ghaAriesNext - ghaAriesBase) * minSecFractionHours;
+
+      var sha = (parseFloat(document.getElementById('shaDeg').value) || 0) + 
+                (parseFloat(document.getElementById('shaMin').value) || 0) / 60;
+
+      interpolatedGha = (ghaAriesInterp + sha) % 360;
+
+      var decVal = (parseFloat(document.getElementById('decStarDeg').value) || 0) + 
+                   (parseFloat(document.getElementById('decStarMin').value) || 0) / 60;
+      if (document.getElementById('decStarNS').value === 'S') decVal = -decVal;
+      interpolatedDec = decVal;
+    } else {
+      var ghaBase = (parseFloat(document.getElementById('ghaBaseDeg').value) || 0) + 
+                    (parseFloat(document.getElementById('ghaBaseMin').value) || 0) / 60;
+      var ghaNext = (parseFloat(document.getElementById('ghaNextDeg').value) || 0) + 
+                    (parseFloat(document.getElementById('ghaNextMin').value) || 0) / 60;
+      if (ghaNext < ghaBase) ghaNext += 360;
+
+      interpolatedGha = (ghaBase + (ghaNext - ghaBase) * minSecFractionHours) % 360;
+
+      var decBase = (parseFloat(document.getElementById('decBaseDeg').value) || 0) + 
+                    (parseFloat(document.getElementById('decBaseMin').value) || 0) / 60;
+      if (document.getElementById('decBaseNS').value === 'S') decBase = -decBase;
+
+      var decNext = (parseFloat(document.getElementById('decNextDeg').value) || 0) + 
+                    (parseFloat(document.getElementById('decNextMin').value) || 0) / 60;
+      if (document.getElementById('decNextNS').value === 'S') decNext = -decNext;
+
+      interpolatedDec = decBase + (decNext - decBase) * minSecFractionHours;
+    }
+
+    var lat = (parseFloat(document.getElementById('latDeg').value) || 0) + 
+              (parseFloat(document.getElementById('latMin').value) || 0) / 60;
+    if (document.getElementById('latNS').value === 'S') lat = -lat;
+
+    var lon = (parseFloat(document.getElementById('lonDeg').value) || 0) + 
+              (parseFloat(document.getElementById('lonMin').value) || 0) / 60;
+    var lonEW = document.getElementById('lonEW').value;
+
+    var lha = (lonEW === 'W') ? (interpolatedGha - lon) : (interpolatedGha + lon);
+    lha = (lha % 360 + 360) % 360;
+
+    var sinHc = (Math.sin(rad(lat)) * Math.sin(rad(interpolatedDec))) + 
+                (Math.cos(rad(lat)) * Math.cos(rad(interpolatedDec)) * Math.cos(rad(lha)));
+    var hcRad = Math.asin(sinHc);
+    var hcDeg = deg(hcRad);
+
+    var numX = (Math.sin(rad(interpolatedDec)) * Math.cos(rad(lat))) - 
+               (Math.cos(rad(interpolatedDec)) * Math.cos(rad(lha)) * Math.sin(rad(lat)));
+    var denX = Math.cos(hcRad);
+    var X = numX / denX;
+
+    if (X > 1) X = 1;
+    if (X < -1) X = -1;
+
+    var Z = deg(Math.acos(X));
+    var Zn = (lha > 180) ? Z : (360 - Z);
+
+    var interceptNM = (ho - hcDeg) * 60;
+    var interceptText = (interceptNM >= 0) 
+      ? Math.abs(interceptNM).toFixed(1) + ' nm TOWARD' 
+      : Math.abs(interceptNM).toFixed(1) + ' nm AWAY';
+
+    document.getElementById('resGHA').innerText = formatDegMin(interpolatedGha);
+    document.getElementById('resLHA').innerText = lha.toFixed(1) + '°';
+    document.getElementById('resHc').innerText = formatDegMin(hcDeg);
+    document.getElementById('resIntercept').innerText = interceptText;
+    document.getElementById('resZn').innerText = Math.round(Zn).toString().padStart(3, '0') + '°';
+
+    document.getElementById('outputCard').style.display = 'block';
+  }
+
+  function formatDegMin(decimalDeg) {
+    var d = Math.floor(decimalDeg);
+    var m = ((decimalDeg - d) * 60).toFixed(1);
+    return d + '° ' + m + "'";
+  }
+
+  function clearAllData() {
+    if (confirm("Are you sure you want to clear all entered data?")) {
+      document.querySelectorAll('input').forEach(function(i) {
+        if (i.type !== 'date') i.value = '';
+      });
+      document.getElementById('ieMin').value = '0.0';
+      document.getElementById('dipMin').value = '0.0';
+      document.getElementById('altCorrMin').value = '0.0';
+      document.getElementById('addAltCorrMin').value = '0.0';
+      document.getElementById('tzOffset').value = '-4';
+      document.getElementById('sightingsContainer').innerHTML = '';
+      sightingCount = 0;
+      addSightingLine();
+      document.getElementById('outputCard').style.display = 'none';
+      updateAverages();
+    }
+  }
+
+  if ('serviceWorker' in navigator) {
+    var swCode = "self.addEventListener('install', function(e) { e.waitUntil(caches.open('pzx-cache').then(function(c) { return c.addAll(['./']); })); }); self.addEventListener('fetch', function(e) { e.respondWith(caches.match(e.request).then(function(r) { return r || fetch(e.request); })); });";
+    var blob = new Blob([swCode], { type: 'application/javascript' });
+    navigator.serviceWorker.register(URL.createObjectURL(blob));
+  }
+</script>
+
+</body>
+</html>
