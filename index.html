@@ -760,7 +760,41 @@
   }
 
   if ('serviceWorker' in navigator) {
-    var swCode = "self.addEventListener('install', function(e) { e.waitUntil(caches.open('pzx-cache').then(function(c) { return c.addAll(['./']); })); }); self.addEventListener('fetch', function(e) { e.respondWith(caches.match(e.request).then(function(r) { return r || fetch(e.request); })); });";
+    var CACHE_NAME = 'pzx-cache-v2'; // Increment version number with each push
+
+    var swCode = `
+      self.addEventListener('install', function(e) {
+        self.skipWaiting();
+        e.waitUntil(
+          caches.open('${CACHE_NAME}').then(function(c) {
+            return c.addAll(['./']);
+          })
+        );
+      });
+
+      self.addEventListener('activate', function(e) {
+        e.waitUntil(
+          caches.keys().then(function(keys) {
+            return Promise.all(
+              keys.map(function(key) {
+                if (key !== '${CACHE_NAME}') {
+                  return caches.delete(key);
+                }
+              })
+            );
+          })
+        );
+      });
+
+      self.addEventListener('fetch', function(e) {
+        e.respondWith(
+          caches.match(e.request).then(function(r) {
+            return r || fetch(e.request);
+          })
+        );
+      });
+    `;
+
     var blob = new Blob([swCode], { type: 'application/javascript' });
     navigator.serviceWorker.register(URL.createObjectURL(blob));
   }
