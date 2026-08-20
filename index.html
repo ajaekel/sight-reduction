@@ -256,7 +256,7 @@
     <div class="form-group">
       <label>Index Error (IE) [Minutes / On-Off Arc]</label>
       <div class="input-row">
-        <input type="text" inputmode="decimal" id="ieMin" placeholder="2.0" value="0.0">
+        <input type="text" inputmode="decimal" id="ieMin" placeholder="2.0" value="0.0" onfocus="this.select()">
         <select id="ieSign">
           <option value="on">On the Arc (-)</option>
           <option value="off">Off the Arc (+)</option>
@@ -267,14 +267,14 @@
     <div class="form-group">
       <label>Dip Correction [Minutes (-)]</label>
       <div class="input-row">
-        <input type="text" inputmode="decimal" id="dipMin" placeholder="3.8" value="0.0">
+        <input type="text" inputmode="decimal" id="dipMin" placeholder="3.8" value="0.0" onfocus="this.select()">
       </div>
     </div>
 
     <div class="form-group">
       <label>Altitude Correction / Refraction [Minutes / (+/-)]</label>
       <div class="input-row">
-        <input type="text" inputmode="decimal" id="altCorrMin" placeholder="12.4" value="0.0">
+        <input type="text" inputmode="decimal" id="altCorrMin" placeholder="12.4" value="0.0" onfocus="this.select()">
         <select id="altCorrSign">
           <option value="+">+</option>
           <option value="-">-</option>
@@ -285,7 +285,7 @@
     <div class="form-group">
       <label>Additional Altitude Correction [Minutes / (+/-)]</label>
       <div class="input-row">
-        <input type="text" inputmode="decimal" id="addAltCorrMin" placeholder="0.2" value="0.0">
+        <input type="text" inputmode="decimal" id="addAltCorrMin" placeholder="0.2" value="0.0" onfocus="this.select()">
         <select id="addAltCorrSign">
           <option value="+">+</option>
           <option value="-">-</option>
