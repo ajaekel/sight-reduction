@@ -416,28 +416,37 @@
     <button class="btn-calc" id="btnCalc">Calculate Reduction</button>
   </div>
 
-  <!-- RESULTS CARD -->
-  <div class="card" id="outputCard" style="display:none;">
-    <div class="section-title">Reduction Results</div>
+  <!-- SIGHT REDUCTION RESULTS CARD -->
+  <div class="card" id="outputCard" style="display: none;">
+    <div class="section-title">Sight Reduction Results</div>
+
     <div class="results">
       <div class="res-box">
-        <div class="res-label">Interpolated GHA</div>
+        <div class="res-label">Interp. GHA</div>
         <div class="res-value" id="resGHA">--</div>
       </div>
       <div class="res-box">
-        <div class="res-label">LHA</div>
+        <div class="res-label">Interp. Dec</div>
+        <div class="res-value" id="resDec">--</div>
+      </div>
+      <div class="res-box">
+        <div class="res-label">Local Hour Angle (LHA)</div>
         <div class="res-value" id="resLHA">--</div>
       </div>
       <div class="res-box">
-        <div class="res-label">Calculated Altitude (Hc)</div>
+        <div class="res-label">Calculated Height (Hc)</div>
         <div class="res-value" id="resHc">--</div>
       </div>
+      <div class="res-box" style="grid-column: span 2;">
+        <div class="res-label">Assumed Position (AP)</div>
+        <div class="res-value" id="resAP">--</div>
+      </div>
       <div class="res-box">
-        <div class="res-label">Intercept (a)</div>
+        <div class="res-label">Intercept</div>
         <div class="res-value" id="resIntercept">--</div>
       </div>
-      <div class="res-box" style="grid-column: span 2;">
-        <div class="res-label">True Azimuth (Zn)</div>
+      <div class="res-box">
+        <div class="res-label">Azimuth (Zn)</div>
         <div class="res-value" id="resZn">--</div>
       </div>
     </div>
@@ -700,13 +709,13 @@
   var deg = function(rad) { return rad * (180 / Math.PI); };
 
   function calculateSight() {
-    // 1. Stop if any field has an explicit validation error (red outline)
+    // 1. Stop if any field contains an invalid entry
     if (document.querySelectorAll('.input-error').length > 0) {
       alert("Please fix the highlighted invalid entries before calculating.");
       return;
     }
 
-    // 2. Ensure all sighting rows have populated time values
+    // 2. Stop if sighting times are incomplete
     var rows = document.querySelectorAll('.sighting-item');
     for (var i = 0; i < rows.length; i++) {
       var row = rows[i];
@@ -728,9 +737,9 @@
         return;
       }
     }
-    var rows = document.querySelectorAll('.sighting-item');
-    var totalSec = 0, totalHs = 0, count = 0;
 
+    // Process average sight time & observed altitude (Ho)
+    var totalSec = 0, totalHs = 0, count = 0;
     rows.forEach(function(row) {
       totalSec += getLineSeconds(row);
       var d = parseFloat(row.querySelector('.s-deg').value) || 0;
@@ -791,14 +800,22 @@
       interpolatedDec = decBase + (decNext - decBase) * minSecFractionHours;
     }
 
-    var lat = (parseFloat(document.getElementById('latDeg').value) || 0) + 
-              (parseFloat(document.getElementById('latMin').value) || 0) / 60;
-    if (document.getElementById('latNS').value === 'S') lat = -lat;
+    // Assumed Position Inputs & Formatting
+    var latDeg = parseInt(document.getElementById('latDeg').value, 10) || 0;
+    var latMin = parseFloat(document.getElementById('latMin').value) || 0;
+    var latNS = document.getElementById('latNS').value;
+    var lat = (latNS === 'S') ? -(latDeg + (latMin / 60)) : (latDeg + (latMin / 60));
 
-    var lon = (parseFloat(document.getElementById('lonDeg').value) || 0) + 
-              (parseFloat(document.getElementById('lonMin').value) || 0) / 60;
+    var lonDeg = parseInt(document.getElementById('lonDeg').value, 10) || 0;
+    var lonMin = parseFloat(document.getElementById('lonMin').value) || 0;
     var lonEW = document.getElementById('lonEW').value;
+    var lon = (lonDeg + (lonMin / 60));
 
+    // Formatted AP String (e.g. 35°15.1'N 15°33.0'W)
+    var apString = latDeg + '°' + latMin.toFixed(1) + "'" + latNS + ' ' +
+                   lonDeg + '°' + lonMin.toFixed(1) + "'" + lonEW;
+
+    // LHA & Sight Reduction Trigonometry
     var lha = (lonEW === 'W') ? (interpolatedGha - lon) : (interpolatedGha + lon);
     lha = (lha % 360 + 360) % 360;
 
@@ -823,9 +840,17 @@
       ? Math.abs(interceptNM).toFixed(1) + ' nm TOWARD' 
       : Math.abs(interceptNM).toFixed(1) + ' nm AWAY';
 
+    // Format Declination Display (+/- to N/S)
+    var decAbs = Math.abs(interpolatedDec);
+    var decNS = (interpolatedDec >= 0) ? 'N' : 'S';
+    var decFormatted = Math.floor(decAbs) + '° ' + ((decAbs - Math.floor(decAbs)) * 60).toFixed(1) + "'" + decNS;
+
+    // Update Output Card DOM Elements
     document.getElementById('resGHA').innerText = formatDegMin(interpolatedGha);
-    document.getElementById('resLHA').innerText = lha.toFixed(1) + '°';
+    document.getElementById('resDec').innerText = decFormatted;
+    document.getElementById('resLHA').innerText = formatDegMin(lha);
     document.getElementById('resHc').innerText = formatDegMin(hcDeg);
+    document.getElementById('resAP').innerText = apString;
     document.getElementById('resIntercept').innerText = interceptText;
     document.getElementById('resZn').innerText = Math.round(Zn).toString().padStart(3, '0') + '°';
 
