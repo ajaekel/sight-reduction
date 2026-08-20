@@ -85,18 +85,94 @@
       gap: 6px;
       align-items: center;
     }
+
+    /* Section 2 Sightings Layout */
+    .sighting-item {
+      margin-bottom: 8px;
+    }
+    .sighting-side-label {
+      width: 55px;
+      flex-shrink: 0;
+      font-size: 0.85rem;
+      color: #aaa;
+      font-weight: bold;
+    }
+
+    /* Inline layout for Section 1 Date, Celestial Body & Name */
+    .body-inline-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+    }
+    .body-inline-col {
+      flex: 1;
+    }
+
+    /* Section 3 Almanac Grid with Side Labels */
+    .almanac-table {
+      background: #181818;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid #2a2a2a;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .almanac-header-row {
+      display: grid;
+      grid-template-columns: 80px 1fr 1fr;
+      gap: 12px;
+      align-items: flex-end;
+    }
+
+    .almanac-data-row {
+      display: grid;
+      grid-template-columns: 80px 1fr 1fr;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .side-label {
+      color: #aaa;
+      font-weight: bold;
+      font-size: 0.85rem;
+    }
+
+    .col-header-box {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .col-header-box .col-time {
+      font-size: 0.75rem;
+      font-weight: bold;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+
+    .col-header-box .col-sub {
+      font-size: 0.75rem;
+      color: #aaa;
+    }
+
+    .almanac-col-border {
+      border-right: 1px dashed var(--border);
+      padding-right: 12px;
+    }
+
     input, select {
       background: #2a2a2a;
       border: 1px solid var(--border);
       color: #fff;
       padding: 8px;
       border-radius: 4px;
-      font-size: 1rem; /* 16px prevents automatic iOS zoom */
+      font-size: 1rem;
       width: 100%;
       box-sizing: border-box;
       -webkit-appearance: none;
     }
-    /* Hide native spinner controls */
     input::-webkit-outer-spin-button,
     input::-webkit-inner-spin-button {
       -webkit-appearance: none;
@@ -177,13 +253,10 @@
       font-weight: bold;
       margin-top: 4px;
     }
-    /* Red outline for invalid inputs */
     .input-error {
       border: 2px solid var(--danger) !important;
       background-color: rgba(255, 82, 82, 0.1) !important;
     }
-
-    /* Inline error text below input row */
     .error-msg {
       color: var(--danger);
       font-size: 0.75rem;
@@ -205,57 +278,67 @@
   <div class="card">
     <div class="section-title">1. Trip Info & DR Position</div>
     
+    <!-- CONSOLIDATED DATE, CELESTIAL BODY & NAME ROW -->
     <div class="form-group">
-      <label>Date</label>
-      <input type="date" id="sightDate">
-    </div>
+      <div class="body-inline-row">
+        <div class="body-inline-col" style="flex: 1.2;">
+          <label>Date</label>
+          <input type="date" id="sightDate">
+        </div>
 
-    <div class="form-group">
-      <label>Body Type & Name</label>
-      <div class="input-row">
-        <select id="bodyType" style="width: 120px;">
-          <option value="sun">Sun</option>
-          <option value="moon">Moon</option>
-          <option value="planet">Planet</option>
-          <option value="star">Star</option>
-        </select>
+        <div class="body-inline-col" style="flex: 1;">
+          <label>Celestial Body</label>
+          <select id="bodyType" style="width: 100%;">
+            <option value="sun">Sun</option>
+            <option value="moon">Moon</option>
+            <option value="planet">Planet</option>
+            <option value="star">Star</option>
+          </select>
+        </div>
 
-        <!-- Text input for Star Name -->
-        <input type="text" id="bodyName" placeholder="Name of Star" style="display: none;">
-
-        <!-- Alphabetized Dropdown for Planets with Required Choice -->
-        <select id="planetSelect" style="display: none;">
-          <option value="" disabled selected hidden>Select Planet...</option>
-          <option value="Jupiter">Jupiter</option>
-          <option value="Mars">Mars</option>
-          <option value="Saturn">Saturn</option>
-          <option value="Venus">Venus</option>
-        </select>
+        <div class="body-inline-col" id="bodyNameContainer" style="display: none; flex: 1;">
+          <label id="bodyNameLabel">Name</label>
+          <input type="text" id="bodyName" placeholder="Name of Star" style="display: none;">
+          <select id="planetSelect" style="display: none; width: 100%;">
+            <option value="" disabled selected hidden>Select...</option>
+            <option value="Jupiter">Jupiter</option>
+            <option value="Mars">Mars</option>
+            <option value="Saturn">Saturn</option>
+            <option value="Venus">Venus</option>
+          </select>
+        </div>
       </div>
     </div>
 
+    <!-- CONSOLIDATED DR POSITION ROWS -->
     <div class="form-group">
-      <label>DR Latitude (Deg / Min / N-S)</label>
       <div class="input-row">
-        <input type="text" inputmode="numeric" pattern="[0-9]*" id="latDeg" placeholder="32">
-        <input type="text" inputmode="decimal" id="latMin" placeholder="00.0">
+        <div style="width: 140px; flex-shrink: 0; font-size: 0.85rem; color: #aaa;">
+          Latitude, assumed<br><span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span>
+        </div>
+        <input type="text" inputmode="numeric" id="latDeg" placeholder="35" onfocus="this.select()">
+        <input type="text" inputmode="decimal" id="latMin" placeholder="15.0" onfocus="this.select()">
         <select id="latNS">
           <option value="N">N</option>
           <option value="S">S</option>
         </select>
       </div>
+      <div class="error-msg" id="errLat"></div>
     </div>
 
     <div class="form-group">
-      <label>DR Longitude (Deg / Min / E-W)</label>
       <div class="input-row">
-        <input type="text" inputmode="numeric" pattern="[0-9]*" id="lonDeg" placeholder="064">
-        <input type="text" inputmode="decimal" id="lonMin" placeholder="00.0">
+        <div style="width: 140px; flex-shrink: 0; font-size: 0.85rem; color: #aaa;">
+          Longitude, assumed<br><span style="font-size:0.75rem; color:#888;">(Deg / Min / E-W)</span>
+        </div>
+        <input type="text" inputmode="numeric" id="lonDeg" placeholder="015" onfocus="this.select()">
+        <input type="text" inputmode="decimal" id="lonMin" placeholder="33.0" onfocus="this.select()">
         <select id="lonEW">
           <option value="W">W</option>
           <option value="E">E</option>
         </select>
       </div>
+      <div class="error-msg" id="errLon"></div>
     </div>
 
     <div class="form-group">
@@ -270,13 +353,24 @@
   <!-- SECTION 2: SIGHTINGS & CORRECTIONS -->
   <div class="card">
     <div class="section-title">2. Sightings & Corrections</div>
-    <div id="sightingsContainer">
-      <!-- Dynamic Sight Lines Injected Here -->
+
+    <div class="sub-title">SIGHTINGS</div>
+    <div style="margin-left: 61px; margin-bottom: 4px; font-size: 0.75rem; color: #aaa;">
+      24h Time (HH : MM : SS) | Height (Deg / Min)
     </div>
+
+    <div id="sightingsContainer"></div>
     <button class="btn-add" id="btnAddSight">+ Add Another Sight</button>
 
-    <!-- ALTITUDE CORRECTIONS -->
-    <div class="sub-title">Sextant Altitude Corrections</div>
+    <!-- AVERAGE OF ENTRIES SUMMARY BOX -->
+    <div class="summary-box">
+      <div style="font-size: 0.75rem; font-weight: bold; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Average of Sightings</div>
+      <div><strong>Local Time:</strong> <span id="avgLocalTime">--:--:--</span></div>
+      <div><strong>UTC Time:</strong> <span id="avgUtcTime">--:--:-- UTC</span></div>
+      <div><strong>Hs (Sextant Height):</strong> <span id="avgHs">--° --.-'</span></div>
+    </div>
+
+    <div class="sub-title" style="margin-top: 18px;">Sextant Altitude Corrections</div>
     
     <div class="form-group">
       <label>Index Error (IE) [Minutes / On-Off Arc]</label>
@@ -318,12 +412,9 @@
       </div>
     </div>
 
-    <!-- Computed Sightings Summary -->
-    <div class="summary-box">
-      <div><strong>Avg Local Time:</strong> <span id="avgLocalTime">--:--:--</span></div>
-      <div><strong>Avg UTC Time:</strong> <span id="avgUtcTime">--:--:-- UTC</span></div>
-      <div><strong>Avg Raw Sextant (Hs):</strong> <span id="avgHs">--° --.-'</span></div>
-      <div><strong>Observed Altitude (Ho):</strong> <span id="computedHo">--° --.-'</span></div>
+    <!-- FINAL OBSERVED ALTITUDE -->
+    <div class="summary-box" style="margin-top: 12px;">
+      <div><strong>Ho (Observed Altitude):</strong> <span id="computedHo">--° --.-'</span></div>
     </div>
   </div>
 
@@ -334,82 +425,144 @@
     <!-- STAR FORM FIELDS -->
     <div id="starFields" style="display: none;">
       <div class="form-group">
-        <label>GHA Aries at Base UTC Hour (<span class="lblBaseHour">00</span>:00)</label>
-        <div class="input-row">
-          <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaAriesBaseDeg" placeholder="100">
-          <input type="text" inputmode="decimal" id="ghaAriesBaseMin" placeholder="00.0">
+        <div class="sub-title">ARIES</div>
+        <div class="almanac-table">
+          <div class="almanac-header-row">
+            <div></div>
+            <div class="col-header-box almanac-col-border">
+              <span class="col-time"><span class="lblBaseHour">0</span>h UTC, <span class="lblBaseDate">Jun 2</span></span>
+              <span class="col-sub">Base (Deg / Min)</span>
+            </div>
+            <div class="col-header-box">
+              <span class="col-time"><span class="lblNextHour">1</span>h UTC, <span class="lblNextDate">Jun 2</span></span>
+              <span class="col-sub">Next (Deg / Min)</span>
+            </div>
+          </div>
+
+          <div class="almanac-data-row">
+            <div class="side-label">GHA</div>
+            <div class="almanac-col-border">
+              <div class="input-row">
+                <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaAriesBaseDeg" placeholder="100" onfocus="this.select()">
+                <input type="text" inputmode="decimal" id="ghaAriesBaseMin" placeholder="00.0" onfocus="this.select()">
+              </div>
+            </div>
+            <div>
+              <div class="input-row">
+                <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaAriesNextDeg" placeholder="115" onfocus="this.select()">
+                <input type="text" inputmode="decimal" id="ghaAriesNextMin" placeholder="02.5" onfocus="this.select()">
+              </div>
+            </div>
+          </div>
         </div>
+        <div class="error-msg" id="errGhaAriesBase"></div>
+        <div class="error-msg" id="errGhaAriesNext"></div>
       </div>
 
-      <div class="form-group">
-        <label>GHA Aries at Next UTC Hour (<span class="lblNextHour">01</span>:00)</label>
-        <div class="input-row">
-          <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaAriesNextDeg" placeholder="115">
-          <input type="text" inputmode="decimal" id="ghaAriesNextMin" placeholder="02.5">
-        </div>
-      </div>
+      <div class="form-group" style="margin-top: 12px;">
+        <div class="sub-title" id="starSectionHeader">STAR</div>
+        <div class="almanac-table">
+          <div class="almanac-data-row">
+            <div style="display:flex; flex-direction:column;">
+              <span class="side-label">SHA</span>
+              <span style="font-size:0.75rem; color:#888;">(Deg / Min)</span>
+            </div>
+            <div class="almanac-col-border" style="grid-column: span 2;">
+              <div class="input-row">
+                <input type="text" inputmode="numeric" pattern="[0-9]*" id="shaDeg" placeholder="140" onfocus="this.select()">
+                <input type="text" inputmode="decimal" id="shaMin" placeholder="12.4" onfocus="this.select()">
+              </div>
+            </div>
+          </div>
 
-      <div class="form-group">
-        <label>Sidereal Hour Angle (SHA)</label>
-        <div class="input-row">
-          <input type="text" inputmode="numeric" pattern="[0-9]*" id="shaDeg" placeholder="140">
-          <input type="text" inputmode="decimal" id="shaMin" placeholder="12.4">
+          <div class="almanac-data-row">
+            <div style="display:flex; flex-direction:column;">
+              <span class="side-label">Declination</span>
+              <span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span>
+            </div>
+            <div class="almanac-col-border" style="grid-column: span 2;">
+              <div class="input-row">
+                <input type="text" inputmode="numeric" pattern="[0-9]*" id="decStarDeg" placeholder="15" onfocus="this.select()">
+                <input type="text" inputmode="decimal" id="decStarMin" placeholder="00.0" onfocus="this.select()">
+                <select id="decStarNS">
+                  <option value="N">N</option>
+                  <option value="S">S</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-
-      <div class="form-group">
-        <label>Declination (Deg / Min / N-S)</label>
-        <div class="input-row">
-          <input type="text" inputmode="numeric" pattern="[0-9]*" id="decStarDeg" placeholder="15">
-          <input type="text" inputmode="decimal" id="decStarMin" placeholder="00.0">
-          <select id="decStarNS">
-            <option value="N">N</option>
-            <option value="S">S</option>
-          </select>
-        </div>
+        <div class="error-msg" id="errSha"></div>
+        <div class="error-msg" id="errDecStar"></div>
       </div>
     </div>
 
     <!-- NON-STAR FORM FIELDS -->
     <div id="nonStarFields">
       <div class="form-group">
-        <label>GHA at Base UTC Hour (<span class="lblBaseHour">00</span>:00)</label>
-        <div class="input-row">
-          <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaBaseDeg" placeholder="100">
-          <input type="text" inputmode="decimal" id="ghaBaseMin" placeholder="00.0">
-        </div>
-      </div>
+        <div class="sub-title" id="nonStarSectionHeader">SUN</div>
 
-      <div class="form-group">
-        <label>GHA at Next UTC Hour (<span class="lblNextHour">01</span>:00)</label>
-        <div class="input-row">
-          <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaNextDeg" placeholder="115">
-          <input type="text" inputmode="decimal" id="ghaNextMin" placeholder="02.5">
-        </div>
-      </div>
+        <div class="almanac-table">
+          <!-- TOP HEADER ROW -->
+          <div class="almanac-header-row">
+            <div></div>
+            <div class="col-header-box almanac-col-border">
+              <span class="col-time"><span class="lblBaseHour">0</span>h UTC, <span class="lblBaseDate">Jun 2</span></span>
+              <span class="col-sub">Base (Deg / Min)</span>
+            </div>
+            <div class="col-header-box">
+              <span class="col-time"><span class="lblNextHour">1</span>h UTC, <span class="lblNextDate">Jun 2</span></span>
+              <span class="col-sub">Next (Deg / Min)</span>
+            </div>
+          </div>
 
-      <div class="form-group">
-        <label>Declination at Base UTC Hour (<span class="lblBaseHour">00</span>:00)</label>
-        <div class="input-row">
-          <input type="text" inputmode="numeric" pattern="[0-9]*" id="decBaseDeg" placeholder="15">
-          <input type="text" inputmode="decimal" id="decBaseMin" placeholder="00.0">
-          <select id="decBaseNS">
-            <option value="N">N</option>
-            <option value="S">S</option>
-          </select>
-        </div>
-      </div>
+          <!-- ROW 1: GHA -->
+          <div class="almanac-data-row">
+            <div class="side-label">GHA</div>
+            <div class="almanac-col-border">
+              <div class="input-row">
+                <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaBaseDeg" placeholder="100" onfocus="this.select()">
+                <input type="text" inputmode="decimal" id="ghaBaseMin" placeholder="00.0" onfocus="this.select()">
+              </div>
+            </div>
+            <div>
+              <div class="input-row">
+                <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaNextDeg" placeholder="115" onfocus="this.select()">
+                <input type="text" inputmode="decimal" id="ghaNextMin" placeholder="02.5" onfocus="this.select()">
+              </div>
+            </div>
+          </div>
 
-      <div class="form-group">
-        <label>Declination at Next UTC Hour (<span class="lblNextHour">01</span>:00)</label>
-        <div class="input-row">
-          <input type="text" inputmode="numeric" pattern="[0-9]*" id="decNextDeg" placeholder="15">
-          <input type="text" inputmode="decimal" id="decNextMin" placeholder="01.2">
-          <select id="decNextNS">
-            <option value="N">N</option>
-            <option value="S">S</option>
-          </select>
+          <!-- ROW 2: DECLINATION -->
+          <div class="almanac-data-row">
+            <div class="side-label">Declination</div>
+            <div class="almanac-col-border">
+              <div class="input-row">
+                <input type="text" inputmode="numeric" pattern="[0-9]*" id="decBaseDeg" placeholder="15" onfocus="this.select()">
+                <input type="text" inputmode="decimal" id="decBaseMin" placeholder="00.0" onfocus="this.select()">
+                <select id="decBaseNS">
+                  <option value="N">N</option>
+                  <option value="S">S</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <div class="input-row">
+                <input type="text" inputmode="numeric" pattern="[0-9]*" id="decNextDeg" placeholder="15" onfocus="this.select()">
+                <input type="text" inputmode="decimal" id="decNextMin" placeholder="01.2" onfocus="this.select()">
+                <select id="decNextNS">
+                  <option value="N">N</option>
+                  <option value="S">S</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
+
+        <div class="error-msg" id="errGhaBase"></div>
+        <div class="error-msg" id="errGhaNext"></div>
+        <div class="error-msg" id="errDecBase"></div>
+        <div class="error-msg" id="errDecNext"></div>
       </div>
     </div>
 
@@ -456,7 +609,6 @@
 <script>
   var sightingCount = 0;
 
-  // iOS-compatible init listener
   document.addEventListener('DOMContentLoaded', initApp);
 
   function initApp() {
@@ -464,14 +616,19 @@
       document.getElementById('sightDate').value = new Date().toISOString().split('T')[0];
     } catch (e) {}
 
-    // Explicit event bindings
     document.getElementById('bodyType').addEventListener('change', handleBodyTypeChange);
-    document.getElementById('btnAddSight').addEventListener('click', addSightingLine);
+    document.getElementById('bodyName').addEventListener('input', updateHeaders);
+    document.getElementById('planetSelect').addEventListener('change', function() {
+      updateAverages();
+      updateHeaders();
+    });
+
+    document.getElementById('btnAddSight').addEventListener('click', function() {
+      addSightingLine(true);
+    });
     document.getElementById('btnClearAll').addEventListener('click', clearAllData);
     document.getElementById('btnCalc').addEventListener('click', calculateSight);
-    document.getElementById('planetSelect').addEventListener('change', updateAverages);
 
-    // Inputs triggering live averages
     ['tzOffset', 'ieMin', 'dipMin', 'altCorrMin', 'addAltCorrMin'].forEach(function(id) {
       document.getElementById(id).addEventListener('input', updateAverages);
     });
@@ -479,27 +636,118 @@
       document.getElementById(id).addEventListener('change', updateAverages);
     });
 
-    addSightingLine();
+    // --- SECTION 1: DR POSITION VALIDATION ---
+    var errLat = document.getElementById('errLat');
+    var errLon = document.getElementById('errLon');
+
+    document.getElementById('latDeg').addEventListener('input', function() {
+      validateField(this, 0, 90, 'Latitude Degrees', errLat, false);
+    });
+    document.getElementById('latMin').addEventListener('input', function() {
+      validateField(this, 0, 60, 'Latitude Minutes', errLat, true);
+    });
+    document.getElementById('lonDeg').addEventListener('input', function() {
+      validateField(this, 0, 180, 'Longitude Degrees', errLon, false);
+    });
+    document.getElementById('lonMin').addEventListener('input', function() {
+      validateField(this, 0, 60, 'Longitude Minutes', errLon, true);
+    });
+
+    // --- SECTION 3: STAR ALMANAC VALIDATION ---
+    var errGhaAriesBase = document.getElementById('errGhaAriesBase');
+    var errGhaAriesNext = document.getElementById('errGhaAriesNext');
+    var errSha = document.getElementById('errSha');
+    var errDecStar = document.getElementById('errDecStar');
+
+    document.getElementById('ghaAriesBaseDeg').addEventListener('input', function() {
+      validateField(this, 0, 360, 'GHA Aries Base Deg', errGhaAriesBase, true);
+    });
+    document.getElementById('ghaAriesBaseMin').addEventListener('input', function() {
+      validateField(this, 0, 60, 'GHA Aries Base Min', errGhaAriesBase, true);
+    });
+
+    document.getElementById('ghaAriesNextDeg').addEventListener('input', function() {
+      validateField(this, 0, 360, 'GHA Aries Next Deg', errGhaAriesNext, true);
+    });
+    document.getElementById('ghaAriesNextMin').addEventListener('input', function() {
+      validateField(this, 0, 60, 'GHA Aries Next Min', errGhaAriesNext, true);
+    });
+
+    document.getElementById('shaDeg').addEventListener('input', function() {
+      validateField(this, 0, 360, 'SHA Degrees', errSha, true);
+    });
+    document.getElementById('shaMin').addEventListener('input', function() {
+      validateField(this, 0, 60, 'SHA Minutes', errSha, true);
+    });
+
+    document.getElementById('decStarDeg').addEventListener('input', function() {
+      validateField(this, 0, 90, 'Declination Degrees', errDecStar, false);
+    });
+    document.getElementById('decStarMin').addEventListener('input', function() {
+      validateField(this, 0, 60, 'Declination Minutes', errDecStar, true);
+    });
+
+    // --- SECTION 3: NON-STAR ALMANAC VALIDATION ---
+    var errGhaBase = document.getElementById('errGhaBase');
+    var errGhaNext = document.getElementById('errGhaNext');
+    var errDecBase = document.getElementById('errDecBase');
+    var errDecNext = document.getElementById('errDecNext');
+
+    document.getElementById('ghaBaseDeg').addEventListener('input', function() {
+      validateField(this, 0, 360, 'GHA Base Degrees', errGhaBase, true);
+    });
+    document.getElementById('ghaBaseMin').addEventListener('input', function() {
+      validateField(this, 0, 60, 'GHA Base Minutes', errGhaBase, true);
+    });
+
+    document.getElementById('ghaNextDeg').addEventListener('input', function() {
+      validateField(this, 0, 360, 'GHA Next Degrees', errGhaNext, true);
+    });
+    document.getElementById('ghaNextMin').addEventListener('input', function() {
+      validateField(this, 0, 60, 'GHA Next Minutes', errGhaNext, true);
+    });
+
+    document.getElementById('decBaseDeg').addEventListener('input', function() {
+      validateField(this, 0, 90, 'Declination Base Deg', errDecBase, false);
+    });
+    document.getElementById('decBaseMin').addEventListener('input', function() {
+      validateField(this, 0, 60, 'Declination Base Min', errDecBase, true);
+    });
+
+    document.getElementById('decNextDeg').addEventListener('input', function() {
+      validateField(this, 0, 90, 'Declination Next Deg', errDecNext, false);
+    });
+    document.getElementById('decNextMin').addEventListener('input', function() {
+      validateField(this, 0, 60, 'Declination Next Min', errDecNext, true);
+    });
+
+    addSightingLine(false);
     handleBodyTypeChange();
   }
 
   function handleBodyTypeChange() {
     var type = document.getElementById('bodyType').value;
+    var nameContainer = document.getElementById('bodyNameContainer');
+    var nameLabel = document.getElementById('bodyNameLabel');
     var nameInput = document.getElementById('bodyName');
     var planetSelect = document.getElementById('planetSelect');
     var starFields = document.getElementById('starFields');
     var nonStarFields = document.getElementById('nonStarFields');
 
-    // Reset fields & visibility
     nameInput.style.display = 'none';
     planetSelect.style.display = 'none';
-    planetSelect.selectedIndex = 0; // Resets dropdown back to "Select Planet..."
+    planetSelect.selectedIndex = 0;
+    nameContainer.style.display = 'none';
 
     if (type === 'star') {
+      nameContainer.style.display = 'block';
+      nameLabel.innerText = 'Star Name';
       nameInput.style.display = 'block';
       starFields.style.display = 'block';
       nonStarFields.style.display = 'none';
     } else if (type === 'planet') {
+      nameContainer.style.display = 'block';
+      nameLabel.innerText = 'Planet Name';
       planetSelect.style.display = 'block';
       starFields.style.display = 'none';
       nonStarFields.style.display = 'block';
@@ -508,18 +756,38 @@
       starFields.style.display = 'none';
       nonStarFields.style.display = 'block';
     }
+
+    updateHeaders();
   }
 
-  function addSightingLine() {
+  function updateHeaders() {
+    var type = document.getElementById('bodyType').value;
+    var starHeader = document.getElementById('starSectionHeader');
+    var nonStarHeader = document.getElementById('nonStarSectionHeader');
+
+    if (type === 'star') {
+      var starName = document.getElementById('bodyName').value.trim();
+      starHeader.innerText = starName ? 'STAR ' + starName.toUpperCase() : 'STAR';
+    } else if (type === 'planet') {
+      var planetName = document.getElementById('planetSelect').value;
+      nonStarHeader.innerText = planetName ? 'PLANET ' + planetName.toUpperCase() : 'PLANET';
+    } else if (type === 'sun') {
+      nonStarHeader.innerText = 'SUN';
+    } else if (type === 'moon') {
+      nonStarHeader.innerText = 'MOON';
+    }
+  }
+
+  function addSightingLine(autoFocus) {
     sightingCount++;
     var container = document.getElementById('sightingsContainer');
     var div = document.createElement('div');
-    div.className = 'form-group sighting-item';
+    div.className = 'sighting-item';
     div.id = 'sightLine_' + sightingCount;
     
     div.innerHTML = 
-      '<label>Sight ' + sightingCount + ' — 24h Time (HH : MM : SS) | Height (Deg / Min)</label>' +
       '<div class="input-row">' +
+        '<div class="sighting-side-label">Sight ' + sightingCount + '</div>' +
         '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-h" placeholder="12" maxlength="2">' +
         '<span>:</span>' +
         '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-m" placeholder="00" maxlength="2">' +
@@ -540,7 +808,6 @@
     var sm = div.querySelector('.s-min');
     var errBox = div.querySelector('.error-msg');
 
-    // Time Chain Auto-Focus & Validation
     th.addEventListener('input', function() {
       validateField(this, 0, 23, 'Hours', errBox);
       autoFocusNext(th, 2, tm);
@@ -556,19 +823,16 @@
       autoFocusNext(ts, 2, sd);
     });
 
-    // Degrees: <= 90 (Inclusive)
     sd.addEventListener('input', function() {
       validateField(this, 0, 90, 'Degrees', errBox, false);
       updateAverages();
     });
 
-    // Minutes: < 60 (Strictly less than 60)
     sm.addEventListener('input', function() {
       validateField(this, 0, 60, 'Height Minutes', errBox, true);
       updateAverages();
     });
 
-    // Enable click-to-highlight/replace for all input fields
     [th, tm, ts, sd, sm].forEach(function(input) {
       input.addEventListener('focus', function() { this.select(); });
     });
@@ -582,9 +846,15 @@
     }
 
     updateAverages();
+
+    if (autoFocus) {
+      setTimeout(function() {
+        th.focus();
+        th.select();
+      }, 10);
+    }
   }
 
-  // Checks field against min/max and toggles red border + warning message
   function validateField(el, min, max, labelName, errorEl, isStrictMax) {
     var valStr = el.value.trim();
 
@@ -695,27 +965,39 @@
     document.getElementById('avgHs').innerText = formatDegMin(avgHs);
     document.getElementById('computedHo').innerText = formatDegMin(ho);
 
-    var baseUtcHour = Math.floor(((avgUtcSec % 86400 + 86400) % 86400) / 3600);
-    var nextUtcHour = (baseUtcHour + 1) % 24;
+    var dateInput = document.getElementById('sightDate').value;
+    var baseUtcDate = dateInput ? new Date(dateInput + 'T00:00:00Z') : new Date();
+    baseUtcDate.setUTCSeconds(baseUtcDate.getUTCSeconds() + avgUtcSec);
 
-    var baseStr = baseUtcHour.toString().padStart(2, '0');
-    var nextStr = nextUtcHour.toString().padStart(2, '0');
+    updateAlmanacHourLabels(baseUtcDate);
+  }
 
-    document.querySelectorAll('.lblBaseHour').forEach(function(el) { el.innerText = baseStr; });
-    document.querySelectorAll('.lblNextHour').forEach(function(el) { el.innerText = nextStr; });
+  function updateAlmanacHourLabels(baseUtcDate) {
+    if (!baseUtcDate || isNaN(baseUtcDate.getTime())) return;
+
+    var baseHour = baseUtcDate.getUTCHours();
+    var nextUtcDate = new Date(baseUtcDate.getTime() + (3600 * 1000));
+    var nextHour = nextUtcDate.getUTCHours();
+
+    var options = { month: 'short', day: 'numeric', timeZone: 'UTC' };
+    var baseDateStr = baseUtcDate.toLocaleDateString('en-US', options);
+    var nextDateStr = nextUtcDate.toLocaleDateString('en-US', options);
+
+    document.querySelectorAll('.lblBaseHour').forEach(function(el) { el.innerText = baseHour; });
+    document.querySelectorAll('.lblNextHour').forEach(function(el) { el.innerText = nextHour; });
+    document.querySelectorAll('.lblBaseDate').forEach(function(el) { el.innerText = baseDateStr; });
+    document.querySelectorAll('.lblNextDate').forEach(function(el) { el.innerText = nextDateStr; });
   }
 
   var rad = function(deg) { return deg * (Math.PI / 180); };
   var deg = function(rad) { return rad * (180 / Math.PI); };
 
   function calculateSight() {
-    // 1. Stop if any field contains an invalid entry
     if (document.querySelectorAll('.input-error').length > 0) {
       alert("Please fix the highlighted invalid entries before calculating.");
       return;
     }
 
-    // 2. Stop if sighting times are incomplete
     var rows = document.querySelectorAll('.sighting-item');
     for (var i = 0; i < rows.length; i++) {
       var row = rows[i];
@@ -729,7 +1011,6 @@
       }
     }
 
-    // 3. Ensure a planet is selected if bodyType is 'planet'
     if (document.getElementById('bodyType').value === 'planet') {
       var selectedPlanet = document.getElementById('planetSelect').value;
       if (!selectedPlanet) {
@@ -738,7 +1019,6 @@
       }
     }
 
-    // Process average sight time & observed altitude (Ho)
     var totalSec = 0, totalHs = 0, count = 0;
     rows.forEach(function(row) {
       totalSec += getLineSeconds(row);
@@ -800,7 +1080,6 @@
       interpolatedDec = decBase + (decNext - decBase) * minSecFractionHours;
     }
 
-    // Assumed Position Inputs & Formatting
     var latDeg = parseInt(document.getElementById('latDeg').value, 10) || 0;
     var latMin = parseFloat(document.getElementById('latMin').value) || 0;
     var latNS = document.getElementById('latNS').value;
@@ -811,11 +1090,9 @@
     var lonEW = document.getElementById('lonEW').value;
     var lon = (lonDeg + (lonMin / 60));
 
-    // Formatted AP String (e.g. 35°15.1'N 15°33.0'W)
     var apString = latDeg + '°' + latMin.toFixed(1) + "'" + latNS + ' ' +
                    lonDeg + '°' + lonMin.toFixed(1) + "'" + lonEW;
 
-    // LHA & Sight Reduction Trigonometry
     var lha = (lonEW === 'W') ? (interpolatedGha - lon) : (interpolatedGha + lon);
     lha = (lha % 360 + 360) % 360;
 
@@ -840,12 +1117,10 @@
       ? Math.abs(interceptNM).toFixed(1) + ' nm TOWARD' 
       : Math.abs(interceptNM).toFixed(1) + ' nm AWAY';
 
-    // Format Declination Display (+/- to N/S)
     var decAbs = Math.abs(interpolatedDec);
     var decNS = (interpolatedDec >= 0) ? 'N' : 'S';
     var decFormatted = Math.floor(decAbs) + '° ' + ((decAbs - Math.floor(decAbs)) * 60).toFixed(1) + "'" + decNS;
 
-    // Update Output Card DOM Elements
     document.getElementById('resGHA').innerText = formatDegMin(interpolatedGha);
     document.getElementById('resDec').innerText = decFormatted;
     document.getElementById('resLHA').innerText = formatDegMin(lha);
@@ -859,8 +1134,12 @@
 
   function formatDegMin(decimalDeg) {
     var d = Math.floor(decimalDeg);
-    var m = ((decimalDeg - d) * 60).toFixed(1);
-    return d + '° ' + m + "'";
+    var m = Math.round((decimalDeg - d) * 60 * 10) / 10;
+    if (m >= 60) {
+      d += 1;
+      m -= 60;
+    }
+    return d + '° ' + m.toFixed(1) + "'";
   }
 
   function clearAllData() {
@@ -875,14 +1154,15 @@
       document.getElementById('tzOffset').value = '-4';
       document.getElementById('sightingsContainer').innerHTML = '';
       sightingCount = 0;
-      addSightingLine();
+      addSightingLine(false);
       document.getElementById('outputCard').style.display = 'none';
       updateAverages();
+      updateHeaders();
     }
   }
 
   if ('serviceWorker' in navigator) {
-    var CACHE_NAME = 'pzx-cache-v3'; // Increment version number with each push
+    var CACHE_NAME = 'pzx-cache-v7';
 
     var swCode = `
       self.addEventListener('install', function(e) {
