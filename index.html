@@ -205,7 +205,18 @@
           <option value="planet">Planet</option>
           <option value="star">Star</option>
         </select>
-        <input type="text" id="bodyName" placeholder="Name of Body" style="display: none;">
+
+        <!-- Text input for Star Name -->
+        <input type="text" id="bodyName" placeholder="Name of Star" style="display: none;">
+
+        <!-- Alphabetized Dropdown for Planets with Required Choice -->
+        <select id="planetSelect" style="display: none;">
+          <option value="" disabled selected hidden>Select Planet...</option>
+          <option value="Jupiter">Jupiter</option>
+          <option value="Mars">Mars</option>
+          <option value="Saturn">Saturn</option>
+          <option value="Venus">Venus</option>
+        </select>
       </div>
     </div>
 
@@ -435,6 +446,7 @@
     document.getElementById('btnAddSight').addEventListener('click', addSightingLine);
     document.getElementById('btnClearAll').addEventListener('click', clearAllData);
     document.getElementById('btnCalc').addEventListener('click', calculateSight);
+    document.getElementById('planetSelect').addEventListener('change', updateAverages);
 
     // Inputs triggering live averages
     ['tzOffset', 'ieMin', 'dipMin', 'altCorrMin', 'addAltCorrMin'].forEach(function(id) {
@@ -451,20 +463,25 @@
   function handleBodyTypeChange() {
     var type = document.getElementById('bodyType').value;
     var nameInput = document.getElementById('bodyName');
+    var planetSelect = document.getElementById('planetSelect');
     var starFields = document.getElementById('starFields');
     var nonStarFields = document.getElementById('nonStarFields');
 
-    if (type === 'star' || type === 'planet') {
-      nameInput.style.display = 'block';
-    } else {
-      nameInput.style.display = 'none';
-      nameInput.value = '';
-    }
+    // Reset fields & visibility
+    nameInput.style.display = 'none';
+    planetSelect.style.display = 'none';
+    planetSelect.selectedIndex = 0; // Resets dropdown back to "Select Planet..."
 
     if (type === 'star') {
+      nameInput.style.display = 'block';
       starFields.style.display = 'block';
       nonStarFields.style.display = 'none';
+    } else if (type === 'planet') {
+      planetSelect.style.display = 'block';
+      starFields.style.display = 'none';
+      nonStarFields.style.display = 'block';
     } else {
+      nameInput.value = '';
       starFields.style.display = 'none';
       nonStarFields.style.display = 'block';
     }
@@ -606,6 +623,14 @@
   var deg = function(rad) { return rad * (180 / Math.PI); };
 
   function calculateSight() {
+    // Ensure a planet is selected if bodyType is 'planet'
+    if (document.getElementById('bodyType').value === 'planet') {
+      var selectedPlanet = document.getElementById('planetSelect').value;
+      if (!selectedPlanet) {
+        alert("Please select a planet from the dropdown.");
+        return;
+      }
+    }
     var rows = document.querySelectorAll('.sighting-item');
     var totalSec = 0, totalHs = 0, count = 0;
 
