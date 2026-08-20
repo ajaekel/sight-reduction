@@ -177,6 +177,20 @@
       font-weight: bold;
       margin-top: 4px;
     }
+    /* Red outline for invalid inputs */
+    .input-error {
+      border: 2px solid var(--danger) !important;
+      background-color: rgba(255, 82, 82, 0.1) !important;
+    }
+
+    /* Inline error text below input row */
+    .error-msg {
+      color: var(--danger);
+      font-size: 0.75rem;
+      margin-top: 4px;
+      display: none;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -505,7 +519,8 @@
         '<input type="text" inputmode="numeric" pattern="[0-9]*" class="s-deg" placeholder="31" style="margin-left: 6px;">' +
         '<input type="text" inputmode="decimal" class="s-min" placeholder="08.1">' +
         (sightingCount > 1 ? '<button class="btn-del" type="button">✕</button>' : '') +
-      '</div>';
+      '</div>' +
+      '<div class="error-msg"></div>';
 
     container.appendChild(div);
 
@@ -514,13 +529,38 @@
     var ts = div.querySelector('.t-s');
     var sd = div.querySelector('.s-deg');
     var sm = div.querySelector('.s-min');
+    var errBox = div.querySelector('.error-msg');
 
-    th.addEventListener('input', function() { autoFocusNext(th, 2, tm); });
-    tm.addEventListener('input', function() { autoFocusNext(tm, 2, ts); });
-    ts.addEventListener('input', function() { autoFocusNext(ts, 2, null); });
+    // Time Chain Auto-Focus & Validation
+    th.addEventListener('input', function() {
+      validateField(this, 0, 23, 'Hours', errBox);
+      autoFocusNext(th, 2, tm);
+    });
 
+    tm.addEventListener('input', function() {
+      validateField(this, 0, 59, 'Minutes', errBox);
+      autoFocusNext(tm, 2, ts);
+    });
+
+    ts.addEventListener('input', function() {
+      validateField(this, 0, 59, 'Seconds', errBox);
+      autoFocusNext(ts, 2, sd);
+    });
+
+    // Degrees: <= 90 (Inclusive)
+    sd.addEventListener('input', function() {
+      validateField(this, 0, 90, 'Degrees', errBox, false);
+      updateAverages();
+    });
+
+    // Minutes: < 60 (Strictly less than 60)
+    sm.addEventListener('input', function() {
+      validateField(this, 0, 60, 'Height Minutes', errBox, true);
+      updateAverages();
+    });
+
+    // Enable click-to-highlight/replace for all input fields
     [th, tm, ts, sd, sm].forEach(function(input) {
-      input.addEventListener('input', updateAverages);
       input.addEventListener('focus', function() { this.select(); });
     });
 
@@ -535,12 +575,49 @@
     updateAverages();
   }
 
+  // Checks field against min/max and toggles red border + warning message
+  function validateField(el, min, max, labelName, errorEl, isStrictMax) {
+    var valStr = el.value.trim();
+
+    if (valStr === '') {
+      el.classList.remove('input-error');
+      if (errorEl) errorEl.style.display = 'none';
+      return true;
+    }
+
+    var val = Number(valStr);
+    var isTooHigh = false;
+
+    if (max !== null) {
+      isTooHigh = isStrictMax ? (val >= max) : (val > max);
+    }
+
+    if (isNaN(val) || (min !== null && val < min) || isTooHigh) {
+      el.classList.add('input-error');
+      if (errorEl) {
+        var rangeText = isStrictMax
+          ? (min + ' to < ' + max)
+          : (min + '–' + max);
+        errorEl.innerText = 'Invalid entry: ' + labelName + ' must be ' + rangeText;
+        errorEl.style.display = 'block';
+      }
+      return false;
+    } else {
+      el.classList.remove('input-error');
+      if (errorEl) errorEl.style.display = 'none';
+      return true;
+    }
+  }
+
   function autoFocusNext(el, maxChars, nextEl) {
     if (el.value.length >= maxChars) {
       if (el.value.length > maxChars) {
         el.value = el.value.slice(0, maxChars);
       }
-      if (nextEl) nextEl.focus();
+      if (nextEl) {
+        nextEl.focus();
+        nextEl.select();
+      }
     }
     updateAverages();
   }
@@ -623,7 +700,27 @@
   var deg = function(rad) { return rad * (180 / Math.PI); };
 
   function calculateSight() {
-    // Ensure a planet is selected if bodyType is 'planet'
+    // 1. Stop if any field has an explicit validation error (red outline)
+    if (document.querySelectorAll('.input-error').length > 0) {
+      alert("Please fix the highlighted invalid entries before calculating.");
+      return;
+    }
+
+    // 2. Ensure all sighting rows have populated time values
+    var rows = document.querySelectorAll('.sighting-item');
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      var hVal = row.querySelector('.t-h').value.trim();
+      var mVal = row.querySelector('.t-m').value.trim();
+      var sVal = row.querySelector('.t-s').value.trim();
+
+      if (hVal === '' || mVal === '' || sVal === '') {
+        alert("Please enter a complete time (Hours, Minutes, and Seconds) for all sightings.");
+        return;
+      }
+    }
+
+    // 3. Ensure a planet is selected if bodyType is 'planet'
     if (document.getElementById('bodyType').value === 'planet') {
       var selectedPlanet = document.getElementById('planetSelect').value;
       if (!selectedPlanet) {
