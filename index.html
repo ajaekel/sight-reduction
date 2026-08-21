@@ -677,9 +677,9 @@
     var versionLabel = document.getElementById('swVersion');
 
     if (typeof CACHE_NAME !== 'undefined') {
-      versionLabel.textContent = 'Version: ' + CACHE_NAME;
+      versionLabel.textContent = '' + CACHE_NAME;
     } else {
-      versionLabel.textContent = 'Version: (CACHE_NAME not found)';
+      versionLabel.textContent = '(CACHE_NAME not found)';
     }
   });
 
@@ -712,18 +712,13 @@
     var errLat = document.getElementById('errLat');
     var errLon = document.getElementById('errLon');
 
-    document.getElementById('latDeg').addEventListener('input', function() {
-      validateField(this, 0, 90, 'Latitude Degrees', errLat, false);
-    });
-    document.getElementById('latMin').addEventListener('input', function() {
-      validateField(this, 0, 60, 'Latitude Minutes', errLat, true);
-    });
-    document.getElementById('lonDeg').addEventListener('input', function() {
-      validateField(this, 0, 180, 'Longitude Degrees', errLon, false);
-    });
-    document.getElementById('lonMin').addEventListener('input', function() {
-      validateField(this, 0, 60, 'Longitude Minutes', errLon, true);
-    });
+    var validateLat = function() { validateDegMinPair(document.getElementById('latDeg'), document.getElementById('latMin'), 90, 'Latitude', errLat); };
+    var validateLon = function() { validateDegMinPair(document.getElementById('lonDeg'), document.getElementById('lonMin'), 180, 'Longitude', errLon); };
+
+    document.getElementById('latDeg').addEventListener('input', validateLat);
+    document.getElementById('latMin').addEventListener('input', validateLat);
+    document.getElementById('lonDeg').addEventListener('input', validateLon);
+    document.getElementById('lonMin').addEventListener('input', validateLon);
 
     // --- SECTION 3: STAR ALMANAC VALIDATION ---
     var errGhaAriesBase = document.getElementById('errGhaAriesBase');
@@ -731,33 +726,19 @@
     var errSha = document.getElementById('errSha');
     var errDecStar = document.getElementById('errDecStar');
 
-    document.getElementById('ghaAriesBaseDeg').addEventListener('input', function() {
-      validateField(this, 0, 360, 'GHA Aries Base Deg', errGhaAriesBase, true);
-    });
-    document.getElementById('ghaAriesBaseMin').addEventListener('input', function() {
-      validateField(this, 0, 60, 'GHA Aries Base Min', errGhaAriesBase, true);
-    });
+    var validateGhaAriesBase = function() { validateDegMinPair(document.getElementById('ghaAriesBaseDeg'), document.getElementById('ghaAriesBaseMin'), 360, 'GHA Aries Base', errGhaAriesBase); };
+    var validateGhaAriesNext = function() { validateDegMinPair(document.getElementById('ghaAriesNextDeg'), document.getElementById('ghaAriesNextMin'), 360, 'GHA Aries Next', errGhaAriesNext); };
+    var validateSha = function() { validateDegMinPair(document.getElementById('shaDeg'), document.getElementById('shaMin'), 360, 'SHA', errSha); };
+    var validateDecStar = function() { validateDegMinPair(document.getElementById('decStarDeg'), document.getElementById('decStarMin'), 90, 'Star Declination', errDecStar); };
 
-    document.getElementById('ghaAriesNextDeg').addEventListener('input', function() {
-      validateField(this, 0, 360, 'GHA Aries Next Deg', errGhaAriesNext, true);
-    });
-    document.getElementById('ghaAriesNextMin').addEventListener('input', function() {
-      validateField(this, 0, 60, 'GHA Aries Next Min', errGhaAriesNext, true);
-    });
-
-    document.getElementById('shaDeg').addEventListener('input', function() {
-      validateField(this, 0, 360, 'SHA Degrees', errSha, true);
-    });
-    document.getElementById('shaMin').addEventListener('input', function() {
-      validateField(this, 0, 60, 'SHA Minutes', errSha, true);
-    });
-
-    document.getElementById('decStarDeg').addEventListener('input', function() {
-      validateField(this, 0, 90, 'Declination Degrees', errDecStar, false);
-    });
-    document.getElementById('decStarMin').addEventListener('input', function() {
-      validateField(this, 0, 60, 'Declination Minutes', errDecStar, true);
-    });
+    document.getElementById('ghaAriesBaseDeg').addEventListener('input', validateGhaAriesBase);
+    document.getElementById('ghaAriesBaseMin').addEventListener('input', validateGhaAriesBase);
+    document.getElementById('ghaAriesNextDeg').addEventListener('input', validateGhaAriesNext);
+    document.getElementById('ghaAriesNextMin').addEventListener('input', validateGhaAriesNext);
+    document.getElementById('shaDeg').addEventListener('input', validateSha);
+    document.getElementById('shaMin').addEventListener('input', validateSha);
+    document.getElementById('decStarDeg').addEventListener('input', validateDecStar);
+    document.getElementById('decStarMin').addEventListener('input', validateDecStar);
 
     // --- SECTION 3: NON-STAR ALMANAC VALIDATION ---
     var errGhaBase = document.getElementById('errGhaBase');
@@ -765,33 +746,19 @@
     var errDecBase = document.getElementById('errDecBase');
     var errDecNext = document.getElementById('errDecNext');
 
-    document.getElementById('ghaBaseDeg').addEventListener('input', function() {
-      validateField(this, 0, 360, 'GHA Base Degrees', errGhaBase, true);
-    });
-    document.getElementById('ghaBaseMin').addEventListener('input', function() {
-      validateField(this, 0, 60, 'GHA Base Minutes', errGhaBase, true);
-    });
+    var validateGhaBase = function() { validateDegMinPair(document.getElementById('ghaBaseDeg'), document.getElementById('ghaBaseMin'), 360, 'GHA Base', errGhaBase); };
+    var validateGhaNext = function() { validateDegMinPair(document.getElementById('ghaNextDeg'), document.getElementById('ghaNextMin'), 360, 'GHA Next', errGhaNext); };
+    var validateDecBase = function() { validateDegMinPair(document.getElementById('decBaseDeg'), document.getElementById('decBaseMin'), 90, 'Declination Base', errDecBase); };
+    var validateDecNext = function() { validateDegMinPair(document.getElementById('decNextDeg'), document.getElementById('decNextMin'), 90, 'Declination Next', errDecNext); };
 
-    document.getElementById('ghaNextDeg').addEventListener('input', function() {
-      validateField(this, 0, 360, 'GHA Next Degrees', errGhaNext, true);
-    });
-    document.getElementById('ghaNextMin').addEventListener('input', function() {
-      validateField(this, 0, 60, 'GHA Next Minutes', errGhaNext, true);
-    });
-
-    document.getElementById('decBaseDeg').addEventListener('input', function() {
-      validateField(this, 0, 90, 'Declination Base Deg', errDecBase, false);
-    });
-    document.getElementById('decBaseMin').addEventListener('input', function() {
-      validateField(this, 0, 60, 'Declination Base Min', errDecBase, true);
-    });
-
-    document.getElementById('decNextDeg').addEventListener('input', function() {
-      validateField(this, 0, 90, 'Declination Next Deg', errDecNext, false);
-    });
-    document.getElementById('decNextMin').addEventListener('input', function() {
-      validateField(this, 0, 60, 'Declination Next Min', errDecNext, true);
-    });
+    document.getElementById('ghaBaseDeg').addEventListener('input', validateGhaBase);
+    document.getElementById('ghaBaseMin').addEventListener('input', validateGhaBase);
+    document.getElementById('ghaNextDeg').addEventListener('input', validateGhaNext);
+    document.getElementById('ghaNextMin').addEventListener('input', validateGhaNext);
+    document.getElementById('decBaseDeg').addEventListener('input', validateDecBase);
+    document.getElementById('decBaseMin').addEventListener('input', validateDecBase);
+    document.getElementById('decNextDeg').addEventListener('input', validateDecNext);
+    document.getElementById('decNextMin').addEventListener('input', validateDecNext);
 
     addSightingLine(false);
     handleBodyTypeChange();
@@ -960,7 +927,7 @@
       return true;
     }
 
-    var val = Number(valStr);
+    var val = parseFloat(valStr);
     var isTooHigh = false;
 
     if (max !== null) {
@@ -979,6 +946,30 @@
       return false;
     } else {
       el.classList.remove('input-error');
+      if (errorEl) errorEl.style.display = 'none';
+      return true;
+    }
+  }
+
+  // NEW HELPER: Validates combined sum of degree and minute fields
+  function validateDegMinPair(degEl, minEl, maxDeg, labelName, errorEl) {
+    var degVal = parseFloat(degEl.value) || 0;
+    var minVal = parseFloat(minEl.value) || 0;
+    var totalDeg = degVal + (minVal / 60);
+
+    var isInvalid = isNaN(totalDeg) || totalDeg < 0 || totalDeg > maxDeg;
+
+    if (isInvalid && (degEl.value.trim() !== '' || minEl.value.trim() !== '')) {
+      degEl.classList.add('input-error');
+      minEl.classList.add('input-error');
+      if (errorEl) {
+        errorEl.innerText = 'Invalid entry: ' + labelName + ' total must be 0–' + maxDeg + '°';
+        errorEl.style.display = 'block';
+      }
+      return false;
+    } else {
+      degEl.classList.remove('input-error');
+      minEl.classList.remove('input-error');
       if (errorEl) errorEl.style.display = 'none';
       return true;
     }
@@ -1176,18 +1167,23 @@
       interpolatedDec = decBase + (decNext - decBase) * minSecFractionHours;
     }
 
-    var latDeg = parseInt(document.getElementById('latDeg').value, 10) || 0;
+    // --- Parse Latitude & Longitude using parseFloat for decimal degrees support ---
+    var latDeg = parseFloat(document.getElementById('latDeg').value) || 0;
     var latMin = parseFloat(document.getElementById('latMin').value) || 0;
     var latNS = document.getElementById('latNS').value;
-    var lat = (latNS === 'S') ? -(latDeg + (latMin / 60)) : (latDeg + (latMin / 60));
+    var latTotal = latDeg + (latMin / 60);
+    var lat = (latNS === 'S') ? -latTotal : latTotal;
 
-    var lonDeg = parseInt(document.getElementById('lonDeg').value, 10) || 0;
+    var lonDeg = parseFloat(document.getElementById('lonDeg').value) || 0;
     var lonMin = parseFloat(document.getElementById('lonMin').value) || 0;
     var lonEW = document.getElementById('lonEW').value;
-    var lon = (lonDeg + (lonMin / 60));
+    var lonTotal = lonDeg + (lonMin / 60);
+    var lon = lonTotal;
 
-    var apString = latDeg + '°' + latMin.toFixed(1) + "'" + latNS + ' ' +
-                   lonDeg + '°' + lonMin.toFixed(1) + "'" + lonEW;
+    // Format AP display using formatDegMin
+    var apLatFormatted = formatDegMin(latTotal);
+    var apLonFormatted = formatDegMin(lonTotal);
+    var apString = apLatFormatted + latNS + ' ' + apLonFormatted + lonEW;
 
     var lha = (lonEW === 'W') ? (interpolatedGha - lon) : (interpolatedGha + lon);
     lha = (lha % 360 + 360) % 360;
@@ -1215,7 +1211,7 @@
 
     var decAbs = Math.abs(interpolatedDec);
     var decNS = (interpolatedDec >= 0) ? 'N' : 'S';
-    var decFormatted = Math.floor(decAbs) + '° ' + ((decAbs - Math.floor(decAbs)) * 60).toFixed(1) + "'" + decNS;
+    var decFormatted = formatDegMin(decAbs) + decNS;
 
     document.getElementById('resGHA').innerText = formatDegMin(interpolatedGha);
     document.getElementById('resDec').innerText = decFormatted;
@@ -1229,13 +1225,10 @@
   }
 
   function formatDegMin(decimalDeg) {
-    var d = Math.floor(decimalDeg);
-    var m = Math.round((decimalDeg - d) * 60 * 10) / 10;
-    if (m >= 60) {
-      d += 1;
-      m -= 60;
-    }
-    return d + '° ' + m.toFixed(1) + "'";
+    var totalMin = Math.round(decimalDeg * 60 * 10) / 10;
+    var d = Math.floor(totalMin / 60);
+    var m = (totalMin % 60).toFixed(1);
+    return d + '° ' + m + "'";
   }
 
   function clearAllData() {
@@ -1258,7 +1251,7 @@
   }
 
   if ('serviceWorker' in navigator) {
-    var CACHE_NAME = 'pzx-cache-v15';
+    var CACHE_NAME = 'v15';
 
     var swCode = `
       self.addEventListener('install', function(e) {
