@@ -192,6 +192,29 @@
       padding-right: 12px;
     }
 
+    /* Compact degree fields (2–3 digits) */
+    .deg-box {
+      min-width: 42px;
+      flex: 1;
+      text-align: center;
+      padding: 8px 4px;
+    }
+
+    /* Decimal minute fields */
+    .min-box {
+      min-width: 54px;
+      flex: 1.2;
+      padding: 8px 4px;
+    }
+
+    /* Narrow drop-down selectors for N/S, E/W, (+/-) */
+    .select-compact {
+      width: 52px !important;
+      flex: 0 0 52px;
+      padding: 8px 2px;
+      text-align: center;
+    }    
+
     input, select {
       background: #2a2a2a;
       border: 1px solid var(--border);
@@ -475,8 +498,9 @@
       <div class="form-group">
         <div class="sub-title">ARIES</div>
         <div class="almanac-table">
-          <div class="almanac-header-row">
-            <div></div>
+          <!-- TOP HEADER ROW: GHA ARIES -->
+          <div class="sub-title" style="margin: 0 0 6px 0;">ARIES</div>
+          <div class="almanac-header-row" style="grid-template-columns: 1fr 1fr;">
             <div class="col-header-box almanac-col-border">
               <span class="col-time"><span class="lblBaseHour">0</span>h UTC, <span class="lblBaseDate">Jun 2</span></span>
               <span class="col-sub">Base (Deg / Min)</span>
@@ -487,18 +511,50 @@
             </div>
           </div>
 
-          <div class="almanac-data-row">
-            <div class="side-label">GHA</div>
-            <div class="almanac-col-border">
-              <div class="input-row">
-                <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaAriesBaseDeg" placeholder="100" onfocus="this.select()">
-                <input type="text" inputmode="decimal" id="ghaAriesBaseMin" placeholder="00.0" onfocus="this.select()">
+          <!-- GHA ARIES INPUTS -->
+          <div class="almanac-row-block">
+            <div class="side-label">GHA Aries</div>
+            <div class="almanac-inputs-grid">
+              <div class="almanac-col-border">
+                <div class="input-row">
+                  <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="ghaAriesBaseDeg" placeholder="100" onfocus="this.select()">
+                  <input type="text" inputmode="decimal" class="min-box" id="ghaAriesBaseMin" placeholder="00.0" onfocus="this.select()">
+                </div>
+              </div>
+              <div>
+                <div class="input-row">
+                  <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="ghaAriesNextDeg" placeholder="115" onfocus="this.select()">
+                  <input type="text" inputmode="decimal" class="min-box" id="ghaAriesNextMin" placeholder="02.5" onfocus="this.select()">
+                </div>
               </div>
             </div>
-            <div>
+          </div>
+
+          <hr style="border: 0; border-top: 1px solid var(--border); margin: 8px 0;">
+
+          <!-- STAR DATA: SHA & DECLINATION SIDE BY SIDE -->
+          <div class="sub-title" id="starSectionHeader" style="margin: 0 0 6px 0;">STAR</div>
+          
+          <div class="almanac-inputs-grid">
+            <!-- LEFT SIDE: SHA -->
+            <div class="almanac-col-border">
+              <div class="side-label" style="margin-bottom: 4px;">SHA <span style="font-size:0.75rem; color:#888;">(Deg / Min)</span></div>
               <div class="input-row">
-                <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaAriesNextDeg" placeholder="115" onfocus="this.select()">
-                <input type="text" inputmode="decimal" id="ghaAriesNextMin" placeholder="02.5" onfocus="this.select()">
+                <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="shaDeg" placeholder="140" onfocus="this.select()">
+                <input type="text" inputmode="decimal" class="min-box" id="shaMin" placeholder="12.4" onfocus="this.select()">
+              </div>
+            </div>
+
+            <!-- RIGHT SIDE: DECLINATION -->
+            <div>
+              <div class="side-label" style="margin-bottom: 4px;">Declination <span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span></div>
+              <div class="input-row">
+                <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="decStarDeg" placeholder="15" maxlength="2" onfocus="this.select()">
+                <input type="text" inputmode="decimal" class="min-box" id="decStarMin" placeholder="00.0" onfocus="this.select()">
+                <select id="decStarNS" class="select-compact">
+                  <option value="N">N</option>
+                  <option value="S">S</option>
+                </select>
               </div>
             </div>
           </div>
@@ -569,14 +625,14 @@
             <div class="almanac-inputs-grid">
               <div class="almanac-col-border">
                 <div class="input-row">
-                  <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaBaseDeg" placeholder="100" onfocus="this.select()">
-                  <input type="text" inputmode="decimal" id="ghaBaseMin" placeholder="00.0" onfocus="this.select()">
+                  <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="ghaBaseDeg" placeholder="100" onfocus="this.select()">
+                  <input type="text" inputmode="decimal" class="min-box" id="ghaBaseMin" placeholder="00.0" onfocus="this.select()">
                 </div>
               </div>
               <div>
                 <div class="input-row">
-                  <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaNextDeg" placeholder="115" onfocus="this.select()">
-                  <input type="text" inputmode="decimal" id="ghaNextMin" placeholder="02.5" onfocus="this.select()">
+                  <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="ghaNextDeg" placeholder="115" onfocus="this.select()">
+                  <input type="text" inputmode="decimal" class="min-box" id="ghaNextMin" placeholder="02.5" onfocus="this.select()">
                 </div>
               </div>
             </div>
@@ -588,9 +644,9 @@
             <div class="almanac-inputs-grid">
               <div class="almanac-col-border">
                 <div class="input-row">
-                  <input type="text" inputmode="numeric" pattern="[0-9]*" id="decBaseDeg" placeholder="15" onfocus="this.select()">
-                  <input type="text" inputmode="decimal" id="decBaseMin" placeholder="00.0" onfocus="this.select()">
-                  <select id="decBaseNS">
+                  <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="decBaseDeg" placeholder="15" maxlength="2" onfocus="this.select()">
+                  <input type="text" inputmode="decimal" class="min-box" id="decBaseMin" placeholder="00.0" onfocus="this.select()">
+                  <select id="decBaseNS" class="select-compact">
                     <option value="N">N</option>
                     <option value="S">S</option>
                   </select>
@@ -598,9 +654,9 @@
               </div>
               <div>
                 <div class="input-row">
-                  <input type="text" inputmode="numeric" pattern="[0-9]*" id="decNextDeg" placeholder="15" onfocus="this.select()">
-                  <input type="text" inputmode="decimal" id="decNextMin" placeholder="01.2" onfocus="this.select()">
-                  <select id="decNextNS">
+                  <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="decNextDeg" placeholder="15" maxlength="2" onfocus="this.select()">
+                  <input type="text" inputmode="decimal" class="min-box" id="decNextMin" placeholder="01.2" onfocus="this.select()">
+                  <select id="decNextNS" class="select-compact">
                     <option value="N">N</option>
                     <option value="S">S</option>
                   </select>
@@ -1216,7 +1272,7 @@
   }
 
   if ('serviceWorker' in navigator) {
-    var CACHE_NAME = 'pzx-cache-v10';
+    var CACHE_NAME = 'pzx-cache-v11';
 
     var swCode = `
       self.addEventListener('install', function(e) {
