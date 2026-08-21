@@ -340,7 +340,10 @@
 
 <div class="app-container">
   <div class="header-row">
-    <h1>Sight Reduction Calculator</h1>
+    <h1 style="margin-bottom: 2px;">Sight Reduction Calculator</h1>
+    <div id="swVersion" style="font-size: 0.75rem; color: var(--accent, #888); font-family: monospace; margin-bottom: 12px;">
+      Version: loading...
+    </div>
     <button class="btn-clear-all" id="btnClearAll">Clear All</button>
   </div>
 
@@ -669,6 +672,16 @@
   var sightingCount = 0;
 
   document.addEventListener('DOMContentLoaded', initApp);
+
+  document.addEventListener('DOMContentLoaded', function() {
+    var versionLabel = document.getElementById('swVersion');
+
+    if (typeof CACHE_NAME !== 'undefined') {
+      versionLabel.textContent = 'Version: ' + CACHE_NAME;
+    } else {
+      versionLabel.textContent = 'Version: (CACHE_NAME not found)';
+    }
+  });
 
   function initApp() {
     try {
