@@ -91,11 +91,19 @@
       margin-bottom: 8px;
     }
     .sighting-side-label {
-      width: 55px;
+      /*width: 55px;*/
+      width: 24px;
       flex-shrink: 0;
       font-size: 0.85rem;
       color: #aaa;
       font-weight: bold;
+      text-align: center;
+    }
+
+    /* Allow numerical input fields to flex properly on smaller screens */
+    .s-deg, .s-min {
+      min-width: 0;
+      flex: 1;
     }
 
     /* Inline layout for Section 1 Date, Celestial Body & Name */
@@ -131,6 +139,19 @@
       grid-template-columns: 80px 1fr 1fr;
       gap: 12px;
       align-items: center;
+    }
+
+    /* Stack the label above the two input columns on mobile */
+    .almanac-row-block {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .almanac-inputs-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
     }
 
     .side-label {
@@ -504,8 +525,7 @@
 
         <div class="almanac-table">
           <!-- TOP HEADER ROW -->
-          <div class="almanac-header-row">
-            <div></div>
+          <div class="almanac-header-row" style="grid-template-columns: 1fr 1fr;">
             <div class="col-header-box almanac-col-border">
               <span class="col-time"><span class="lblBaseHour">0</span>h UTC, <span class="lblBaseDate">Jun 2</span></span>
               <span class="col-sub">Base (Deg / Min)</span>
@@ -517,43 +537,47 @@
           </div>
 
           <!-- ROW 1: GHA -->
-          <div class="almanac-data-row">
+          <div class="almanac-row-block">
             <div class="side-label">GHA</div>
-            <div class="almanac-col-border">
-              <div class="input-row">
-                <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaBaseDeg" placeholder="100" onfocus="this.select()">
-                <input type="text" inputmode="decimal" id="ghaBaseMin" placeholder="00.0" onfocus="this.select()">
+            <div class="almanac-inputs-grid">
+              <div class="almanac-col-border">
+                <div class="input-row">
+                  <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaBaseDeg" placeholder="100" onfocus="this.select()">
+                  <input type="text" inputmode="decimal" id="ghaBaseMin" placeholder="00.0" onfocus="this.select()">
+                </div>
               </div>
-            </div>
-            <div>
-              <div class="input-row">
-                <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaNextDeg" placeholder="115" onfocus="this.select()">
-                <input type="text" inputmode="decimal" id="ghaNextMin" placeholder="02.5" onfocus="this.select()">
+              <div>
+                <div class="input-row">
+                  <input type="text" inputmode="numeric" pattern="[0-9]*" id="ghaNextDeg" placeholder="115" onfocus="this.select()">
+                  <input type="text" inputmode="decimal" id="ghaNextMin" placeholder="02.5" onfocus="this.select()">
+                </div>
               </div>
             </div>
           </div>
 
           <!-- ROW 2: DECLINATION -->
-          <div class="almanac-data-row">
-            <div class="side-label">Declination</div>
-            <div class="almanac-col-border">
-              <div class="input-row">
-                <input type="text" inputmode="numeric" pattern="[0-9]*" id="decBaseDeg" placeholder="15" onfocus="this.select()">
-                <input type="text" inputmode="decimal" id="decBaseMin" placeholder="00.0" onfocus="this.select()">
-                <select id="decBaseNS">
-                  <option value="N">N</option>
-                  <option value="S">S</option>
-                </select>
+          <div class="almanac-row-block">
+            <div class="side-label">Declination <span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span></div>
+            <div class="almanac-inputs-grid">
+              <div class="almanac-col-border">
+                <div class="input-row">
+                  <input type="text" inputmode="numeric" pattern="[0-9]*" id="decBaseDeg" placeholder="15" onfocus="this.select()">
+                  <input type="text" inputmode="decimal" id="decBaseMin" placeholder="00.0" onfocus="this.select()">
+                  <select id="decBaseNS">
+                    <option value="N">N</option>
+                    <option value="S">S</option>
+                  </select>
+                </div>
               </div>
-            </div>
-            <div>
-              <div class="input-row">
-                <input type="text" inputmode="numeric" pattern="[0-9]*" id="decNextDeg" placeholder="15" onfocus="this.select()">
-                <input type="text" inputmode="decimal" id="decNextMin" placeholder="01.2" onfocus="this.select()">
-                <select id="decNextNS">
-                  <option value="N">N</option>
-                  <option value="S">S</option>
-                </select>
+              <div>
+                <div class="input-row">
+                  <input type="text" inputmode="numeric" pattern="[0-9]*" id="decNextDeg" placeholder="15" onfocus="this.select()">
+                  <input type="text" inputmode="decimal" id="decNextMin" placeholder="01.2" onfocus="this.select()">
+                  <select id="decNextNS">
+                    <option value="N">N</option>
+                    <option value="S">S</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -787,7 +811,8 @@
     
     div.innerHTML = 
       '<div class="input-row">' +
-        '<div class="sighting-side-label">Sight ' + sightingCount + '</div>' +
+        // '<div class="sighting-side-label">Sight ' + sightingCount + '</div>' +
+        '<div class="sighting-side-label">' + sightingCount + '</div>' +
         '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-h" placeholder="12" maxlength="2">' +
         '<span>:</span>' +
         '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-m" placeholder="00" maxlength="2">' +
@@ -1162,7 +1187,7 @@
   }
 
   if ('serviceWorker' in navigator) {
-    var CACHE_NAME = 'pzx-cache-v8';
+    var CACHE_NAME = 'pzx-cache-v9';
 
     var swCode = `
       self.addEventListener('install', function(e) {
