@@ -495,11 +495,13 @@
     
     <!-- STAR FORM FIELDS -->
     <div id="starFields" style="display: none;">
+      
+      <!-- ARIES SECTION -->
       <div class="form-group">
         <div class="sub-title">ARIES</div>
         <div class="almanac-table">
-          <!-- TOP HEADER ROW: GHA ARIES -->
-          <div class="sub-title" style="margin: 0 0 6px 0;">ARIES</div>
+          
+          <!-- TOP HEADER ROW -->
           <div class="almanac-header-row" style="grid-template-columns: 1fr 1fr;">
             <div class="col-header-box almanac-col-border">
               <span class="col-time"><span class="lblBaseHour">0</span>h UTC, <span class="lblBaseDate">Jun 2</span></span>
@@ -511,9 +513,9 @@
             </div>
           </div>
 
-          <!-- GHA ARIES INPUTS -->
+          <!-- ROW 1: GHA (ARIES) -->
           <div class="almanac-row-block">
-            <div class="side-label">GHA Aries</div>
+            <div class="side-label">GHA</div>
             <div class="almanac-inputs-grid">
               <div class="almanac-col-border">
                 <div class="input-row">
@@ -530,75 +532,43 @@
             </div>
           </div>
 
-          <hr style="border: 0; border-top: 1px solid var(--border); margin: 8px 0;">
-
-          <!-- STAR DATA: SHA & DECLINATION SIDE BY SIDE -->
-          <div class="sub-title" id="starSectionHeader" style="margin: 0 0 6px 0;">STAR</div>
-          
-          <div class="almanac-inputs-grid">
-            <!-- LEFT SIDE: SHA -->
-            <div class="almanac-col-border">
-              <div class="side-label" style="margin-bottom: 4px;">SHA <span style="font-size:0.75rem; color:#888;">(Deg / Min)</span></div>
-              <div class="input-row">
-                <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="shaDeg" placeholder="140" onfocus="this.select()">
-                <input type="text" inputmode="decimal" class="min-box" id="shaMin" placeholder="12.4" onfocus="this.select()">
-              </div>
-            </div>
-
-            <!-- RIGHT SIDE: DECLINATION -->
-            <div>
-              <div class="side-label" style="margin-bottom: 4px;">Declination <span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span></div>
-              <div class="input-row">
-                <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="decStarDeg" placeholder="15" maxlength="2" onfocus="this.select()">
-                <input type="text" inputmode="decimal" class="min-box" id="decStarMin" placeholder="00.0" onfocus="this.select()">
-                <select id="decStarNS" class="select-compact">
-                  <option value="N">N</option>
-                  <option value="S">S</option>
-                </select>
-              </div>
-            </div>
-          </div>
         </div>
         <div class="error-msg" id="errGhaAriesBase"></div>
         <div class="error-msg" id="errGhaAriesNext"></div>
       </div>
 
-      <div class="form-group" style="margin-top: 12px;">
+      <!-- STAR NAME SECTION -->
+      <div class="form-group" style="margin-top: 16px;">
         <div class="sub-title" id="starSectionHeader">STAR</div>
         <div class="almanac-table">
-          <div class="almanac-data-row">
-            <div style="display:flex; flex-direction:column;">
-              <span class="side-label">SHA</span>
-              <span style="font-size:0.75rem; color:#888;">(Deg / Min)</span>
-            </div>
-            <div class="almanac-col-border" style="grid-column: span 2;">
-              <div class="input-row">
-                <input type="text" inputmode="numeric" pattern="[0-9]*" id="shaDeg" placeholder="140" onfocus="this.select()">
-                <input type="text" inputmode="decimal" id="shaMin" placeholder="12.4" onfocus="this.select()">
-              </div>
+
+          <!-- ROW 1: SHA (SINGLE INPUT) -->
+          <div class="almanac-row-block">
+            <div class="side-label">SHA <span style="font-size:0.75rem; color:#888;">(Deg / Min)</span></div>
+            <div class="input-row">
+              <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="shaDeg" placeholder="140" onfocus="this.select()">
+              <input type="text" inputmode="decimal" class="min-box" id="shaMin" placeholder="12.4" onfocus="this.select()">
             </div>
           </div>
 
-          <div class="almanac-data-row">
-            <div style="display:flex; flex-direction:column;">
-              <span class="side-label">Declination</span>
-              <span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span>
-            </div>
-            <div class="almanac-col-border" style="grid-column: span 2;">
-              <div class="input-row">
-                <input type="text" inputmode="numeric" pattern="[0-9]*" id="decStarDeg" placeholder="15" onfocus="this.select()">
-                <input type="text" inputmode="decimal" id="decStarMin" placeholder="00.0" onfocus="this.select()">
-                <select id="decStarNS">
-                  <option value="N">N</option>
-                  <option value="S">S</option>
-                </select>
-              </div>
+          <!-- ROW 2: DECLINATION (SINGLE INPUT) -->
+          <div class="almanac-row-block">
+            <div class="side-label">Declination <span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span></div>
+            <div class="input-row">
+              <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="decStarDeg" placeholder="15" maxlength="2" onfocus="this.select()">
+              <input type="text" inputmode="decimal" class="min-box" id="decStarMin" placeholder="00.0" onfocus="this.select()">
+              <select id="decStarNS" class="select-compact">
+                <option value="N">N</option>
+                <option value="S">S</option>
+              </select>
             </div>
           </div>
+
         </div>
         <div class="error-msg" id="errSha"></div>
         <div class="error-msg" id="errDecStar"></div>
       </div>
+
     </div>
 
     <!-- NON-STAR FORM FIELDS -->
@@ -869,19 +839,43 @@
 
   function updateHeaders() {
     var type = document.getElementById('bodyType').value;
+    var titleEl = document.getElementById('section3Title');
     var starHeader = document.getElementById('starSectionHeader');
     var nonStarHeader = document.getElementById('nonStarSectionHeader');
 
-    if (type === 'star') {
-      var starName = document.getElementById('bodyName').value.trim();
-      starHeader.innerText = starName ? 'STAR ' + starName.toUpperCase() : 'STAR';
-    } else if (type === 'planet') {
-      var planetName = document.getElementById('planetSelect').value;
-      nonStarHeader.innerText = planetName ? 'PLANET ' + planetName.toUpperCase() : 'PLANET';
-    } else if (type === 'sun') {
-      nonStarHeader.innerText = 'SUN';
-    } else if (type === 'moon') {
-      nonStarHeader.innerText = 'MOON';
+    var starInput = document.getElementById('bodyName');
+    var starName = starInput ? starInput.value.trim().toUpperCase() : '';
+
+    var planetSelect = document.getElementById('planetSelect');
+    var planetName = planetSelect ? planetSelect.value.trim().toUpperCase() : '';
+
+    // Update main section title if present
+    if (titleEl) {
+      if (type === 'star') {
+        titleEl.innerText = starName ? 'STAR ' + starName : 'STAR';
+      } else if (type === 'planet') {
+        titleEl.innerText = planetName ? 'PLANET ' + planetName : 'PLANET';
+      } else if (type === 'sun') {
+        titleEl.innerText = 'SUN';
+      } else if (type === 'moon') {
+        titleEl.innerText = 'MOON';
+      }
+    }
+
+    // Update Star subsection header
+    if (starHeader) {
+      starHeader.innerText = starName ? 'STAR ' + starName : 'STAR';
+    }
+
+    // Update Non-Star subsection header
+    if (nonStarHeader) {
+      if (type === 'planet') {
+        nonStarHeader.innerText = planetName ? 'PLANET ' + planetName : 'PLANET';
+      } else if (type === 'moon') {
+        nonStarHeader.innerText = 'MOON';
+      } else {
+        nonStarHeader.innerText = 'SUN';
+      }
     }
   }
 
@@ -894,16 +888,13 @@
     
     div.innerHTML = 
       '<div class="input-row">' +
-        // '<div class="sighting-side-label">Sight ' + sightingCount + '</div>' +
         '<div class="sighting-side-label">' + sightingCount + '</div>' +
         '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-h" placeholder="12" maxlength="2">' +
         '<span>:</span>' +
         '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-m" placeholder="00" maxlength="2">' +
         '<span>:</span>' +
         '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-s" placeholder="00" maxlength="2">' +
-        // '<input type="text" inputmode="numeric" pattern="[0-9]*" class="s-deg" placeholder="31" style="margin-left: 6px;">' +
         '<input type="text" inputmode="numeric" pattern="[0-9]*" class="s-deg" placeholder="31">' +
-
         '<input type="text" inputmode="decimal" class="s-min" placeholder="08.1">' +
         (sightingCount > 1 ? '<button class="btn-del" type="button">✕</button>' : '') +
       '</div>' +
@@ -1272,7 +1263,7 @@
   }
 
   if ('serviceWorker' in navigator) {
-    var CACHE_NAME = 'pzx-cache-v11';
+    var CACHE_NAME = 'pzx-cache-v12';
 
     var swCode = `
       self.addEventListener('install', function(e) {
