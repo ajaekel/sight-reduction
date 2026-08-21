@@ -420,12 +420,11 @@
     </div>
   </div>
 
-  <!-- SECTION 2: SIGHTINGS & CORRECTIONS -->
+  <!-- UPDATED SECTION 2: SIGHTINGS & CORRECTIONS HTML -->
   <div class="card">
     <div class="section-title">2. Sightings & Corrections</div>
 
     <div class="sub-title">SIGHTINGS</div>
-    <!-- <div style="margin-left: 61px; margin-bottom: 4px; font-size: 0.75rem; color: #aaa;"> -->
     <div style="margin-left: 22px; margin-bottom: 4px; font-size: 0.75rem; color: #aaa;">
       24h Time (HH : MM : SS) | Height (Deg / Min)
     </div>
@@ -433,7 +432,6 @@
     <div id="sightingsContainer"></div>
     <button class="btn-add" id="btnAddSight">+ Add Another Sight</button>
 
-    <!-- AVERAGE OF ENTRIES SUMMARY BOX -->
     <div class="summary-box">
       <div style="font-size: 0.75rem; font-weight: bold; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Average of Sightings</div>
       <div><strong>Local Time:</strong> <span id="avgLocalTime">--:--:--</span></div>
@@ -483,25 +481,20 @@
       </div>
     </div>
 
-    <!-- FINAL OBSERVED ALTITUDE -->
     <div class="summary-box" style="margin-top: 12px;">
       <div><strong>Ho (Observed Altitude):</strong> <span id="computedHo">--° --.-'</span></div>
     </div>
   </div>
 
-  <!-- SECTION 3: NAUTICAL ALMANAC DATA -->
+  <!-- UPDATED SECTION 3: NAUTICAL ALMANAC DATA HTML -->
   <div class="card">
     <div class="section-title">3. Nautical Almanac Data</div>
     
     <!-- STAR FORM FIELDS -->
     <div id="starFields" style="display: none;">
-      
-      <!-- ARIES SECTION -->
       <div class="form-group">
         <div class="sub-title">ARIES</div>
         <div class="almanac-table">
-          
-          <!-- TOP HEADER ROW -->
           <div class="almanac-header-row" style="grid-template-columns: 1fr 1fr;">
             <div class="col-header-box almanac-col-border">
               <span class="col-time"><span class="lblBaseHour">0</span>h UTC, <span class="lblBaseDate">Jun 2</span></span>
@@ -513,49 +506,43 @@
             </div>
           </div>
 
-          <!-- ROW 1: GHA (ARIES) -->
           <div class="almanac-row-block">
             <div class="side-label">GHA</div>
             <div class="almanac-inputs-grid">
               <div class="almanac-col-border">
                 <div class="input-row">
-                  <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="ghaAriesBaseDeg" placeholder="100" onfocus="this.select()">
+                  <input type="text" inputmode="decimal" class="deg-box" id="ghaAriesBaseDeg" placeholder="100" onfocus="this.select()">
                   <input type="text" inputmode="decimal" class="min-box" id="ghaAriesBaseMin" placeholder="00.0" onfocus="this.select()">
                 </div>
               </div>
               <div>
                 <div class="input-row">
-                  <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="ghaAriesNextDeg" placeholder="115" onfocus="this.select()">
+                  <input type="text" inputmode="decimal" class="deg-box" id="ghaAriesNextDeg" placeholder="115" onfocus="this.select()">
                   <input type="text" inputmode="decimal" class="min-box" id="ghaAriesNextMin" placeholder="02.5" onfocus="this.select()">
                 </div>
               </div>
             </div>
           </div>
-
         </div>
         <div class="error-msg" id="errGhaAriesBase"></div>
         <div class="error-msg" id="errGhaAriesNext"></div>
       </div>
 
-      <!-- STAR NAME SECTION -->
       <div class="form-group" style="margin-top: 16px;">
         <div class="sub-title" id="starSectionHeader">STAR</div>
         <div class="almanac-table">
-
-          <!-- ROW 1: SHA (SINGLE INPUT) -->
           <div class="almanac-row-block">
             <div class="side-label">SHA <span style="font-size:0.75rem; color:#888;">(Deg / Min)</span></div>
             <div class="input-row">
-              <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="shaDeg" placeholder="140" onfocus="this.select()">
+              <input type="text" inputmode="decimal" class="deg-box" id="shaDeg" placeholder="140" onfocus="this.select()">
               <input type="text" inputmode="decimal" class="min-box" id="shaMin" placeholder="12.4" onfocus="this.select()">
             </div>
           </div>
 
-          <!-- ROW 2: DECLINATION (SINGLE INPUT) -->
           <div class="almanac-row-block">
             <div class="side-label">Declination <span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span></div>
             <div class="input-row">
-              <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="decStarDeg" placeholder="15" maxlength="2" onfocus="this.select()">
+              <input type="text" inputmode="decimal" class="deg-box" id="decStarDeg" placeholder="15" onfocus="this.select()">
               <input type="text" inputmode="decimal" class="min-box" id="decStarMin" placeholder="00.0" onfocus="this.select()">
               <select id="decStarNS" class="select-compact">
                 <option value="N">N</option>
@@ -563,12 +550,10 @@
               </select>
             </div>
           </div>
-
         </div>
         <div class="error-msg" id="errSha"></div>
         <div class="error-msg" id="errDecStar"></div>
       </div>
-
     </div>
 
     <!-- NON-STAR FORM FIELDS -->
@@ -577,7 +562,6 @@
         <div class="sub-title" id="nonStarSectionHeader">SUN</div>
 
         <div class="almanac-table">
-          <!-- TOP HEADER ROW -->
           <div class="almanac-header-row" style="grid-template-columns: 1fr 1fr;">
             <div class="col-header-box almanac-col-border">
               <span class="col-time"><span class="lblBaseHour">0</span>h UTC, <span class="lblBaseDate">Jun 2</span></span>
@@ -589,32 +573,30 @@
             </div>
           </div>
 
-          <!-- ROW 1: GHA -->
           <div class="almanac-row-block">
             <div class="side-label">GHA</div>
             <div class="almanac-inputs-grid">
               <div class="almanac-col-border">
                 <div class="input-row">
-                  <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="ghaBaseDeg" placeholder="100" onfocus="this.select()">
+                  <input type="text" inputmode="decimal" class="deg-box" id="ghaBaseDeg" placeholder="100" onfocus="this.select()">
                   <input type="text" inputmode="decimal" class="min-box" id="ghaBaseMin" placeholder="00.0" onfocus="this.select()">
                 </div>
               </div>
               <div>
                 <div class="input-row">
-                  <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="ghaNextDeg" placeholder="115" onfocus="this.select()">
+                  <input type="text" inputmode="decimal" class="deg-box" id="ghaNextDeg" placeholder="115" onfocus="this.select()">
                   <input type="text" inputmode="decimal" class="min-box" id="ghaNextMin" placeholder="02.5" onfocus="this.select()">
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- ROW 2: DECLINATION -->
           <div class="almanac-row-block">
             <div class="side-label">Declination <span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span></div>
             <div class="almanac-inputs-grid">
               <div class="almanac-col-border">
                 <div class="input-row">
-                  <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="decBaseDeg" placeholder="15" maxlength="2" onfocus="this.select()">
+                  <input type="text" inputmode="decimal" class="deg-box" id="decBaseDeg" placeholder="15" onfocus="this.select()">
                   <input type="text" inputmode="decimal" class="min-box" id="decBaseMin" placeholder="00.0" onfocus="this.select()">
                   <select id="decBaseNS" class="select-compact">
                     <option value="N">N</option>
@@ -624,7 +606,7 @@
               </div>
               <div>
                 <div class="input-row">
-                  <input type="text" inputmode="numeric" pattern="[0-9]*" class="deg-box" id="decNextDeg" placeholder="15" maxlength="2" onfocus="this.select()">
+                  <input type="text" inputmode="decimal" class="deg-box" id="decNextDeg" placeholder="15" onfocus="this.select()">
                   <input type="text" inputmode="decimal" class="min-box" id="decNextMin" placeholder="01.2" onfocus="this.select()">
                   <select id="decNextNS" class="select-compact">
                     <option value="N">N</option>
@@ -894,7 +876,7 @@
         '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-m" placeholder="00" maxlength="2">' +
         '<span>:</span>' +
         '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-s" placeholder="00" maxlength="2">' +
-        '<input type="text" inputmode="numeric" pattern="[0-9]*" class="s-deg" placeholder="31">' +
+        '<input type="text" inputmode="decimal" class="s-deg" placeholder="31">' +
         '<input type="text" inputmode="decimal" class="s-min" placeholder="08.1">' +
         (sightingCount > 1 ? '<button class="btn-del" type="button">✕</button>' : '') +
       '</div>' +
@@ -949,10 +931,10 @@
     updateAverages();
 
     if (autoFocus) {
-      setTimeout(function() {
-        th.focus();
-        th.select();
-      }, 10);
+      // Synchronous execution ensures mobile virtual keyboards open reliably on user touch
+      th.focus();
+      th.click();
+      th.select();
     }
   }
 
@@ -1263,7 +1245,7 @@
   }
 
   if ('serviceWorker' in navigator) {
-    var CACHE_NAME = 'pzx-cache-v12';
+    var CACHE_NAME = 'pzx-cache-v13';
 
     var swCode = `
       self.addEventListener('install', function(e) {
