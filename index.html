@@ -91,8 +91,7 @@
       margin-bottom: 8px;
     }
     .sighting-side-label {
-      /*width: 55px;*/
-      width: 24px;
+      width: 16px;
       flex-shrink: 0;
       font-size: 0.85rem;
       color: #aaa;
@@ -100,11 +99,21 @@
       text-align: center;
     }
 
-    /* Allow numerical input fields to flex properly on smaller screens */
-    .s-deg, .s-min {
-      min-width: 0;
+    /* Give the degree and minute boxes flexible sizing with a minimum width */
+    .s-deg {
+      min-width: 42px;
       flex: 1;
     }
+
+    .s-min {
+      min-width: 48px;
+      flex: 1;
+    }
+    /* Allow numerical input fields to flex properly on smaller screens */
+    /*.s-deg, .s-min {
+      min-width: 0;
+      flex: 1;
+    }*/
 
     /* Inline layout for Section 1 Date, Celestial Body & Name */
     .body-inline-row {
@@ -206,11 +215,17 @@
     select {
       width: 110px;
     }
+    /* Tighten time box width and inner padding for 2-character fields */
     .time-box {
+      width: 36px; /* Reduced from 48px */
+      text-align: center;
+      padding: 8px 2px; /* Reduced side padding */
+    }
+    /*.time-box {
       width: 48px;
       text-align: center;
       padding: 8px 4px;
-    }
+    }*/
     .btn-add {
       background: transparent;
       border: 1px dashed var(--accent);
@@ -222,7 +237,18 @@
       width: 100%;
       margin-top: 6px;
     }
+    /* Compact delete button to prevent crowding on the right */
     .btn-del {
+      background: var(--danger);
+      color: #fff;
+      border: none;
+      padding: 8px 8px; /* Reduced side padding */
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+    /*.btn-del {
       background: var(--danger);
       color: #fff;
       border: none;
@@ -230,7 +256,7 @@
       border-radius: 4px;
       cursor: pointer;
       font-weight: bold;
-    }
+    }*/
     .btn-calc {
       width: 100%;
       background: var(--accent);
@@ -376,7 +402,8 @@
     <div class="section-title">2. Sightings & Corrections</div>
 
     <div class="sub-title">SIGHTINGS</div>
-    <div style="margin-left: 61px; margin-bottom: 4px; font-size: 0.75rem; color: #aaa;">
+    <!-- <div style="margin-left: 61px; margin-bottom: 4px; font-size: 0.75rem; color: #aaa;"> -->
+    <div style="margin-left: 22px; margin-bottom: 4px; font-size: 0.75rem; color: #aaa;">
       24h Time (HH : MM : SS) | Height (Deg / Min)
     </div>
 
@@ -818,7 +845,9 @@
         '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-m" placeholder="00" maxlength="2">' +
         '<span>:</span>' +
         '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-s" placeholder="00" maxlength="2">' +
-        '<input type="text" inputmode="numeric" pattern="[0-9]*" class="s-deg" placeholder="31" style="margin-left: 6px;">' +
+        // '<input type="text" inputmode="numeric" pattern="[0-9]*" class="s-deg" placeholder="31" style="margin-left: 6px;">' +
+        '<input type="text" inputmode="numeric" pattern="[0-9]*" class="s-deg" placeholder="31">' +
+
         '<input type="text" inputmode="decimal" class="s-min" placeholder="08.1">' +
         (sightingCount > 1 ? '<button class="btn-del" type="button">✕</button>' : '') +
       '</div>' +
@@ -1187,7 +1216,7 @@
   }
 
   if ('serviceWorker' in navigator) {
-    var CACHE_NAME = 'pzx-cache-v9';
+    var CACHE_NAME = 'pzx-cache-v10';
 
     var swCode = `
       self.addEventListener('install', function(e) {
