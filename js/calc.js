@@ -1,0 +1,182 @@
+/**
+ * calc.js
+ * Pure sight-reduction math. No DOM access anywhere in this file.
+ * Everything here takes plain numbers/objects in and returns plain numbers/objects out,
+ * so it can be unit-tested, reused for charting/exports, and reasoned about in isolation
+ * from the UI layer (app.js).
+ *
+ * Angle convention: all degree values are decimal degrees. Latitude and Declination
+ * are SIGNED (positive = N, negative = S). Longitude is UNSIGNED with a separate
+ * 'E'/'W' indicator, matching how it's read off a chart / almanac.
+ */
+(function (global) {
+  'use strict';
+
+  function rad(d) { return d * (Math.PI / 180); }
+  function deg(r) { return r * (180 / Math.PI); }
+
+  /** Combine degrees + minutes into decimal degrees (unsigned). */
+  function dmToDecimal(d, m) {
+    return (d || 0) + (m || 0) / 60;
+  }
+
+  /** Format decimal degrees as "D° MM.M'" */
+  function formatDegMin(decimalDeg) {
+    var totalMin = Math.round(decimalDeg * 60 * 10) / 10;
+    var d = Math.floor(totalMin / 60);
+    var m = (totalMin % 60).toFixed(1);
+    return d + '\u00B0 ' + m + "'";
+  }
+
+  /** Format seconds-of-day as HH:MM:SS, wrapping into [0, 86400). */
+  function secondsToTimeString(sec) {
+    sec = (sec % 86400 + 86400) % 86400;
+    var h = Math.floor(sec / 3600).toString().padStart(2, '0');
+    var m = Math.floor((sec % 3600) / 60).toString().padStart(2, '0');
+    var s = Math.round(sec % 60).toString().padStart(2, '0');
+    return h + ':' + m + ':' + s;
+  }
+
+  /**
+   * observations: [{ h, m, s, heightDeg, heightMin }, ...]
+   * Returns { avgLocalSec, avgHsDeg } or null if no observations.
+   */
+  function averageObservations(observations) {
+    if (!observations || observations.length === 0) return null;
+    var totalSec = 0;
+    var totalHs = 0;
+    observations.forEach(function (o) {
+      var sec = (o.h || 0) * 3600 + (o.m || 0) * 60 + (o.s || 0);
+      totalSec += sec;
+      totalHs += dmToDecimal(o.heightDeg, o.heightMin);
+    });
+    var n = observations.length;
+    return { avgLocalSec: totalSec / n, avgHsDeg: totalHs / n };
+  }
+
+  /**
+   * corrections: {
+   *   ieMin, ieSign ('on'|'off'),
+   *   dipMin,
+   *   altCorrMin, altCorrSign ('+'|'-'),
+   *   addAltCorrMin, addAltCorrSign ('+'|'-')
+   * }
+   * Returns Ho (Observed Altitude) in decimal degrees.
+   */
+  function computeHo(avgHsDeg, corrections) {
+    var c = corrections || {};
+    var ie = c.ieMin || 0;
+    var ieCorr = c.ieSign === 'on' ? -ie : ie;
+
+    var dipCorr = -(c.dipMin || 0);
+
+    var alt = c.altCorrMin || 0;
+    var altCorr = c.altCorrSign === '-' ? -alt : alt;
+
+    var addAlt = c.addAltCorrMin || 0;
+    var addAltCorr = c.addAltCorrSign === '-' ? -addAlt : addAlt;
+
+    var totalCorrDeg = (ieCorr + dipCorr + altCorr + addAltCorr) / 60;
+    return avgHsDeg + totalCorrDeg;
+  }
+
+  /** Local seconds-of-day -> UTC seconds-of-day, wrapped into [0, 86400). */
+  function utcSecondsFromLocal(avgLocalSec, tzOffsetHours) {
+    return ((avgLocalSec - (tzOffsetHours || 0) * 3600) % 86400 + 86400) % 86400;
+  }
+
+  /**
+   * Interpolate a GHA-like value (0-360, wraps at the hour boundary) across the
+   * fraction of the hour that has elapsed.
+   */
+  function interpolateGha(baseDeg, nextDeg, fraction) {
+    var b = baseDeg;
+    var n = nextDeg;
+    if (n < b) n += 360;
+    return (b + (n - b) * fraction) % 360;
+  }
+
+  /** Plain linear interpolation, for values that don't wrap (e.g. Declination). */
+  function interpolateLinear(base, next, fraction) {
+    return base + (next - base) * fraction;
+  }
+
+  /**
+   * Core sight reduction calculation.
+   *
+   * input = {
+   *   bodyType: 'sun' | 'moon' | 'planet' | 'star',
+   *   lat: signed decimal degrees (N positive),
+   *   lon: unsigned decimal degrees,
+   *   lonEW: 'E' | 'W',
+   *   utcFractionOfHour: 0..1 (how far through the almanac hour the avg UTC time falls),
+   *   star: { ghaAriesBase, ghaAriesNext, sha, dec } -- required if bodyType === 'star'
+   *   nonStar: { ghaBase, ghaNext, decBase, decNext } -- required otherwise
+   *   ho: decimal degrees, already-corrected Observed Altitude
+   * }
+   *
+   * Returns {
+   *   interpolatedGha, interpolatedDec, lha, hc, zn, interceptNM, interceptDirection
+   * }
+   */
+  function reduceSight(input) {
+    var interpolatedGha, interpolatedDec;
+
+    if (input.bodyType === 'star') {
+      var s = input.star;
+      var ghaAriesInterp = interpolateGha(s.ghaAriesBase, s.ghaAriesNext, input.utcFractionOfHour);
+      interpolatedGha = (ghaAriesInterp + s.sha) % 360;
+      interpolatedDec = s.dec;
+    } else {
+      var ns = input.nonStar;
+      interpolatedGha = interpolateGha(ns.ghaBase, ns.ghaNext, input.utcFractionOfHour);
+      interpolatedDec = interpolateLinear(ns.decBase, ns.decNext, input.utcFractionOfHour);
+    }
+
+    var lat = input.lat;
+    var lon = input.lon;
+
+    var lha = (input.lonEW === 'W') ? (interpolatedGha - lon) : (interpolatedGha + lon);
+    lha = (lha % 360 + 360) % 360;
+
+    var sinHc = (Math.sin(rad(lat)) * Math.sin(rad(interpolatedDec))) +
+                (Math.cos(rad(lat)) * Math.cos(rad(interpolatedDec)) * Math.cos(rad(lha)));
+    var hcRad = Math.asin(sinHc);
+    var hcDeg = deg(hcRad);
+
+    var numX = (Math.sin(rad(interpolatedDec)) * Math.cos(rad(lat))) -
+               (Math.cos(rad(interpolatedDec)) * Math.cos(rad(lha)) * Math.sin(rad(lat)));
+    var X = numX / Math.cos(hcRad);
+    if (X > 1) X = 1;
+    if (X < -1) X = -1;
+
+    var Z = deg(Math.acos(X));
+    var Zn = (lha > 180) ? Z : (360 - Z);
+
+    var interceptNM = (input.ho - hcDeg) * 60;
+
+    return {
+      interpolatedGha: interpolatedGha,
+      interpolatedDec: interpolatedDec,
+      lha: lha,
+      hc: hcDeg,
+      zn: Zn,
+      interceptNM: interceptNM,
+      interceptDirection: interceptNM >= 0 ? 'TOWARD' : 'AWAY'
+    };
+  }
+
+  global.SightCalc = {
+    rad: rad,
+    deg: deg,
+    dmToDecimal: dmToDecimal,
+    formatDegMin: formatDegMin,
+    secondsToTimeString: secondsToTimeString,
+    averageObservations: averageObservations,
+    computeHo: computeHo,
+    utcSecondsFromLocal: utcSecondsFromLocal,
+    interpolateGha: interpolateGha,
+    interpolateLinear: interpolateLinear,
+    reduceSight: reduceSight
+  };
+})(window);

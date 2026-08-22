@@ -1,0 +1,410 @@
+:root {
+  --bg: #121212;
+  --card: #1e1e1e;
+  --text: #e0e0e0;
+  --accent: #00bcd4;
+  --border: #333;
+  --danger: #ff5252;
+  --ok: #4caf50;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  margin: 0;
+  padding: 16px;
+  display: flex;
+  justify-content: center;
+}
+.app-container {
+  width: 100%;
+  max-width: 520px;
+}
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+h1 {
+  font-size: 1.3rem;
+  color: var(--accent);
+  margin: 0;
+}
+.btn-clear-all {
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  font-weight: bold;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.section-title {
+  font-size: 1.05rem;
+  font-weight: bold;
+  color: var(--accent);
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+.sub-title {
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: #aaa;
+  margin: 12px 0 6px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.form-group {
+  margin-bottom: 12px;
+}
+label {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+  color: #aaa;
+}
+.input-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Section 2 Sightings Layout */
+.sighting-item {
+  margin-bottom: 8px;
+}
+.sighting-side-label {
+  width: 16px;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  color: #aaa;
+  font-weight: bold;
+  text-align: center;
+}
+
+.s-deg {
+  min-width: 42px;
+  flex: 1;
+}
+
+.s-min {
+  min-width: 48px;
+  flex: 1;
+}
+
+/* Inline layout for Section 1 Date, Celestial Body & Name */
+.body-inline-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+.body-inline-col {
+  flex: 1;
+}
+
+/* Section 3 Almanac Grid with Side Labels */
+.almanac-table {
+  background: #181818;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #2a2a2a;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.almanac-header-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 1fr;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.almanac-data-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.almanac-row-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.almanac-inputs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.side-label {
+  color: #aaa;
+  font-weight: bold;
+  font-size: 0.85rem;
+}
+
+.col-header-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.col-header-box .col-time {
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.col-header-box .col-sub {
+  font-size: 0.75rem;
+  color: #aaa;
+}
+
+.almanac-col-border {
+  border-right: 1px dashed var(--border);
+  padding-right: 12px;
+}
+
+.deg-box {
+  min-width: 42px;
+  flex: 1;
+  text-align: center;
+  padding: 8px 4px;
+}
+
+.min-box {
+  min-width: 54px;
+  flex: 1.2;
+  padding: 8px 4px;
+}
+
+.select-compact {
+  width: 52px !important;
+  flex: 0 0 52px;
+  padding: 8px 2px;
+  text-align: center;
+}
+
+input, select {
+  background: #2a2a2a;
+  border: 1px solid var(--border);
+  color: #fff;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+}
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+select {
+  width: 110px;
+}
+.time-box {
+  width: 36px;
+  text-align: center;
+  padding: 8px 2px;
+}
+.btn-add {
+  background: transparent;
+  border: 1px dashed var(--accent);
+  color: var(--accent);
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 6px;
+}
+.btn-del {
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  padding: 8px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+.btn-calc {
+  width: 100%;
+  background: var(--accent);
+  color: #000;
+  font-weight: bold;
+  border: none;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-top: 12px;
+}
+.btn-secondary {
+  width: 100%;
+  background: transparent;
+  color: var(--accent);
+  font-weight: bold;
+  border: 1px solid var(--accent);
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.summary-box {
+  background: #252525;
+  padding: 10px;
+  border-radius: 6px;
+  border-left: 3px solid var(--accent);
+  margin-top: 10px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.results {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 8px;
+}
+.res-box {
+  background: #252525;
+  padding: 12px;
+  border-radius: 6px;
+  border-left: 3px solid var(--accent);
+}
+.res-label {
+  font-size: 0.75rem;
+  color: #888;
+  text-transform: uppercase;
+}
+.res-value {
+  font-size: 1.1rem;
+  font-weight: bold;
+  margin-top: 4px;
+}
+.input-error {
+  border: 2px solid var(--danger) !important;
+  background-color: rgba(255, 82, 82, 0.1) !important;
+}
+.error-msg {
+  color: var(--danger);
+  font-size: 0.75rem;
+  margin-top: 4px;
+  display: none;
+  font-weight: bold;
+}
+
+/* --- Section 4: Save / Export / Saved Sightings --- */
+.file-import-label {
+  display: block;
+  text-align: center;
+  background: transparent;
+  color: var(--accent);
+  font-weight: bold;
+  border: 1px solid var(--accent);
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.file-import-label input[type=file] {
+  display: none;
+}
+.saved-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.saved-item {
+  background: #252525;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.saved-item-info {
+  font-size: 0.85rem;
+  line-height: 1.3;
+}
+.saved-item-info .saved-item-title {
+  font-weight: bold;
+  color: var(--text);
+}
+.saved-item-info .saved-item-meta {
+  color: #888;
+  font-size: 0.75rem;
+}
+.saved-item-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.btn-mini {
+  border: none;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+.btn-mini-load {
+  background: var(--accent);
+  color: #000;
+}
+.btn-mini-del {
+  background: var(--danger);
+  color: #fff;
+}
+.empty-note {
+  font-size: 0.8rem;
+  color: #888;
+  font-style: italic;
+  margin-top: 8px;
+}
+.toast {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2a2a2a;
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.toast.show {
+  opacity: 1;
+}
+.toast.error {
+  border-color: var(--danger);
+}

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>calc.js regression tests</title>
+</head>
+<body>
+  <h1>calc.js regression tests</h1>
+  <p>Open the browser console to see results. All assertions log to console; failures throw.</p>
+  <script src="js/calc.js"></script>
+  <script>
+    var pass = 0, fail = 0;
+
+    function assertClose(label, actual, expected, tolerance) {
+      tolerance = tolerance === undefined ? 0.05 : tolerance;
+      var ok = Math.abs(actual - expected) <= tolerance;
+      if (ok) {
+        pass++;
+        console.log('PASS: ' + label + ' (got ' + actual.toFixed(4) + ', expected ~' + expected + ')');
+      } else {
+        fail++;
+        console.error('FAIL: ' + label + ' -- got ' + actual + ', expected ~' + expected + ' (tolerance ' + tolerance + ')');
+      }
+    }
+
+    // --- Worked example: Sun sight (values adapted from a standard sight-reduction
+    // teaching example; DR/AP near 35N 015W, LHA computed to land near a whole degree). ---
+    // AP: Lat 35 15.0 N, Lon 015 33.0 W
+    // GHA base 100 00.0, GHA next 115 02.5 (i.e. Sun moves ~15.04 deg/hr)
+    // Dec base 15 00.0 N, Dec next 15 01.2 N (roughly steady)
+    // UTC fraction of hour = 0.60 (36 minutes into the hour)
+    (function testSunReduction() {
+      var lat = SightCalc.dmToDecimal(35, 15.0);
+      var lon = SightCalc.dmToDecimal(15, 33.0);
+      var fraction = 0.60;
+
+      var nonStar = {
+        ghaBase: SightCalc.dmToDecimal(100, 0.0),
+        ghaNext: SightCalc.dmToDecimal(115, 2.5),
+        decBase: SightCalc.dmToDecimal(15, 0.0),
+        decNext: SightCalc.dmToDecimal(15, 1.2)
+      };
+
+      var ho = SightCalc.dmToDecimal(31, 20.0); // arbitrary plausible Ho for the test
+
+      var result = SightCalc.reduceSight({
+        bodyType: 'sun',
+        lat: lat,
+        lon: lon,
+        lonEW: 'W',
+        utcFractionOfHour: fraction,
+        nonStar: nonStar,
+        ho: ho
+      });
+
+      // Interpolated GHA should land between base and next, roughly base + 0.6*(next-base)
+      var expectedGha = 100.0 + 0.60 * (115 + 2.5 / 60 - 100.0);
+      assertClose('Interpolated GHA', result.interpolatedGha, expectedGha, 0.01);
+
+      // LHA = GHA - lon (W)
+      var expectedLha = ((expectedGha - lon) % 360 + 360) % 360;
+      assertClose('LHA', result.lha, expectedLha, 0.01);
+
+      // Hc should be a plausible altitude (sanity bound, not a precise external reference)
+      if (result.hc > -90 && result.hc < 90) {
+        pass++;
+        console.log('PASS: Hc within valid range (' + result.hc.toFixed(2) + ')');
+      } else {
+        fail++;
+        console.error('FAIL: Hc out of range: ' + result.hc);
+      }
+
+      // Zn should be a valid compass bearing
+      if (result.zn >= 0 && result.zn <= 360) {
+        pass++;
+        console.log('PASS: Zn within valid range (' + result.zn.toFixed(1) + ')');
+      } else {
+        fail++;
+        console.error('FAIL: Zn out of range: ' + result.zn);
+      }
+    })();
+
+    // --- Sanity check: known right-angle case ---
+    // Observer at the equator (lat 0), body's GP also on the equator (dec 0),
+    // LHA = 90 (body due east/west on the horizon-ish). Hc should be 0.
+    (function testEquatorRightAngle() {
+      var result = SightCalc.reduceSight({
+        bodyType: 'sun',
+        lat: 0,
+        lon: 0,
+        lonEW: 'W',
+        utcFractionOfHour: 0,
+        nonStar: { ghaBase: 90, ghaNext: 90, decBase: 0, decNext: 0 },
+        ho: 0
+      });
+      assertClose('Hc at lat=0, dec=0, LHA=90 should be ~0', result.hc, 0, 0.1);
+    })();
+
+    // --- GHA rollover across the hour boundary ---
+    (function testGhaRollover() {
+      var interp = SightCalc.interpolateGha(355, 10, 0.5); // next hour wraps past 360
+      assertClose('GHA rollover interpolation', interp, 2.5, 0.01);
+    })();
+
+    // --- Ho correction sign handling ---
+    (function testHoCorrections() {
+      var ho = SightCalc.computeHo(31.5, {
+        ieMin: 2.0, ieSign: 'on',       // -2.0'
+        dipMin: 3.8,                     // always -3.8'
+        altCorrMin: 12.4, altCorrSign: '-', // -12.4'
+        addAltCorrMin: 0.2, addAltCorrSign: '+' // +0.2'
+      });
+      var expectedCorrDeg = (-2.0 - 3.8 - 12.4 + 0.2) / 60;
+      assertClose('Ho with mixed corrections', ho, 31.5 + expectedCorrDeg, 0.0001);
+    })();
+
+    console.log('--- ' + pass + ' passed, ' + fail + ' failed ---');
+    if (fail > 0) {
+      throw new Error(fail + ' calc.js regression test(s) failed. See console above.');
+    }
+  </script>
+</body>
+</html>
