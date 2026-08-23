@@ -10,7 +10,7 @@
  * never on the DOM directly.
  */
 
-var APP_VERSION = 'phase1-v1';
+var APP_VERSION = 'phase1-v2';
 var sightingCount = 0;
 
 document.addEventListener('DOMContentLoaded', initApp);
@@ -484,6 +484,7 @@ function updateAverages() {
     addAltCorrMin: parseFloat(document.getElementById('addAltCorrMin').value) || 0,
     addAltCorrSign: document.getElementById('addAltCorrSign').value
   };
+  var ha = SightCalc.computeHa(avg.avgHsDeg, corrections);
   var ho = SightCalc.computeHo(avg.avgHsDeg, corrections);
 
   var tzOffset = parseFloat(document.getElementById('tzOffset').value) || 0;
@@ -492,6 +493,7 @@ function updateAverages() {
   document.getElementById('avgLocalTime').innerText = SightCalc.secondsToTimeString(avg.avgLocalSec);
   document.getElementById('avgUtcTime').innerText = SightCalc.secondsToTimeString(avgUtcSec) + ' UTC';
   document.getElementById('avgHs').innerText = SightCalc.formatDegMin(avg.avgHsDeg);
+  document.getElementById('computedHa').innerText = SightCalc.formatDegMin(ha);
   document.getElementById('computedHo').innerText = SightCalc.formatDegMin(ho);
 
   var dateInput = document.getElementById('sightDate').value;

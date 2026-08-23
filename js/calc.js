@@ -28,13 +28,21 @@
     return d + '\u00B0 ' + m + "'";
   }
 
-  /** Format seconds-of-day as HH:MM:SS, wrapping into [0, 86400). */
+  /**
+   * Format seconds-of-day as HH:MM:SS, wrapping into [0, 86400).
+   * Rounds to the nearest whole second FIRST, then decomposes into H/M/S,
+   * so a value like 59.6s correctly carries into the next minute (":60"
+   * never appears). This is purely a display concern -- the underlying
+   * unrounded seconds value passed in is never mutated, so callers doing
+   * further math (e.g. interpolation fraction-of-hour) keep full precision.
+   */
   function secondsToTimeString(sec) {
-    sec = (sec % 86400 + 86400) % 86400;
-    var h = Math.floor(sec / 3600).toString().padStart(2, '0');
-    var m = Math.floor((sec % 3600) / 60).toString().padStart(2, '0');
-    var s = Math.round(sec % 60).toString().padStart(2, '0');
-    return h + ':' + m + ':' + s;
+    var totalSec = Math.round(sec);
+    totalSec = ((totalSec % 86400) + 86400) % 86400;
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
   }
 
   /**
@@ -61,14 +69,28 @@
    *   altCorrMin, altCorrSign ('+'|'-'),
    *   addAltCorrMin, addAltCorrSign ('+'|'-')
    * }
-   * Returns Ho (Observed Altitude) in decimal degrees.
+   * Returns Ha (Apparent Altitude) in decimal degrees: Hs corrected for
+   * Index Error and Dip only. This is the value used to look up the
+   * Altitude Correction (refraction/SD/PA) tables in the Nautical Almanac.
    */
-  function computeHo(avgHsDeg, corrections) {
+  function computeHa(avgHsDeg, corrections) {
     var c = corrections || {};
     var ie = c.ieMin || 0;
     var ieCorr = c.ieSign === 'on' ? -ie : ie;
 
     var dipCorr = -(c.dipMin || 0);
+
+    return avgHsDeg + (ieCorr + dipCorr) / 60;
+  }
+
+  /**
+   * Returns Ho (Observed Altitude) in decimal degrees: Ha further corrected
+   * for refraction/semidiameter/parallax (the Altitude Correction and
+   * Additional Altitude Correction read from the almanac).
+   */
+  function computeHo(avgHsDeg, corrections) {
+    var c = corrections || {};
+    var ha = computeHa(avgHsDeg, corrections);
 
     var alt = c.altCorrMin || 0;
     var altCorr = c.altCorrSign === '-' ? -alt : alt;
@@ -76,8 +98,7 @@
     var addAlt = c.addAltCorrMin || 0;
     var addAltCorr = c.addAltCorrSign === '-' ? -addAlt : addAlt;
 
-    var totalCorrDeg = (ieCorr + dipCorr + altCorr + addAltCorr) / 60;
-    return avgHsDeg + totalCorrDeg;
+    return ha + (altCorr + addAltCorr) / 60;
   }
 
   /** Local seconds-of-day -> UTC seconds-of-day, wrapped into [0, 86400). */
@@ -173,6 +194,7 @@
     formatDegMin: formatDegMin,
     secondsToTimeString: secondsToTimeString,
     averageObservations: averageObservations,
+    computeHa: computeHa,
     computeHo: computeHo,
     utcSecondsFromLocal: utcSecondsFromLocal,
     interpolateGha: interpolateGha,
