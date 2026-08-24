@@ -6,6 +6,9 @@
   --border: #333;
   --danger: #ff5252;
   --ok: #4caf50;
+  --chart-az: #00bcd4;
+  --chart-lop: #ffca28;
+  --chart-grid: #3a3a3a;
 }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -312,6 +315,66 @@ select {
   margin-top: 4px;
   display: none;
   font-weight: bold;
+}
+
+/* --- Chart / Plot --- */
+.chart-wrap {
+  display: flex;
+  justify-content: center;
+}
+.chart-svg {
+  width: 100%;
+  max-width: 340px;
+  height: auto;
+}
+.chart-compass-label {
+  font-size: 11px;
+  fill: #888;
+}
+.chart-point-label {
+  font-size: 12px;
+  fill: var(--text);
+  font-weight: bold;
+}
+.chart-az-label {
+  font-size: 11px;
+  fill: var(--chart-az);
+  font-weight: bold;
+}
+.chart-legend {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #aaa;
+}
+.chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chart-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  border-top-width: 2.5px;
+  border-top-style: solid;
+}
+.chart-swatch.az {
+  border-top-color: var(--chart-az);
+  border-top-style: dashed;
+}
+.chart-swatch.lop {
+  border-top-color: var(--chart-lop);
+}
+.chart-caption {
+  text-align: center;
+  font-size: 0.8rem;
+  color: #888;
+  margin-top: 10px;
+  line-height: 1.5;
 }
 
 /* --- Section 4: Save / Export / Saved Sightings --- */

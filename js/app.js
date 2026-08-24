@@ -10,7 +10,7 @@
  * never on the DOM directly.
  */
 
-var APP_VERSION = 'phase1-v2';
+var APP_VERSION = 'v1.3';
 var sightingCount = 0;
 
 document.addEventListener('DOMContentLoaded', initApp);
@@ -443,6 +443,7 @@ function applyFormState(state) {
   updateHeaders();
   updateAverages();
   document.getElementById('outputCard').style.display = 'none';
+  document.getElementById('chartCard').style.display = 'none';
 }
 
 function getLineSeconds(row) {
@@ -602,12 +603,40 @@ function calculateSight() {
 
   document.getElementById('outputCard').style.display = 'block';
 
+  renderChart(state, result, apString);
+
   // Cache the last computed results on the record shape, useful for export/save.
   window._lastResult = result;
   window._lastResultDisplay = {
     ho: ho, apString: apString, interceptText: interceptText,
     zn: Math.round(result.zn).toString().padStart(3, '0') + '\u00B0'
   };
+}
+
+function formatBodyLabel(body) {
+  if (!body) return 'Body';
+  if (body.type === 'star' || body.type === 'planet') {
+    return body.name ? (body.type.charAt(0).toUpperCase() + body.type.slice(1) + ' ' + body.name) : body.type;
+  }
+  return body.type.charAt(0).toUpperCase() + body.type.slice(1);
+}
+
+function renderChart(state, result, apString) {
+  var container = document.getElementById('chartContainer');
+  var bodyLabel = formatBodyLabel(state.body);
+
+  var chartInfo = SightChart.renderSightChart(container, {
+    zn: result.zn,
+    interceptNM: result.interceptNM,
+    apLabel: apString,
+    bodyLabel: bodyLabel
+  });
+
+  document.getElementById('chartCaption').innerText =
+    'AP ' + apString + '  \u00B7  Zn ' + chartInfo.znLabel + '  \u00B7  Intercept ' + chartInfo.interceptText +
+    '  \u00B7  Range ring = ' + chartInfo.scaleNM + ' nm';
+
+  document.getElementById('chartCard').style.display = 'block';
 }
 
 function clearAllData() {
@@ -625,6 +654,7 @@ function clearAllData() {
   sightingCount = 0;
   addSightingLine(false);
   document.getElementById('outputCard').style.display = 'none';
+  document.getElementById('chartCard').style.display = 'none';
   window._lastResult = null;
   window._lastResultDisplay = null;
   updateAverages();

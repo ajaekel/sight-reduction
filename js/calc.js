@@ -187,6 +187,45 @@
     };
   }
 
+  /**
+   * Pure geometry for plotting a single sight: AP, the azimuth line toward the
+   * body's GP, and the resulting Line of Position (LOP). Everything is returned
+   * in nautical miles on a North-up, East-positive/North-positive plane centered
+   * on AP (AP is always the origin). Rendering (pixels, SVG) is chart.js's job.
+   *
+   * zn: true azimuth in decimal degrees (0-360, from North, clockwise)
+   * interceptNM: signed nm (positive = TOWARD the body's GP, negative = AWAY)
+   */
+  function computeLopGeometry(zn, interceptNM) {
+    var znRad = rad(zn);
+    var azUnit = { x: Math.sin(znRad), y: Math.cos(znRad) }; // x=East, y=North
+
+    var interceptPoint = { x: azUnit.x * interceptNM, y: azUnit.y * interceptNM };
+
+    // LOP is perpendicular to the azimuth line, passing through interceptPoint.
+    var lopDirection = { x: -azUnit.y, y: azUnit.x };
+
+    return {
+      ap: { x: 0, y: 0 },
+      azimuthUnit: azUnit,
+      interceptPoint: interceptPoint,
+      lopDirection: lopDirection
+    };
+  }
+
+  /**
+   * Chooses a "nice" round nm value (for a range ring / chart scale) that
+   * comfortably contains maxExtentNM with some padding.
+   */
+  function chooseNiceScale(maxExtentNM) {
+    var niceSteps = [0.5, 1, 2, 5, 10, 20, 30, 50, 75, 100, 150, 200, 300, 500, 1000, 2000, 5000, 10000];
+    var target = Math.max(Math.abs(maxExtentNM), 0.25) * 1.35;
+    for (var i = 0; i < niceSteps.length; i++) {
+      if (niceSteps[i] >= target) return niceSteps[i];
+    }
+    return niceSteps[niceSteps.length - 1];
+  }
+
   global.SightCalc = {
     rad: rad,
     deg: deg,
@@ -199,6 +238,8 @@
     utcSecondsFromLocal: utcSecondsFromLocal,
     interpolateGha: interpolateGha,
     interpolateLinear: interpolateLinear,
-    reduceSight: reduceSight
+    reduceSight: reduceSight,
+    computeLopGeometry: computeLopGeometry,
+    chooseNiceScale: chooseNiceScale
   };
 })(window);

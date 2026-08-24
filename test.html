@@ -141,6 +141,32 @@
       assertClose('Ha (IE + Dip only)', ha, 31.5 + (-2.0 - 3.8) / 60, 0.0001);
     })();
 
+    // --- LOP geometry: due-north azimuth, positive (TOWARD) intercept ---
+    (function testLopGeometryNorth() {
+      var geo = SightCalc.computeLopGeometry(0, 10); // body due north, 10nm toward
+      assertClose('Intercept point x (due N, TOWARD)', geo.interceptPoint.x, 0, 0.001);
+      assertClose('Intercept point y (due N, TOWARD)', geo.interceptPoint.y, 10, 0.001);
+      // LOP should run due East-West (perpendicular to a North azimuth)
+      assertClose('LOP direction x (perp to N)', Math.abs(geo.lopDirection.x), 1, 0.001);
+      assertClose('LOP direction y (perp to N)', Math.abs(geo.lopDirection.y), 0, 0.001);
+    })();
+
+    // --- LOP geometry: due-east azimuth, negative (AWAY) intercept ---
+    (function testLopGeometryEastAway() {
+      var geo = SightCalc.computeLopGeometry(90, -5); // body due east, 5nm away -> point is due west
+      assertClose('Intercept point x (due E, AWAY)', geo.interceptPoint.x, -5, 0.001);
+      assertClose('Intercept point y (due E, AWAY)', geo.interceptPoint.y, 0, 0.001);
+    })();
+
+    // --- chooseNiceScale always covers the requested extent ---
+    (function testChooseNiceScale() {
+      [0, 1.2, 4.9, 17, 123, 4321].forEach(function (v) {
+        var scale = SightCalc.chooseNiceScale(v);
+        if (scale >= Math.abs(v)) { pass++; console.log('PASS: scale ' + scale + ' covers extent ' + v); }
+        else { fail++; console.error('FAIL: scale ' + scale + ' does NOT cover extent ' + v); }
+      });
+    })();
+
     console.log('--- ' + pass + ' passed, ' + fail + ' failed ---');
     if (fail > 0) {
       throw new Error(fail + ' calc.js regression test(s) failed. See console above.');
