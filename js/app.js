@@ -10,7 +10,7 @@
  * never on the DOM directly.
  */
 
-var APP_VERSION = 'v1.3';
+var APP_VERSION = 'v1.4';
 var sightingCount = 0;
 
 document.addEventListener('DOMContentLoaded', initApp);
@@ -40,6 +40,7 @@ function initApp() {
   document.getElementById('btnSaveSight').addEventListener('click', onSaveSight);
   document.getElementById('btnExportJson').addEventListener('click', onExportJson);
   document.getElementById('fileImportJson').addEventListener('change', onImportJson);
+  document.getElementById('btnFetchUsno').addEventListener('click', onFetchUsno);
 
   ['tzOffset', 'ieMin', 'dipMin', 'altCorrMin', 'addAltCorrMin'].forEach(function (id) {
     document.getElementById(id).addEventListener('input', updateAverages);
@@ -659,6 +660,128 @@ function clearAllData() {
   window._lastResultDisplay = null;
   updateAverages();
   updateHeaders();
+}
+
+// ---------------------------------------------------------------------
+// USNO AUTOFILL
+// ---------------------------------------------------------------------
+
+function setUsnoStatus(msg, kind) {
+  var el = document.getElementById('usnoStatus');
+  el.textContent = msg;
+  el.className = 'usno-status' + (kind ? ' ' + kind : '');
+}
+
+function flashField(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove('autofilled-flash');
+  // Force a reflow so re-adding the class restarts the animation on repeat fetches.
+  void el.offsetWidth;
+  el.classList.add('autofilled-flash');
+}
+
+function applyUsnoFill(bodyType, fill) {
+  var setDM = function (degId, minId, decimalDeg) {
+    var dm = SightCalc.decimalToDM(decimalDeg);
+    document.getElementById(degId).value = dm.deg;
+    document.getElementById(minId).value = dm.min.toFixed(1);
+  };
+
+  if (bodyType === 'star') {
+    setDM('ghaAriesBaseDeg', 'ghaAriesBaseMin', fill.ghaAriesBaseDeg);
+    setDM('ghaAriesNextDeg', 'ghaAriesNextMin', fill.ghaAriesNextDeg);
+    setDM('shaDeg', 'shaMin', fill.shaDeg);
+    setDM('decStarDeg', 'decStarMin', fill.decDeg);
+    document.getElementById('decStarNS').value = fill.decSign;
+    ['ghaAriesBaseDeg', 'ghaAriesBaseMin', 'ghaAriesNextDeg', 'ghaAriesNextMin',
+     'shaDeg', 'shaMin', 'decStarDeg', 'decStarMin'].forEach(flashField);
+  } else {
+    setDM('ghaBaseDeg', 'ghaBaseMin', fill.ghaBaseDeg);
+    setDM('ghaNextDeg', 'ghaNextMin', fill.ghaNextDeg);
+    setDM('decBaseDeg', 'decBaseMin', fill.decBaseDeg);
+    document.getElementById('decBaseNS').value = fill.decBaseSign;
+    setDM('decNextDeg', 'decNextMin', fill.decNextDeg);
+    document.getElementById('decNextNS').value = fill.decNextSign;
+    ['ghaBaseDeg', 'ghaBaseMin', 'ghaNextDeg', 'ghaNextMin',
+     'decBaseDeg', 'decBaseMin', 'decNextDeg', 'decNextMin'].forEach(flashField);
+  }
+
+  updateAverages(); // refreshes the "Xh UTC" hour labels and Ho display
+}
+
+function onFetchUsno() {
+  var btn = document.getElementById('btnFetchUsno');
+  var state = collectFormState();
+
+  if (navigator.onLine === false) {
+    setUsnoStatus('You appear to be offline. Connect to fetch, or enter almanac data manually.', 'error');
+    return;
+  }
+
+  var latEntered = document.getElementById('latDeg').value.trim() !== '' || document.getElementById('latMin').value.trim() !== '';
+  var lonEntered = document.getElementById('lonDeg').value.trim() !== '' || document.getElementById('lonMin').value.trim() !== '';
+  if (!latEntered || !lonEntered) {
+    setUsnoStatus('Enter your assumed position (Section 1) first.', 'error');
+    return;
+  }
+
+  if (state.body.type === 'planet' && !state.body.name) {
+    setUsnoStatus('Select a planet first.', 'error');
+    return;
+  }
+  if (state.body.type === 'star' && !state.body.name) {
+    setUsnoStatus('Enter the star name first.', 'error');
+    return;
+  }
+
+  var rows = document.querySelectorAll('.sighting-item');
+  var hasCompleteTime = rows.length > 0 && Array.prototype.every.call(rows, function (row) {
+    return row.querySelector('.t-h').value.trim() !== '' &&
+           row.querySelector('.t-m').value.trim() !== '' &&
+           row.querySelector('.t-s').value.trim() !== '';
+  });
+  var avg = SightCalc.averageObservations(state.observations);
+  if (!avg || !hasCompleteTime) {
+    setUsnoStatus('Enter at least one complete sighting time (Section 2) first, so we know which hour to fetch.', 'error');
+    return;
+  }
+
+  var p = state.position;
+  var latTotal = SightCalc.dmToDecimal(p.latDeg, p.latMin);
+  var latSigned = (p.latNS === 'S') ? -latTotal : latTotal;
+  var lonTotal = SightCalc.dmToDecimal(p.lonDeg, p.lonMin);
+  var lonSigned = (p.lonEW === 'W') ? -lonTotal : lonTotal; // USNO coords are east-positive
+
+  var avgUtcSec = SightCalc.utcSecondsFromLocal(avg.avgLocalSec, p.tzOffset);
+  var dateInput = document.getElementById('sightDate').value;
+  var baseUtcDate = dateInput ? new Date(dateInput + 'T00:00:00Z') : new Date();
+  baseUtcDate.setUTCSeconds(baseUtcDate.getUTCSeconds() + avgUtcSec);
+  baseUtcDate.setUTCMinutes(0, 0, 0); // floor to the top of the bracketing hour
+  var nextUtcDate = new Date(baseUtcDate.getTime() + 3600 * 1000);
+
+  btn.disabled = true;
+  setUsnoStatus('Fetching from USNO\u2026', 'loading');
+
+  SightUsno.fetchAlmanacFill(state.body, baseUtcDate, nextUtcDate, latSigned, lonSigned)
+    .then(function (fill) {
+      applyUsnoFill(state.body.type, fill);
+      setUsnoStatus(
+        'Filled from USNO for ' + formatBodyLabel(state.body) + ', hour ' +
+        String(baseUtcDate.getUTCHours()).padStart(2, '0') + '\u2013' +
+        String(nextUtcDate.getUTCHours()).padStart(2, '0') + 'z on ' +
+        baseUtcDate.toISOString().split('T')[0] + '.',
+        'ok'
+      );
+      showToast('Almanac data filled from USNO.');
+    })
+    .catch(function (err) {
+      console.error(err);
+      setUsnoStatus(err && err.message ? err.message : 'Could not fetch data from USNO. You can enter almanac data manually.', 'error');
+    })
+    .finally(function () {
+      btn.disabled = false;
+    });
 }
 
 // ---------------------------------------------------------------------

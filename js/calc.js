@@ -226,6 +226,19 @@
     return niceSteps[niceSteps.length - 1];
   }
 
+  /**
+   * Splits unsigned decimal degrees into {deg, min} (minutes to 1 decimal).
+   * Rounds total minutes first, then floors into whole degrees, so a value
+   * like 14.999...deg correctly becomes {deg:15, min:0.0} rather than
+   * {deg:14, min:60.0}.
+   */
+  function decimalToDM(decimalDeg) {
+    var totalMinTenths = Math.round(Math.abs(decimalDeg) * 600);
+    var d = Math.floor(totalMinTenths / 600);
+    var m = (totalMinTenths - d * 600) / 10;
+    return { deg: d, min: m };
+  }
+
   global.SightCalc = {
     rad: rad,
     deg: deg,
@@ -240,6 +253,7 @@
     interpolateLinear: interpolateLinear,
     reduceSight: reduceSight,
     computeLopGeometry: computeLopGeometry,
-    chooseNiceScale: chooseNiceScale
+    chooseNiceScale: chooseNiceScale,
+    decimalToDM: decimalToDM
   };
 })(window);

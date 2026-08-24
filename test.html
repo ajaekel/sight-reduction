@@ -8,6 +8,7 @@
   <h1>calc.js regression tests</h1>
   <p>Open the browser console to see results. All assertions log to console; failures throw.</p>
   <script src="js/calc.js"></script>
+  <script src="js/usno.js"></script>
   <script>
     var pass = 0, fail = 0;
 
@@ -165,6 +166,55 @@
         if (scale >= Math.abs(v)) { pass++; console.log('PASS: scale ' + scale + ' covers extent ' + v); }
         else { fail++; console.error('FAIL: scale ' + scale + ' does NOT cover extent ' + v); }
       });
+    })();
+
+    // --- decimalToDM: basic and rounding-carry cases ---
+    (function testDecimalToDM() {
+      var a = SightCalc.decimalToDM(115.041667);
+      assertClose('decimalToDM deg', a.deg, 115, 0.001);
+      assertClose('decimalToDM min', a.min, 2.5, 0.05);
+
+      var b = SightCalc.decimalToDM(14.99999);
+      if (b.deg === 15 && b.min === 0) { pass++; console.log('PASS: decimalToDM carries to next degree, not 60.0min'); }
+      else { fail++; console.error('FAIL: decimalToDM carry, got deg=' + b.deg + ' min=' + b.min); }
+    })();
+
+    // --- USNO assembleFill: pure parsing/matching against mock payloads ---
+    (function testUsnoAssembleFill() {
+      function mkData(entries) {
+        return entries.map(function (e) {
+          return {
+            object: e.name, nav_star_number: e.num || null,
+            almanac_data: { dec: e.dec, gha: e.gha, hc: 0, zn: 0 },
+            altitude_corrections: { isCorrected: true, pa: 0, refr: 0, sd: 0, sum: 0 }
+          };
+        });
+      }
+
+      var baseStar = mkData([{ name: 'Aries', dec: 0, gha: 50.0 }, { name: 'Aldebaran', num: 10, dec: 16.5, gha: 190.0 }]);
+      var nextStar = mkData([{ name: 'Aries', dec: 0, gha: 65.0 }, { name: 'Aldebaran', num: 10, dec: 16.5, gha: 205.0 }]);
+      var fillStar = SightUsno.assembleFill({ type: 'star', name: 'Aldebaran' }, baseStar, nextStar);
+      assertClose('USNO star SHA', fillStar.shaDeg, 140.0, 0.001);
+
+      var baseNoAries = mkData([{ name: 'Vega', dec: 38.8, gha: 300.0 }]);
+      var nextNoAries = mkData([{ name: 'Vega', dec: 38.8, gha: 315.0 }]);
+      var fillFallback = SightUsno.assembleFill({ type: 'star', name: 'Vega' }, baseNoAries, nextNoAries);
+      if (fillFallback.shaDeg === 0 && fillFallback.ghaAriesBaseDeg === 300.0) {
+        pass++; console.log('PASS: USNO star fallback (no Aries entry) produces SHA=0');
+      } else {
+        fail++; console.error('FAIL: USNO star fallback incorrect: ' + JSON.stringify(fillFallback));
+      }
+
+      var basePlanet = mkData([{ name: 'Jupiter', dec: 22.1, gha: 44.5 }]);
+      var nextPlanet = mkData([{ name: 'Jupiter', dec: 22.1, gha: 59.5 }]);
+      var fillPlanet = SightUsno.assembleFill({ type: 'planet', name: 'Jupiter' }, basePlanet, nextPlanet);
+      assertClose('USNO planet GHA base', fillPlanet.ghaBaseDeg, 44.5, 0.001);
+
+      var threw = false;
+      try { SightUsno.assembleFill({ type: 'star', name: 'Nonexistentia' }, baseStar, nextStar); }
+      catch (e) { threw = true; }
+      if (threw) { pass++; console.log('PASS: USNO missing-body throws a descriptive error'); }
+      else { fail++; console.error('FAIL: USNO missing-body should have thrown'); }
     })();
 
     console.log('--- ' + pass + ' passed, ' + fail + ' failed ---');
