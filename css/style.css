@@ -80,6 +80,7 @@ label {
   display: flex;
   gap: 6px;
   align-items: center;
+  min-width: 0;
 }
 
 /* Section 2 Sightings Layout */
@@ -118,7 +119,7 @@ label {
 /* Section 3 Almanac Grid with Side Labels */
 .almanac-table {
   background: #181818;
-  padding: 12px;
+  padding: 10px;
   border-radius: 6px;
   border: 1px solid #2a2a2a;
   display: flex;
@@ -129,14 +130,14 @@ label {
 .almanac-header-row {
   display: grid;
   grid-template-columns: 80px 1fr 1fr;
-  gap: 12px;
+  gap: 8px;
   align-items: flex-end;
 }
 
 .almanac-data-row {
   display: grid;
   grid-template-columns: 80px 1fr 1fr;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
 }
 
@@ -149,7 +150,8 @@ label {
 .almanac-inputs-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .side-label {
@@ -162,6 +164,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .col-header-box .col-time {
@@ -178,28 +181,40 @@ label {
 
 .almanac-col-border {
   border-right: 1px dashed var(--border);
-  padding-right: 12px;
+  padding-right: 8px;
+  min-width: 0;
 }
 
-.deg-box {
-  min-width: 42px;
-  flex: 1;
-  text-align: center;
-  padding: 8px 4px;
-}
-
+/* All three almanac input boxes (Deg / Min / N-S) share equal, flexible
+   width with no hard minimums, so a 3-box Declination row fits in the same
+   column width as a 2-box GHA row -- which is also what keeps the Base|Next
+   divider aligned vertically across the header, GHA, and Declination blocks
+   (they all share the same .almanac-inputs-grid 1fr/1fr definition; forcing
+   any one row's content wider than its 1fr share is what breaks alignment). */
+.deg-box,
 .min-box {
-  min-width: 54px;
-  flex: 1.2;
-  padding: 8px 4px;
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  padding: 8px 2px;
+  font-size: 0.92rem;
 }
 
 .select-compact {
-  width: 52px !important;
-  flex: 0 0 52px;
-  padding: 8px 2px;
+  flex: 1;
+  min-width: 0;
+  width: auto !important;
+  padding: 8px 0;
   text-align: center;
+  font-size: 0.92rem;
 }
+
+/* Tighter gap specifically for 3-box rows (Deg / Min / N-S), since they have
+   one more element competing for the same column width as a 2-box GHA row. */
+.input-row-3 {
+  gap: 4px;
+}
+
 
 input, select {
   background: #2a2a2a;
@@ -339,6 +354,40 @@ select {
 }
 .autofilled-flash {
   animation: autofillFlash 1.2s ease-out;
+}
+
+/* --- Offline Almanac Cache --- */
+.cache-blurb {
+  font-size: 0.8rem;
+  color: #aaa;
+  margin: 0 0 12px 0;
+  line-height: 1.45;
+}
+.cache-progress {
+  font-size: 0.8rem;
+  margin-top: 6px;
+  min-height: 1.1em;
+  line-height: 1.4;
+}
+.cache-progress.loading {
+  color: var(--accent);
+}
+.cache-progress.ok {
+  color: var(--ok);
+}
+.cache-progress.error {
+  color: var(--danger);
+  font-weight: bold;
+}
+.cache-summary {
+  font-size: 0.8rem;
+  color: #888;
+  margin: 10px 0;
+  line-height: 1.5;
+}
+.btn-danger-outline {
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 /* --- Chart / Plot --- */

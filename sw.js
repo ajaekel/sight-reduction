@@ -1,6 +1,6 @@
 // Bump CACHE_NAME on every deploy that changes any precached file.
 // (Also update APP_VERSION in js/app.js so the on-screen version label matches.)
-var CACHE_NAME = 'ocsr-v1.4';
+var CACHE_NAME = 'ocsr-v1.6';
 
 var PRECACHE_URLS = [
   './',
@@ -9,6 +9,7 @@ var PRECACHE_URLS = [
   './js/calc.js',
   './js/storage.js',
   './js/chart.js',
+  './js/almanacCache.js',
   './js/usno.js',
   './js/app.js'
 ];

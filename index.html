@@ -225,7 +225,7 @@
 
           <div class="almanac-row-block">
             <div class="side-label">Declination <span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span></div>
-            <div class="input-row">
+            <div class="input-row input-row-3">
               <input type="text" inputmode="decimal" class="deg-box" id="decStarDeg" placeholder="15" onfocus="this.select()">
               <input type="text" inputmode="decimal" class="min-box" id="decStarMin" placeholder="00.0" onfocus="this.select()">
               <select id="decStarNS" class="select-compact">
@@ -279,7 +279,7 @@
             <div class="side-label">Declination <span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span></div>
             <div class="almanac-inputs-grid">
               <div class="almanac-col-border">
-                <div class="input-row">
+                <div class="input-row input-row-3">
                   <input type="text" inputmode="decimal" class="deg-box" id="decBaseDeg" placeholder="15" onfocus="this.select()">
                   <input type="text" inputmode="decimal" class="min-box" id="decBaseMin" placeholder="00.0" onfocus="this.select()">
                   <select id="decBaseNS" class="select-compact">
@@ -289,7 +289,7 @@
                 </div>
               </div>
               <div>
-                <div class="input-row">
+                <div class="input-row input-row-3">
                   <input type="text" inputmode="decimal" class="deg-box" id="decNextDeg" placeholder="15" onfocus="this.select()">
                   <input type="text" inputmode="decimal" class="min-box" id="decNextMin" placeholder="01.2" onfocus="this.select()">
                   <select id="decNextNS" class="select-compact">
@@ -310,6 +310,35 @@
     </div>
 
     <button class="btn-calc" id="btnCalc">Calculate Reduction</button>
+  </div>
+
+  <!-- OFFLINE ALMANAC CACHE -->
+  <div class="card">
+    <div class="section-title">Offline Almanac Cache</div>
+    <p class="cache-blurb">
+      Pre-download almanac data (GHA/Dec for the Sun, Moon, planets, and navigational stars)
+      while you have a connection, so "Fetch from USNO" above keeps working offline afterward.
+      Dates below are UTC.
+    </p>
+
+    <div class="form-group">
+      <div class="input-row">
+        <div style="flex: 1;">
+          <label>From (UTC)</label>
+          <input type="date" id="cacheFromDate">
+        </div>
+        <div style="flex: 1;">
+          <label>To (UTC)</label>
+          <input type="date" id="cacheToDate">
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-secondary" id="btnCacheRange" type="button">Download &amp; Cache Range</button>
+    <div class="cache-progress" id="cacheProgress"></div>
+
+    <div class="cache-summary" id="cacheSummary">No almanac data cached yet.</div>
+    <button class="btn-secondary btn-danger-outline" id="btnClearCache" type="button">Clear Cache</button>
   </div>
 
   <!-- SIGHT REDUCTION RESULTS CARD -->
@@ -381,6 +410,7 @@
 <script src="js/calc.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/chart.js"></script>
+<script src="js/almanacCache.js"></script>
 <script src="js/usno.js"></script>
 <script src="js/app.js"></script>
 </body>

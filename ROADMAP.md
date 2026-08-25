@@ -8,7 +8,7 @@
 
 * [X] Add button to retrieve data with USNO API call
 * [ ] Add option to cache almanac data for a date or range of dates
-* [ ] Autofill altitude corrections (via direct computation)
+* [ ] Option to autofill altitude corrections (via direct computation) see pg 280 in Nautical Almanac
   * [ ] Option to replace Dip with Observer altitude above sea level (The user should still have the option to enter Dip if they're working wth an Almanac offline)
   * [ ] Refraction
   * [ ] Semi-diameter for Sun/Moon/planets, where applicable

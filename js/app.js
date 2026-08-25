@@ -10,7 +10,7 @@
  * never on the DOM directly.
  */
 
-var APP_VERSION = 'v1.5';
+var APP_VERSION = 'v1.6';
 var sightingCount = 0;
 
 document.addEventListener('DOMContentLoaded', initApp);
@@ -41,6 +41,8 @@ function initApp() {
   document.getElementById('btnExportJson').addEventListener('click', onExportJson);
   document.getElementById('fileImportJson').addEventListener('change', onImportJson);
   document.getElementById('btnFetchUsno').addEventListener('click', onFetchUsno);
+  document.getElementById('btnCacheRange').addEventListener('click', onCacheRange);
+  document.getElementById('btnClearCache').addEventListener('click', onClearCache);
 
   ['tzOffset', 'ieMin', 'dipMin', 'altCorrMin', 'addAltCorrMin'].forEach(function (id) {
     document.getElementById(id).addEventListener('input', updateAverages);
@@ -104,6 +106,13 @@ function initApp() {
   addSightingLine(false);
   handleBodyTypeChange();
   refreshSavedList();
+  refreshCacheSummary();
+
+  try {
+    var today = new Date().toISOString().split('T')[0];
+    document.getElementById('cacheFromDate').value = today;
+    document.getElementById('cacheToDate').value = today;
+  } catch (e) {}
 
   if (window.SightStorage && SightStorage.requestPersistence) {
     SightStorage.requestPersistence();
@@ -606,8 +615,23 @@ function calculateSight() {
 
   renderChart(state, result, apString);
 
+  // The exact UTC instant the averaged sighting corresponds to (same
+  // construction used elsewhere to bracket the almanac hour).
+  var obsUtcDate = state.date ? new Date(state.date + 'T00:00:00Z') : new Date();
+  obsUtcDate.setUTCSeconds(obsUtcDate.getUTCSeconds() + avgUtcSec);
+
   // Cache the last computed results on the record shape, useful for export/save.
-  window._lastResult = result;
+  window._lastResult = {
+    interpolatedGha: result.interpolatedGha,
+    interpolatedDec: result.interpolatedDec,
+    lha: result.lha,
+    hc: result.hc,
+    zn: result.zn,
+    interceptNM: result.interceptNM,
+    interceptDirection: result.interceptDirection,
+    ho: ho,
+    observationTime: obsUtcDate.toISOString()
+  };
   window._lastResultDisplay = {
     ho: ho, apString: apString, interceptText: interceptText,
     zn: Math.round(result.zn).toString().padStart(3, '0') + '\u00B0'
@@ -658,6 +682,7 @@ function clearAllData() {
   document.getElementById('chartCard').style.display = 'none';
   window._lastResult = null;
   window._lastResultDisplay = null;
+  window._currentRecordId = null;
   updateAverages();
   updateHeaders();
 }
@@ -714,11 +739,6 @@ function onFetchUsno() {
   var btn = document.getElementById('btnFetchUsno');
   var state = collectFormState();
 
-  if (navigator.onLine === false) {
-    setUsnoStatus('You appear to be offline. Connect to fetch, or enter almanac data manually.', 'error');
-    return;
-  }
-
   var latEntered = document.getElementById('latDeg').value.trim() !== '' || document.getElementById('latMin').value.trim() !== '';
   var lonEntered = document.getElementById('lonDeg').value.trim() !== '' || document.getElementById('lonMin').value.trim() !== '';
   if (!latEntered || !lonEntered) {
@@ -761,27 +781,134 @@ function onFetchUsno() {
   var nextUtcDate = new Date(baseUtcDate.getTime() + 3600 * 1000);
 
   btn.disabled = true;
-  setUsnoStatus('Fetching from USNO\u2026', 'loading');
+  setUsnoStatus('Checking cache\u2026', 'loading');
 
-  SightUsno.fetchAlmanacFill(state.body, baseUtcDate, nextUtcDate, latSigned, lonSigned)
-    .then(function (fill) {
-      applyUsnoFill(state.body.type, fill);
+  // Cache-first: instant and works offline if this hour was pre-downloaded
+  // via the Offline Almanac Cache section below. Falls back to a live fetch
+  // (and backfills the cache) only for whatever isn't already cached.
+  SightUsno.getAlmanacFillWithCache(state.body, baseUtcDate, nextUtcDate, latSigned, lonSigned)
+    .then(function (result) {
+      applyUsnoFill(state.body.type, result.fill);
       setUsnoStatus(
-        'Filled from USNO for ' + formatBodyLabel(state.body) + ', hour ' +
+        'Filled ' + (result.fromCache ? 'from cache' : 'from USNO') + ' for ' + formatBodyLabel(state.body) + ', hour ' +
         String(baseUtcDate.getUTCHours()).padStart(2, '0') + '\u2013' +
         String(nextUtcDate.getUTCHours()).padStart(2, '0') + 'z on ' +
         baseUtcDate.toISOString().split('T')[0] + '.',
         'ok'
       );
-      showToast('Almanac data filled from USNO.');
+      showToast('Almanac data filled' + (result.fromCache ? ' (from cache).' : '.'));
+      refreshCacheSummary();
     })
     .catch(function (err) {
       console.error(err);
-      setUsnoStatus(err && err.message ? err.message : 'Could not fetch data from USNO. You can enter almanac data manually.', 'error');
+      var msg = err && err.message ? err.message : 'Could not get almanac data.';
+      if (navigator.onLine === false) {
+        msg += ' You appear to be offline and this hour isn\u2019t cached yet \u2014 download it in advance with the Offline Almanac Cache section below, or enter the data manually.';
+      }
+      setUsnoStatus(msg, 'error');
     })
     .finally(function () {
       btn.disabled = false;
     });
+}
+
+// ---------------------------------------------------------------------
+// OFFLINE ALMANAC CACHE (date-range pre-download)
+// ---------------------------------------------------------------------
+
+function setCacheProgress(msg, kind) {
+  var el = document.getElementById('cacheProgress');
+  el.textContent = msg;
+  el.className = 'cache-progress' + (kind ? ' ' + kind : '');
+}
+
+function formatBytes(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function refreshCacheSummary() {
+  if (!window.AlmanacCache) return;
+  AlmanacCache.summary().then(function (s) {
+    var el = document.getElementById('cacheSummary');
+    if (!s.count) {
+      el.textContent = 'No almanac data cached yet.';
+      return;
+    }
+    el.textContent = s.count + ' hour' + (s.count === 1 ? '' : 's') + ' cached (\u2248' + formatBytes(s.approxBytes) +
+                      '), spanning ' + s.first + 'z \u2013 ' + s.last + 'z.';
+  }).catch(function () {});
+}
+
+function onCacheRange() {
+  var btn = document.getElementById('btnCacheRange');
+  var from = document.getElementById('cacheFromDate').value;
+  var to = document.getElementById('cacheToDate').value;
+
+  if (!from || !to) {
+    setCacheProgress('Enter both a "From" and "To" date first.', 'error');
+    return;
+  }
+  if (to < from) {
+    setCacheProgress('"To" date must be on or after "From" date.', 'error');
+    return;
+  }
+  if (navigator.onLine === false) {
+    setCacheProgress('You appear to be offline. Connect to download almanac data.', 'error');
+    return;
+  }
+
+  var latEntered = document.getElementById('latDeg').value.trim() !== '' || document.getElementById('latMin').value.trim() !== '';
+  var lonEntered = document.getElementById('lonDeg').value.trim() !== '' || document.getElementById('lonMin').value.trim() !== '';
+  if (!latEntered || !lonEntered) {
+    setCacheProgress('Enter your assumed position (Section 1) first \u2014 required by the USNO API call, though GHA/Dec themselves are the same worldwide, just like a printed almanac.', 'error');
+    return;
+  }
+
+  var latDeg = parseFloat(document.getElementById('latDeg').value) || 0;
+  var latMin = parseFloat(document.getElementById('latMin').value) || 0;
+  var lonDeg = parseFloat(document.getElementById('lonDeg').value) || 0;
+  var lonMin = parseFloat(document.getElementById('lonMin').value) || 0;
+  var latTotal = SightCalc.dmToDecimal(latDeg, latMin);
+  var latSigned = (document.getElementById('latNS').value === 'S') ? -latTotal : latTotal;
+  var lonTotal = SightCalc.dmToDecimal(lonDeg, lonMin);
+  var lonSigned = (document.getElementById('lonEW').value === 'W') ? -lonTotal : lonTotal;
+
+  btn.disabled = true;
+  setCacheProgress('Starting\u2026', 'loading');
+
+  SightUsno.fetchAndCacheRange(from, to, latSigned, lonSigned, function (done, total, failedSoFar) {
+    setCacheProgress(
+      'Fetched ' + done + ' of ' + total + ' hours' + (failedSoFar ? ' (' + failedSoFar + ' failed)' : '') + '\u2026',
+      'loading'
+    );
+  })
+    .then(function (result) {
+      var msg = 'Cached ' + result.succeeded + ' of ' + result.total + ' hours.';
+      if (result.failed > 0) {
+        msg += ' ' + result.failed + ' failed \u2014 re-run the same range to retry just those.';
+      }
+      setCacheProgress(msg, result.failed > 0 ? 'error' : 'ok');
+      showToast('Almanac cache updated.');
+      refreshCacheSummary();
+    })
+    .catch(function (err) {
+      console.error(err);
+      setCacheProgress(err && err.message ? err.message : 'Could not download almanac data.', 'error');
+    })
+    .finally(function () {
+      btn.disabled = false;
+    });
+}
+
+function onClearCache() {
+  if (!confirm('Clear all cached almanac data from this device? (Saved sights are not affected.)')) return;
+  AlmanacCache.clearAll().then(function () {
+    refreshCacheSummary();
+    setCacheProgress('', '');
+    showToast('Almanac cache cleared.');
+  });
 }
 
 // ---------------------------------------------------------------------
@@ -799,12 +926,24 @@ function showToast(message, isError) {
 
 function onSaveSight() {
   var state = collectFormState();
+  var existingLabel = state.label || '';
+  var suggested = existingLabel || (formatBodyLabel(state.body) + (state.date ? ' - ' + state.date : ''));
+
+  var name = prompt('Save this sight as:', suggested);
+  if (name === null) return; // user cancelled
+
+  state.label = name.trim() || suggested;
+  document.getElementById('sightLabel').value = state.label; // keep the form in sync
+
+  // If we're editing a sight we just loaded/saved this session, update that
+  // same record instead of creating a duplicate.
+  if (window._currentRecordId) state.id = window._currentRecordId;
+
   if (window._lastResult) state.results = window._lastResult;
 
   SightStorage.save(state).then(function (saved) {
-    // Keep editing the same record on subsequent saves instead of creating duplicates.
     window._currentRecordId = saved.id;
-    showToast('Sight saved to this device.');
+    showToast('Saved as "' + state.label + '".');
     refreshSavedList();
   }).catch(function (err) {
     console.error(err);
