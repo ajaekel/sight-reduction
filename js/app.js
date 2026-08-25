@@ -1,6 +1,7 @@
-/**
+  /**
  * app.js
- * UI layer only: DOM reads/writes, event wiring, validation feedback.
+ *
+ *  UI layer only: DOM reads/writes, event wiring, validation feedback.
  * All actual math lives in calc.js (window.SightCalc).
  * All persistence lives in storage.js (window.SightStorage).
  *
@@ -10,7 +11,7 @@
  * never on the DOM directly.
  */
 
-var APP_VERSION = 'v1.6';
+var APP_VERSION = 'v1.8';
 var sightingCount = 0;
 
 document.addEventListener('DOMContentLoaded', initApp);
@@ -25,7 +26,7 @@ function initApp() {
   } catch (e) {}
 
   document.getElementById('bodyType').addEventListener('change', handleBodyTypeChange);
-  document.getElementById('bodyName').addEventListener('input', updateHeaders);
+  initStarCombo();
   document.getElementById('planetSelect').addEventListener('change', function () {
     updateAverages();
     updateHeaders();
@@ -183,6 +184,80 @@ function updateHeaders() {
       nonStarHeader.innerText = 'SUN';
     }
   }
+}
+
+/**
+ * Searchable dropdown for the Star Name field. Filters NAV_STARS as the
+ * user types but never restricts the value to that list -- it's a plain
+ * text input underneath, so any text (a name not in the list, a bearing
+ * note, anything) is accepted as-is.
+ */
+function initStarCombo() {
+  var input = document.getElementById('bodyName');
+  var list = document.getElementById('bodyNameSuggestions');
+  if (!input || !list) return;
+
+  function renderSuggestions(query) {
+    var q = (query || '').trim().toLowerCase();
+    var stars = window.NAV_STARS || [];
+    var startsWith = [];
+    var contains = [];
+
+    stars.forEach(function (name) {
+      var lower = name.toLowerCase();
+      if (!q) {
+        startsWith.push(name);
+      } else if (lower.indexOf(q) === 0) {
+        startsWith.push(name);
+      } else if (lower.indexOf(q) !== -1) {
+        contains.push(name);
+      }
+    });
+
+    var matches = startsWith.concat(contains).slice(0, 10);
+
+    list.innerHTML = '';
+    if (matches.length === 0) {
+      list.style.display = 'none';
+      return;
+    }
+
+    matches.forEach(function (name) {
+      var item = document.createElement('div');
+      item.className = 'combo-item';
+      item.textContent = name;
+      // mousedown (not click) fires before the input's blur, so we can set
+      // the value and hide the list without the field losing focus first.
+      item.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        input.value = name;
+        list.style.display = 'none';
+        updateHeaders();
+      });
+      list.appendChild(item);
+    });
+
+    list.style.display = 'block';
+  }
+
+  input.addEventListener('input', function () {
+    renderSuggestions(input.value);
+    updateHeaders();
+  });
+
+  input.addEventListener('focus', function () {
+    renderSuggestions(input.value);
+  });
+
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') list.style.display = 'none';
+  });
+
+  document.addEventListener('click', function (e) {
+    if (e.target !== input && !list.contains(e.target)) {
+      list.style.display = 'none';
+    }
+  });
 }
 
 function addSightingLine(autoFocus) {
@@ -735,6 +810,27 @@ function applyUsnoFill(bodyType, fill) {
   updateAverages(); // refreshes the "Xh UTC" hour labels and Ho display
 }
 
+/**
+ * Reads the Section 1 assumed position directly from the DOM and returns
+ * signed decimal degrees (S/W negative). Shared by every feature that needs
+ * the AP but isn't already holding a collectFormState() object (or wants a
+ * fresh read without re-collecting the whole form).
+ */
+function getAssumedPositionSigned() {
+  var latDeg = parseFloat(document.getElementById('latDeg').value) || 0;
+  var latMin = parseFloat(document.getElementById('latMin').value) || 0;
+  var lonDeg = parseFloat(document.getElementById('lonDeg').value) || 0;
+  var lonMin = parseFloat(document.getElementById('lonMin').value) || 0;
+
+  var latTotal = SightCalc.dmToDecimal(latDeg, latMin);
+  var lonTotal = SightCalc.dmToDecimal(lonDeg, lonMin);
+
+  return {
+    lat: document.getElementById('latNS').value === 'S' ? -latTotal : latTotal,
+    lon: document.getElementById('lonEW').value === 'W' ? -lonTotal : lonTotal
+  };
+}
+
 function onFetchUsno() {
   var btn = document.getElementById('btnFetchUsno');
   var state = collectFormState();
@@ -767,13 +863,8 @@ function onFetchUsno() {
     return;
   }
 
-  var p = state.position;
-  var latTotal = SightCalc.dmToDecimal(p.latDeg, p.latMin);
-  var latSigned = (p.latNS === 'S') ? -latTotal : latTotal;
-  var lonTotal = SightCalc.dmToDecimal(p.lonDeg, p.lonMin);
-  var lonSigned = (p.lonEW === 'W') ? -lonTotal : lonTotal; // USNO coords are east-positive
-
-  var avgUtcSec = SightCalc.utcSecondsFromLocal(avg.avgLocalSec, p.tzOffset);
+  var position = getAssumedPositionSigned();
+  var avgUtcSec = SightCalc.utcSecondsFromLocal(avg.avgLocalSec, state.position.tzOffset);
   var dateInput = document.getElementById('sightDate').value;
   var baseUtcDate = dateInput ? new Date(dateInput + 'T00:00:00Z') : new Date();
   baseUtcDate.setUTCSeconds(baseUtcDate.getUTCSeconds() + avgUtcSec);
@@ -786,7 +877,7 @@ function onFetchUsno() {
   // Cache-first: instant and works offline if this hour was pre-downloaded
   // via the Offline Almanac Cache section below. Falls back to a live fetch
   // (and backfills the cache) only for whatever isn't already cached.
-  SightUsno.getAlmanacFillWithCache(state.body, baseUtcDate, nextUtcDate, latSigned, lonSigned)
+  SightUsno.getAlmanacFillWithCache(state.body, baseUtcDate, nextUtcDate, position.lat, position.lon)
     .then(function (result) {
       applyUsnoFill(state.body.type, result.fill);
       setUsnoStatus(
@@ -866,19 +957,12 @@ function onCacheRange() {
     return;
   }
 
-  var latDeg = parseFloat(document.getElementById('latDeg').value) || 0;
-  var latMin = parseFloat(document.getElementById('latMin').value) || 0;
-  var lonDeg = parseFloat(document.getElementById('lonDeg').value) || 0;
-  var lonMin = parseFloat(document.getElementById('lonMin').value) || 0;
-  var latTotal = SightCalc.dmToDecimal(latDeg, latMin);
-  var latSigned = (document.getElementById('latNS').value === 'S') ? -latTotal : latTotal;
-  var lonTotal = SightCalc.dmToDecimal(lonDeg, lonMin);
-  var lonSigned = (document.getElementById('lonEW').value === 'W') ? -lonTotal : lonTotal;
+  var position = getAssumedPositionSigned();
 
   btn.disabled = true;
   setCacheProgress('Starting\u2026', 'loading');
 
-  SightUsno.fetchAndCacheRange(from, to, latSigned, lonSigned, function (done, total, failedSoFar) {
+  SightUsno.fetchAndCacheRange(from, to, position.lat, position.lon, function (done, total, failedSoFar) {
     setCacheProgress(
       'Fetched ' + done + ' of ' + total + ' hours' + (failedSoFar ? ' (' + failedSoFar + ' failed)' : '') + '\u2026',
       'loading'

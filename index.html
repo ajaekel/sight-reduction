@@ -41,7 +41,10 @@
 
         <div class="body-inline-col" id="bodyNameContainer" style="display: none; flex: 1;">
           <label id="bodyNameLabel">Name</label>
-          <input type="text" id="bodyName" placeholder="Name of Star" style="display: none;">
+          <div class="combo-wrap">
+            <input type="text" id="bodyName" placeholder="Name of Star" autocomplete="off" style="display: none;">
+            <div class="combo-list" id="bodyNameSuggestions"></div>
+          </div>
           <select id="planetSelect" style="display: none; width: 100%;">
             <option value="" disabled selected hidden>Select...</option>
             <option value="Jupiter">Jupiter</option>
@@ -167,11 +170,43 @@
     </div>
   </div>
 
+  <!-- OFFLINE ALMANAC CACHE (collapsible, collapsed by default) -->
+  <div class="card">
+    <details id="cacheDetails">
+      <summary class="section-title cache-summary-toggle">Offline Almanac Cache</summary>
+
+      <p class="cache-blurb">
+        Pre-download almanac data (GHA/Dec for the Sun, Moon, planets, and navigational stars)
+        while you have a connection, so auto-fill keeps working offline afterward.
+        Dates below are UTC.
+      </p>
+
+      <div class="form-group">
+        <div class="input-row">
+          <div style="flex: 1;">
+            <label>From (UTC)</label>
+            <input type="date" id="cacheFromDate">
+          </div>
+          <div style="flex: 1;">
+            <label>To (UTC)</label>
+            <input type="date" id="cacheToDate">
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-secondary" id="btnCacheRange" type="button">Download &amp; Cache Range</button>
+      <div class="cache-progress" id="cacheProgress"></div>
+
+      <div class="cache-summary-text" id="cacheSummary">No almanac data cached yet.</div>
+      <button class="btn-secondary btn-danger-outline" id="btnClearCache" type="button">Clear Cache</button>
+    </details>
+  </div>
+
   <!-- SECTION 3: NAUTICAL ALMANAC DATA -->
   <div class="card">
     <div class="section-title">3. Nautical Almanac Data</div>
 
-    <button class="btn-secondary" id="btnFetchUsno" type="button">Fetch from USNO (auto-fill)</button>
+    <button class="btn-secondary" id="btnFetchUsno" type="button">Auto-fill &mdash; Try cache then fetch from USNO</button>
     <div class="usno-status" id="usnoStatus"></div>
 
     <!-- STAR FORM FIELDS -->
@@ -312,35 +347,6 @@
     <button class="btn-calc" id="btnCalc">Calculate Reduction</button>
   </div>
 
-  <!-- OFFLINE ALMANAC CACHE -->
-  <div class="card">
-    <div class="section-title">Offline Almanac Cache</div>
-    <p class="cache-blurb">
-      Pre-download almanac data (GHA/Dec for the Sun, Moon, planets, and navigational stars)
-      while you have a connection, so "Fetch from USNO" above keeps working offline afterward.
-      Dates below are UTC.
-    </p>
-
-    <div class="form-group">
-      <div class="input-row">
-        <div style="flex: 1;">
-          <label>From (UTC)</label>
-          <input type="date" id="cacheFromDate">
-        </div>
-        <div style="flex: 1;">
-          <label>To (UTC)</label>
-          <input type="date" id="cacheToDate">
-        </div>
-      </div>
-    </div>
-
-    <button class="btn-secondary" id="btnCacheRange" type="button">Download &amp; Cache Range</button>
-    <div class="cache-progress" id="cacheProgress"></div>
-
-    <div class="cache-summary" id="cacheSummary">No almanac data cached yet.</div>
-    <button class="btn-secondary btn-danger-outline" id="btnClearCache" type="button">Clear Cache</button>
-  </div>
-
   <!-- SIGHT REDUCTION RESULTS CARD -->
   <div class="card" id="outputCard" style="display: none;">
     <div class="section-title">Sight Reduction Results</div>
@@ -412,6 +418,7 @@
 <script src="js/chart.js"></script>
 <script src="js/almanacCache.js"></script>
 <script src="js/usno.js"></script>
+<script src="js/stars.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
