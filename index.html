@@ -11,12 +11,21 @@
 
 <div class="app-container">
   <div class="header-row">
-    <h1 style="margin-bottom: 2px;">Sight Reduction Calculator</h1>
-    <div id="swVersion" style="font-size: 0.75rem; color: var(--accent, #888); font-family: monospace; margin-bottom: 12px;">
-      Version: loading...
+    <button class="btn-hamburger" id="btnMenu" aria-label="Open menu" aria-haspopup="true" aria-expanded="false" aria-controls="appMenu">
+      <span></span><span></span><span></span>
+    </button>
+    <div class="title-group">
+      <h1 style="margin-bottom: 2px;">Sight Reduction Calculator</h1>
+      <div id="swVersion" style="font-size: 0.75rem; color: var(--accent, #888); font-family: monospace; margin-bottom: 12px;">
+        Version: loading...
+      </div>
     </div>
     <button class="btn-clear-all" id="btnClearAll">Clear All</button>
   </div>
+  <nav class="app-menu" id="appMenu" hidden>
+    <a class="app-menu-item" href="index.html#saved-sightings">Sightings</a>
+    <a class="app-menu-item" href="fixes.html">Fixes</a>
+  </nav>
 
   <!-- SECTION 1: HEADER & AP POSITION -->
   <div class="card">
@@ -405,7 +414,7 @@
       <input type="file" id="fileImportJson" accept="application/json,.json">
     </label>
 
-    <div class="sub-title" style="margin-top: 18px;">Saved Sightings (this device)</div>
+    <div class="sub-title" id="saved-sightings" style="margin-top: 18px;">Saved Sightings (this device)</div>
     <div class="saved-list" id="savedList"></div>
     <div class="empty-note" id="savedListEmpty">No sightings saved on this device yet.</div>
   </div>
@@ -415,10 +424,12 @@
 
 <script src="js/calc.js"></script>
 <script src="js/storage.js"></script>
+<script src="js/fixStorage.js"></script>
 <script src="js/chart.js"></script>
 <script src="js/almanacCache.js"></script>
 <script src="js/usno.js"></script>
 <script src="js/stars.js"></script>
+<script src="js/nav.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

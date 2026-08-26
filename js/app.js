@@ -11,7 +11,7 @@
  * never on the DOM directly.
  */
 
-var APP_VERSION = 'v1.8';
+var APP_VERSION = 'v1.9';
 var sightingCount = 0;
 
 document.addEventListener('DOMContentLoaded', initApp);
@@ -1127,10 +1127,23 @@ function refreshSavedList() {
       });
 
       item.querySelector('.btn-mini-del').addEventListener('click', function () {
-        if (!confirm('Delete this saved sight? This cannot be undone.')) return;
-        SightStorage.remove(entry.id).then(function () {
-          showToast('Deleted.');
-          refreshSavedList();
+        // A sighting referenced by a Fix can't be deleted out from under it --
+        // the user has to remove it from the fix(es) first.
+        var checkFixes = window.FixStorage
+          ? FixStorage.findFixesContaining(entry.id)
+          : Promise.resolve([]);
+
+        checkFixes.then(function (fixes) {
+          if (fixes.length) {
+            var names = fixes.map(function (f) { return f.name; }).join(', ');
+            showToast('Used in ' + (fixes.length === 1 ? 'fix' : 'fixes') + ' "' + names + '" \u2014 remove it there first.', true);
+            return;
+          }
+          if (!confirm('Delete this saved sight? This cannot be undone.')) return;
+          SightStorage.remove(entry.id).then(function () {
+            showToast('Deleted.');
+            refreshSavedList();
+          });
         });
       });
 

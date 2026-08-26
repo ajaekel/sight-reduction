@@ -227,6 +227,39 @@
   }
 
   /**
+   * Combine degrees + minutes + a hemisphere letter ('S' or 'W' => negative)
+   * into signed decimal degrees. A small shared helper so every call site that
+   * needs a position as signed decimal (fix plotting, etc.) applies the same
+   * sign convention as the rest of this file.
+   */
+  function signedDecimalFromDM(d, m, hemisphere) {
+    var mag = dmToDecimal(d, m);
+    return (hemisphere === 'S' || hemisphere === 'W') ? -mag : mag;
+  }
+
+  /**
+   * Flat-earth nm offset of (lat, lon) from a reference point (refLat, refLon),
+   * both signed decimal degrees (N/E positive). Used to place multiple
+   * sightings -- each with its own independently-entered AP -- onto one
+   * shared plot for a Fix.
+   *
+   * This is a local tangent-plane approximation: fine for APs that are at
+   * most a few nm apart (e.g. a round of star sights, or a deliberately
+   * shifted AP later the same evening), but it does NOT account for a moving
+   * vessel between sightings (that's the separate running-fix/DR problem) and
+   * accuracy degrades at large offsets or extreme latitudes where the fixed
+   * refLat cosine factor stops being a good approximation.
+   *
+   * Returns { x, y } in nm: x = East-positive, y = North-positive, matching
+   * computeLopGeometry's plane.
+   */
+  function nmOffsetFromRef(refLat, refLon, lat, lon) {
+    var dNorth = (lat - refLat) * 60;
+    var dEast = (lon - refLon) * 60 * Math.cos(rad(refLat));
+    return { x: dEast, y: dNorth };
+  }
+
+  /**
    * Splits unsigned decimal degrees into {deg, min} (minutes to 1 decimal).
    * Rounds total minutes first, then floors into whole degrees, so a value
    * like 14.999...deg correctly becomes {deg:15, min:0.0} rather than
@@ -254,6 +287,8 @@
     reduceSight: reduceSight,
     computeLopGeometry: computeLopGeometry,
     chooseNiceScale: chooseNiceScale,
-    decimalToDM: decimalToDM
+    decimalToDM: decimalToDM,
+    signedDecimalFromDM: signedDecimalFromDM,
+    nmOffsetFromRef: nmOffsetFromRef
   };
 })(window);

@@ -29,6 +29,64 @@ body {
   align-items: center;
   margin-bottom: 16px;
 }
+.title-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+.btn-hamburger {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.btn-hamburger span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+.app-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  margin: -8px 0 16px;
+  max-width: 220px;
+}
+.app-menu[hidden] {
+  display: none;
+}
+.app-menu-item {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+.app-menu-item:hover {
+  background: #2a2a2a;
+}
+.app-menu-item[aria-current="page"] {
+  color: var(--accent);
+  font-weight: bold;
+}
 h1 {
   font-size: 1.3rem;
   color: var(--accent);
@@ -612,4 +670,29 @@ details:not([open]) > summary.cache-summary-toggle {
 }
 .toast.error {
   border-color: var(--danger);
+}
+
+/* --- Fixes (multi-LOP plot legend + inline swatches) --- */
+.fix-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 10px;
+  font-size: 0.8rem;
+}
+.fix-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+}
+.fix-legend-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  vertical-align: middle;
+  margin-right: 6px;
 }

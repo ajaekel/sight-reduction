@@ -95,7 +95,100 @@
     };
   }
 
+  /**
+   * Renders multiple LOPs (a Fix) on one shared plot. Each sighting keeps
+   * its own AP -- callers translate each into a common frame first (see
+   * SightCalc.nmOffsetFromRef) and pass that translation in as `offset`.
+   *
+   * items = [{
+   *   color: CSS color string,
+   *   label: string (shown in the legend),
+   *   zn: decimal degrees,
+   *   interceptNM: signed nm,
+   *   offset: { x, y } nm from the fix's reference AP (0,0 for the reference itself)
+   * }, ...]
+   */
+  function renderFixChart(container, items) {
+    if (!items || !items.length) {
+      container.innerHTML = '<div class="empty-note">Add at least one calculated sighting to plot this fix.</div>';
+      return { scaleNM: 0 };
+    }
+
+    // Local geometry (AP-at-origin) per sighting, shifted into the shared frame.
+    var geos = items.map(function (item) {
+      var geo = SightCalc.computeLopGeometry(item.zn, item.interceptNM);
+      var off = item.offset || { x: 0, y: 0 };
+      return {
+        item: item,
+        ap: { x: geo.ap.x + off.x, y: geo.ap.y + off.y },
+        interceptPoint: { x: geo.interceptPoint.x + off.x, y: geo.interceptPoint.y + off.y },
+        lopDirection: geo.lopDirection // a direction vector; translation doesn't affect it
+      };
+    });
+
+    // The shared scale has to contain every translated AP and intercept
+    // point, not just one sighting's -- otherwise an offset sighting can
+    // render off-canvas.
+    var maxExtent = 0;
+    geos.forEach(function (g) {
+      maxExtent = Math.max(maxExtent, Math.hypot(g.ap.x, g.ap.y), Math.hypot(g.interceptPoint.x, g.interceptPoint.y));
+    });
+    var scale = SightCalc.chooseNiceScale(maxExtent);
+    var pxPerNm = RADIUS / scale;
+
+    function toPx(nmPoint) {
+      return { x: CENTER + nmPoint.x * pxPerNm, y: CENTER - nmPoint.y * pxPerNm };
+    }
+
+    var lopExtendNm = scale * 2.2;
+
+    var parts = [];
+    parts.push(
+      '<svg viewBox="0 0 ' + SIZE + ' ' + SIZE + '" xmlns="http://www.w3.org/2000/svg" class="chart-svg" role="img" aria-label="Plot of multiple lines of position for this fix">' +
+        '<defs><clipPath id="fixPlotClip"><circle cx="' + CENTER + '" cy="' + CENTER + '" r="' + RADIUS + '"/></clipPath></defs>' +
+        '<circle cx="' + CENTER + '" cy="' + CENTER + '" r="' + RADIUS + '" fill="none" stroke="var(--chart-grid)" stroke-width="1"/>' +
+        '<circle cx="' + CENTER + '" cy="' + CENTER + '" r="' + (RADIUS / 2) + '" fill="none" stroke="var(--chart-grid)" stroke-width="1" stroke-dasharray="2,4"/>' +
+        '<text x="' + CENTER + '" y="' + (CENTER - RADIUS - 8) + '" text-anchor="middle" class="chart-compass-label">N</text>' +
+        '<text x="' + (CENTER + RADIUS + 12) + '" y="' + (CENTER + 4) + '" text-anchor="middle" class="chart-compass-label">E</text>' +
+        '<text x="' + CENTER + '" y="' + (CENTER + RADIUS + 18) + '" text-anchor="middle" class="chart-compass-label">S</text>' +
+        '<text x="' + (CENTER - RADIUS - 12) + '" y="' + (CENTER + 4) + '" text-anchor="middle" class="chart-compass-label">W</text>' +
+        '<g clip-path="url(#fixPlotClip)">'
+    );
+
+    geos.forEach(function (g) {
+      var p1 = toPx({
+        x: g.interceptPoint.x + g.lopDirection.x * lopExtendNm,
+        y: g.interceptPoint.y + g.lopDirection.y * lopExtendNm
+      });
+      var p2 = toPx({
+        x: g.interceptPoint.x - g.lopDirection.x * lopExtendNm,
+        y: g.interceptPoint.y - g.lopDirection.y * lopExtendNm
+      });
+      parts.push('<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" stroke="' + g.item.color + '" stroke-width="2.5"/>');
+    });
+
+    parts.push('</g>');
+
+    geos.forEach(function (g) {
+      var apPx = toPx(g.ap);
+      var ip = toPx(g.interceptPoint);
+      parts.push('<circle cx="' + ip.x + '" cy="' + ip.y + '" r="3.5" fill="' + g.item.color + '"/>');
+      parts.push('<circle cx="' + apPx.x + '" cy="' + apPx.y + '" r="4.5" fill="' + g.item.color + '" stroke="var(--bg)" stroke-width="1.5"/>');
+    });
+
+    parts.push('</svg>');
+
+    var legend = '<div class="fix-legend">' + geos.map(function (g) {
+      return '<div class="fix-legend-item"><span class="fix-legend-swatch" style="background:' + g.item.color + '"></span>' + g.item.label + '</div>';
+    }).join('') + '</div>';
+
+    container.innerHTML = parts.join('') + legend;
+
+    return { scaleNM: scale };
+  }
+
   global.SightChart = {
-    renderSightChart: renderSightChart
+    renderSightChart: renderSightChart,
+    renderFixChart: renderFixChart
   };
 })(window);
