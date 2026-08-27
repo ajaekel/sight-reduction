@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#121212">
+  <title>Fixes - Offline Sight Reduction</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app-container">
+  <div class="header-row">
+    <h1 style="margin-bottom: 2px;">Fixes</h1>
+    <div class="header-controls">
+      <div id="swVersion" style="font-size: 0.75rem; color: var(--accent, #888); font-family: monospace;">
+        Version: loading...
+      </div>
+      <div class="header-buttons">
+        <a href="index.html" class="btn-clear-all" style="text-decoration: none; display: inline-block; border-color: var(--accent); color: var(--accent);">Sight Reduction</a>
+        <div class="nav-menu-wrap">
+          <button class="btn-hamburger" id="btnNavMenu" aria-label="Menu" aria-haspopup="true" aria-expanded="false" type="button">
+            <span></span><span></span><span></span>
+          </button>
+          <div class="nav-menu" id="navMenu">
+            <a href="index.html#savedSightingsSection" class="nav-menu-item">Sightings</a>
+            <a href="fixes.html" class="nav-menu-item">Fixes</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIST VIEW -->
+  <div id="fixListView">
+    <div class="fix-list-header">
+      <p class="cache-blurb" style="margin: 0; flex: 1;">
+        A Fix is a named collection of saved Sightings (e.g. a 3-star fix, or a running fix),
+        plotted together as overlaid Lines of Position.
+      </p>
+      <button class="btn-new-fix" id="btnNewFix" type="button">+ New</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Your Fixes</div>
+      <div class="saved-list" id="fixList"></div>
+      <div class="empty-note" id="fixListEmpty">No fixes saved on this device yet.</div>
+    </div>
+  </div>
+
+  <!-- DETAIL VIEW -->
+  <div id="fixDetailView" style="display: none;">
+    <div class="card">
+      <div class="section-title">
+        <button class="btn-back" id="btnBackToList" type="button" aria-label="Back to Fixes list">&larr;</button>
+        <span id="fixDetailName">Fix</span>
+      </div>
+      <div class="cache-summary-text" id="fixDetailMeta"></div>
+      <button class="btn-secondary btn-danger-outline" id="btnDeleteFix" type="button">Delete This Fix</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Sightings in this Fix</div>
+      <div class="saved-list" id="fixSightingsList"></div>
+      <div class="empty-note" id="fixSightingsEmpty">No sightings in this fix yet. Add one below.</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Add a Saved Sighting</div>
+      <div class="saved-list" id="availableSightingsList"></div>
+      <div class="empty-note" id="availableSightingsEmpty">
+        No other saved sightings available. Reduce and save a sighting on the Sight Reduction page first.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Plot</div>
+      <button class="btn-calc" id="btnPlotFix" type="button">Plot This Fix</button>
+      <div class="cache-progress" id="fixPlotStatus"></div>
+
+      <div id="fixChartCard" style="display: none; margin-top: 16px;">
+        <div class="chart-wrap" id="fixChartContainer"></div>
+        <div class="chart-legend" id="fixChartLegend"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/calc.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/chart.js"></script>
+<script src="js/fixStorage.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/fixes.js"></script>
+</body>
+</html>

@@ -12,10 +12,23 @@
 <div class="app-container">
   <div class="header-row">
     <h1 style="margin-bottom: 2px;">Sight Reduction Calculator</h1>
-    <div id="swVersion" style="font-size: 0.75rem; color: var(--accent, #888); font-family: monospace; margin-bottom: 12px;">
-      Version: loading...
+    <div class="header-controls">
+      <div id="swVersion" style="font-size: 0.75rem; color: var(--accent, #888); font-family: monospace;">
+        Version: loading...
+      </div>
+      <div class="header-buttons">
+        <button class="btn-clear-all" id="btnClearAll">Clear All</button>
+        <div class="nav-menu-wrap">
+          <button class="btn-hamburger" id="btnNavMenu" aria-label="Menu" aria-haspopup="true" aria-expanded="false" type="button">
+            <span></span><span></span><span></span>
+          </button>
+          <div class="nav-menu" id="navMenu">
+            <a href="#savedSightingsSection" class="nav-menu-item" id="navMenuSightings">Sightings</a>
+            <a href="fixes.html" class="nav-menu-item">Fixes</a>
+          </div>
+        </div>
+      </div>
     </div>
-    <button class="btn-clear-all" id="btnClearAll">Clear All</button>
   </div>
 
   <!-- SECTION 1: HEADER & AP POSITION -->
@@ -395,7 +408,7 @@
   </div>
 
   <!-- SECTION 4: SAVE & EXPORT -->
-  <div class="card">
+  <div class="card" id="savedSightingsSection">
     <div class="section-title">4. Save &amp; Export</div>
 
     <button class="btn-secondary" id="btnSaveSight">Save Sight to Device</button>
@@ -417,8 +430,10 @@
 <script src="js/storage.js"></script>
 <script src="js/chart.js"></script>
 <script src="js/almanacCache.js"></script>
+<script src="js/fixStorage.js"></script>
 <script src="js/usno.js"></script>
 <script src="js/stars.js"></script>
+<script src="js/nav.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

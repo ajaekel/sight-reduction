@@ -1,7 +1,6 @@
-  /**
+/**
  * app.js
- *
- *  UI layer only: DOM reads/writes, event wiring, validation feedback.
+ * UI layer only: DOM reads/writes, event wiring, validation feedback.
  * All actual math lives in calc.js (window.SightCalc).
  * All persistence lives in storage.js (window.SightStorage).
  *
@@ -11,7 +10,7 @@
  * never on the DOM directly.
  */
 
-var APP_VERSION = 'v1.8';
+var APP_VERSION = 'v1.11';
 var sightingCount = 0;
 
 document.addEventListener('DOMContentLoaded', initApp);
@@ -27,6 +26,7 @@ function initApp() {
 
   document.getElementById('bodyType').addEventListener('change', handleBodyTypeChange);
   initStarCombo();
+  initNavMenu();
   document.getElementById('planetSelect').addEventListener('change', function () {
     updateAverages();
     updateHeaders();
@@ -688,7 +688,7 @@ function calculateSight() {
 
   document.getElementById('outputCard').style.display = 'block';
 
-  renderChart(state, result, apString);
+  renderChart(state, result, apString, built);
 
   // The exact UTC instant the averaged sighting corresponds to (same
   // construction used elsewhere to bracket the almanac hour).
@@ -714,27 +714,26 @@ function calculateSight() {
 }
 
 function formatBodyLabel(body) {
-  if (!body) return 'Body';
-  if (body.type === 'star' || body.type === 'planet') {
-    return body.name ? (body.type.charAt(0).toUpperCase() + body.type.slice(1) + ' ' + body.name) : body.type;
-  }
-  return body.type.charAt(0).toUpperCase() + body.type.slice(1);
+  return SightCalc.formatBodyLabel(body);
 }
 
-function renderChart(state, result, apString) {
+function renderChart(state, result, apString, built) {
   var container = document.getElementById('chartContainer');
   var bodyLabel = formatBodyLabel(state.body);
+  var lonSigned = (state.position.lonEW === 'W') ? -built.lonTotal : built.lonTotal;
 
   var chartInfo = SightChart.renderSightChart(container, {
     zn: result.zn,
     interceptNM: result.interceptNM,
+    apLat: built.lat,
+    apLon: lonSigned,
     apLabel: apString,
     bodyLabel: bodyLabel
   });
 
   document.getElementById('chartCaption').innerText =
     'AP ' + apString + '  \u00B7  Zn ' + chartInfo.znLabel + '  \u00B7  Intercept ' + chartInfo.interceptText +
-    '  \u00B7  Range ring = ' + chartInfo.scaleNM + ' nm';
+    '  \u00B7  Grid edge = ' + chartInfo.scaleNM + ' nm';
 
   document.getElementById('chartCard').style.display = 'block';
 }
