@@ -47,8 +47,8 @@ self.addEventListener('activate', function (e) {
 self.addEventListener('fetch', function (e) {
   if (e.request.mode === 'navigate') {
     e.respondWith(
-      caches.match(e.request).then(function (cached) {
-        return cached || fetch(e.request);
+      fetch(e.request).catch(function () {
+        return caches.match(e.request);
       })
     );
     return;
