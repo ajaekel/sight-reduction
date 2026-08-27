@@ -95,7 +95,105 @@
     };
   }
 
+  var PALETTE = ['#00bcd4', '#ff9800', '#8bc34a', '#e91e63', '#9c27b0', '#ffeb3b', '#03a9f4', '#ff5722'];
+
+  /**
+   * Renders multiple sightings' LOPs overlaid on one shared chart -- a Fix
+   * plot. Each sighting gets its own color (identity), used consistently
+   * for its AP marker, azimuth line (dashed), and LOP (solid). Geometry
+   * comes from SightCalc.computeMultiLopGeometry (pure); this function only
+   * turns it into pixels/markup.
+   *
+   * sightingsInput = [{ lat, lon, zn, interceptNM, label, color? }]
+   *   label: short text for the legend (e.g. "Sun 16:30z"), color optional
+   *   (defaults to a fixed palette cycled by index if omitted).
+   *
+   * Returns { scaleNM, legend: [{ index, color, label, interceptText }] }
+   * so the caller can render an HTML legend beneath the chart.
+   */
+  function renderMultiSightChart(container, sightingsInput, opts) {
+    opts = opts || {};
+
+    var withColor = sightingsInput.map(function (s, i) {
+      var out = {};
+      for (var key in s) { if (Object.prototype.hasOwnProperty.call(s, key)) out[key] = s[key]; }
+      out.color = s.color || PALETTE[i % PALETTE.length];
+      return out;
+    });
+
+    var multiGeo = SightCalc.computeMultiLopGeometry(withColor);
+    var scale = SightCalc.chooseNiceScale(multiGeo.maxExtentNM);
+    var pxPerNm = RADIUS / scale;
+
+    function toPx(nmPoint) {
+      return { x: CENTER + nmPoint.x * pxPerNm, y: CENTER - nmPoint.y * pxPerNm };
+    }
+
+    var defs = '<defs><clipPath id="plotClipMulti"><circle cx="' + CENTER + '" cy="' + CENTER + '" r="' + RADIUS + '"/></clipPath>';
+    var clippedLines = '';
+    var markers = '';
+    var legend = [];
+
+    multiGeo.sightings.forEach(function (s, i) {
+      var idx = i + 1;
+      var apPx = toPx(s.apPoint);
+      var azEndPx = toPx({ x: s.apPoint.x + s.azimuthUnit.x * scale, y: s.apPoint.y + s.azimuthUnit.y * scale });
+
+      var lopExtendNm = scale * 2.2;
+      var lopP1Px = toPx({
+        x: s.interceptPoint.x + s.lopDirection.x * lopExtendNm,
+        y: s.interceptPoint.y + s.lopDirection.y * lopExtendNm
+      });
+      var lopP2Px = toPx({
+        x: s.interceptPoint.x - s.lopDirection.x * lopExtendNm,
+        y: s.interceptPoint.y - s.lopDirection.y * lopExtendNm
+      });
+
+      defs += '<marker id="azArrowMulti' + idx + '" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto">' +
+              '<path d="M0,0 L9,4.5 L0,9 Z" fill="' + s.color + '"/></marker>';
+
+      clippedLines +=
+        '<line x1="' + lopP1Px.x + '" y1="' + lopP1Px.y + '" x2="' + lopP2Px.x + '" y2="' + lopP2Px.y + '" stroke="' + s.color + '" stroke-width="2.5"/>' +
+        '<line x1="' + apPx.x + '" y1="' + apPx.y + '" x2="' + azEndPx.x + '" y2="' + azEndPx.y + '" stroke="' + s.color + '" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azArrowMulti' + idx + ')"/>';
+
+      markers +=
+        '<circle cx="' + apPx.x + '" cy="' + apPx.y + '" r="9" fill="' + s.color + '" stroke="var(--bg)" stroke-width="1.5"/>' +
+        '<text x="' + apPx.x + '" y="' + (apPx.y + 3.5) + '" text-anchor="middle" class="chart-badge-label">' + idx + '</text>';
+
+      var interceptAbs = Math.abs(s.interceptNM).toFixed(1);
+      var interceptDir = s.interceptNM >= 0 ? 'TOWARD' : 'AWAY';
+      legend.push({
+        index: idx,
+        color: s.color,
+        label: s.label || ('Sight ' + idx),
+        interceptText: interceptAbs + ' nm ' + interceptDir
+      });
+    });
+
+    defs += '</defs>';
+
+    var svg =
+      '<svg viewBox="0 0 ' + SIZE + ' ' + SIZE + '" xmlns="http://www.w3.org/2000/svg" class="chart-svg" role="img" aria-label="Plot of multiple lines of position">' +
+        defs +
+        '<circle cx="' + CENTER + '" cy="' + CENTER + '" r="' + RADIUS + '" fill="none" stroke="var(--chart-grid)" stroke-width="1"/>' +
+        '<circle cx="' + CENTER + '" cy="' + CENTER + '" r="' + (RADIUS / 2) + '" fill="none" stroke="var(--chart-grid)" stroke-width="1" stroke-dasharray="2,4"/>' +
+
+        '<text x="' + CENTER + '" y="' + (CENTER - RADIUS - 8) + '" text-anchor="middle" class="chart-compass-label">N</text>' +
+        '<text x="' + (CENTER + RADIUS + 12) + '" y="' + (CENTER + 4) + '" text-anchor="middle" class="chart-compass-label">E</text>' +
+        '<text x="' + CENTER + '" y="' + (CENTER + RADIUS + 18) + '" text-anchor="middle" class="chart-compass-label">S</text>' +
+        '<text x="' + (CENTER - RADIUS - 12) + '" y="' + (CENTER + 4) + '" text-anchor="middle" class="chart-compass-label">W</text>' +
+
+        '<g clip-path="url(#plotClipMulti)">' + clippedLines + '</g>' +
+        markers +
+      '</svg>';
+
+    container.innerHTML = svg;
+
+    return { scaleNM: scale, legend: legend };
+  }
+
   global.SightChart = {
-    renderSightChart: renderSightChart
+    renderSightChart: renderSightChart,
+    renderMultiSightChart: renderMultiSightChart
   };
 })(window);

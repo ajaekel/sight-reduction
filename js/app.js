@@ -1,7 +1,6 @@
-  /**
+/**
  * app.js
- *
- *  UI layer only: DOM reads/writes, event wiring, validation feedback.
+ * UI layer only: DOM reads/writes, event wiring, validation feedback.
  * All actual math lives in calc.js (window.SightCalc).
  * All persistence lives in storage.js (window.SightStorage).
  *
@@ -11,7 +10,7 @@
  * never on the DOM directly.
  */
 
-var APP_VERSION = 'v1.8';
+var APP_VERSION = 'v1.10';
 var sightingCount = 0;
 
 document.addEventListener('DOMContentLoaded', initApp);
@@ -27,6 +26,7 @@ function initApp() {
 
   document.getElementById('bodyType').addEventListener('change', handleBodyTypeChange);
   initStarCombo();
+  initNavMenu();
   document.getElementById('planetSelect').addEventListener('change', function () {
     updateAverages();
     updateHeaders();
@@ -714,11 +714,7 @@ function calculateSight() {
 }
 
 function formatBodyLabel(body) {
-  if (!body) return 'Body';
-  if (body.type === 'star' || body.type === 'planet') {
-    return body.name ? (body.type.charAt(0).toUpperCase() + body.type.slice(1) + ' ' + body.name) : body.type;
-  }
-  return body.type.charAt(0).toUpperCase() + body.type.slice(1);
+  return SightCalc.formatBodyLabel(body);
 }
 
 function renderChart(state, result, apString) {

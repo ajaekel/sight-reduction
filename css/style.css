@@ -26,13 +26,26 @@ body {
 .header-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 12px;
   margin-bottom: 16px;
 }
 h1 {
   font-size: 1.3rem;
   color: var(--accent);
   margin: 0;
+}
+.header-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .btn-clear-all {
   background: transparent;
@@ -43,6 +56,64 @@ h1 {
   font-size: 0.8rem;
   cursor: pointer;
   font-weight: bold;
+}
+
+/* --- Hamburger menu --- */
+.nav-menu-wrap {
+  position: relative;
+}
+.btn-hamburger {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.btn-hamburger span {
+  display: block;
+  width: 16px;
+  height: 2px;
+  background: var(--text);
+  border-radius: 1px;
+}
+.nav-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  background: #2a2a2a;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  z-index: 30;
+  overflow: hidden;
+}
+.nav-menu.open {
+  display: block;
+}
+.nav-menu-item {
+  display: block;
+  padding: 11px 14px;
+  font-size: 0.9rem;
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid #383838;
+}
+.nav-menu-item:last-child {
+  border-bottom: none;
+}
+.nav-menu-item:hover,
+.nav-menu-item:active {
+  background: var(--accent);
+  color: #000;
 }
 .card {
   background: var(--card);
@@ -389,6 +460,15 @@ select {
   border-color: var(--danger);
   color: var(--danger);
 }
+.btn-back {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 8px 0 0;
+  vertical-align: middle;
+}
 
 /* --- <details>/<summary> collapsible section (Offline Almanac Cache) --- */
 details > summary.cache-summary-toggle {
@@ -482,6 +562,11 @@ details:not([open]) > summary.cache-summary-toggle {
   font-size: 11px;
   fill: var(--chart-az);
   font-weight: bold;
+}
+.chart-badge-label {
+  font-size: 10px;
+  font-weight: bold;
+  fill: #000;
 }
 .chart-legend {
   display: flex;

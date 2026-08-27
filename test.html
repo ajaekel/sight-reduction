@@ -181,23 +181,23 @@
 
     // --- USNO assembleFill: pure parsing/matching against mock payloads ---
     (function testUsnoAssembleFill() {
-      function mkData(entries) {
-        return entries.map(function (e) {
+      function mkMap(entries) {
+        return SightUsno.normalizeUsnoData(entries.map(function (e) {
           return {
             object: e.name, nav_star_number: e.num || null,
             almanac_data: { dec: e.dec, gha: e.gha, hc: 0, zn: 0 },
             altitude_corrections: { isCorrected: true, pa: 0, refr: 0, sd: 0, sum: 0 }
           };
-        });
+        }));
       }
 
-      var baseStar = mkData([{ name: 'Aries', dec: 0, gha: 50.0 }, { name: 'Aldebaran', num: 10, dec: 16.5, gha: 190.0 }]);
-      var nextStar = mkData([{ name: 'Aries', dec: 0, gha: 65.0 }, { name: 'Aldebaran', num: 10, dec: 16.5, gha: 205.0 }]);
+      var baseStar = mkMap([{ name: 'Aries', dec: 0, gha: 50.0 }, { name: 'Aldebaran', num: 10, dec: 16.5, gha: 190.0 }]);
+      var nextStar = mkMap([{ name: 'Aries', dec: 0, gha: 65.0 }, { name: 'Aldebaran', num: 10, dec: 16.5, gha: 205.0 }]);
       var fillStar = SightUsno.assembleFill({ type: 'star', name: 'Aldebaran' }, baseStar, nextStar);
       assertClose('USNO star SHA', fillStar.shaDeg, 140.0, 0.001);
 
-      var baseNoAries = mkData([{ name: 'Vega', dec: 38.8, gha: 300.0 }]);
-      var nextNoAries = mkData([{ name: 'Vega', dec: 38.8, gha: 315.0 }]);
+      var baseNoAries = mkMap([{ name: 'Vega', dec: 38.8, gha: 300.0 }]);
+      var nextNoAries = mkMap([{ name: 'Vega', dec: 38.8, gha: 315.0 }]);
       var fillFallback = SightUsno.assembleFill({ type: 'star', name: 'Vega' }, baseNoAries, nextNoAries);
       if (fillFallback.shaDeg === 0 && fillFallback.ghaAriesBaseDeg === 300.0) {
         pass++; console.log('PASS: USNO star fallback (no Aries entry) produces SHA=0');
@@ -205,8 +205,8 @@
         fail++; console.error('FAIL: USNO star fallback incorrect: ' + JSON.stringify(fillFallback));
       }
 
-      var basePlanet = mkData([{ name: 'Jupiter', dec: 22.1, gha: 44.5 }]);
-      var nextPlanet = mkData([{ name: 'Jupiter', dec: 22.1, gha: 59.5 }]);
+      var basePlanet = mkMap([{ name: 'Jupiter', dec: 22.1, gha: 44.5 }]);
+      var nextPlanet = mkMap([{ name: 'Jupiter', dec: 22.1, gha: 59.5 }]);
       var fillPlanet = SightUsno.assembleFill({ type: 'planet', name: 'Jupiter' }, basePlanet, nextPlanet);
       assertClose('USNO planet GHA base', fillPlanet.ghaBaseDeg, 44.5, 0.001);
 
@@ -215,6 +215,33 @@
       catch (e) { threw = true; }
       if (threw) { pass++; console.log('PASS: USNO missing-body throws a descriptive error'); }
       else { fail++; console.error('FAIL: USNO missing-body should have thrown'); }
+    })();
+
+    // --- computeMultiLopGeometry: identical APs reduce to single-sight geometry ---
+    (function testMultiLopGeometry() {
+      var sameAP = [
+        { lat: 40.5, lon: -74.0, zn: 90, interceptNM: 5 },
+        { lat: 40.5, lon: -74.0, zn: 200, interceptNM: -3 }
+      ];
+      var multi = SightCalc.computeMultiLopGeometry(sameAP);
+      assertClose('multi-LOP: centroid lat with identical APs', multi.originLat, 40.5, 0.0001);
+      assertClose('multi-LOP: sighting apPoint.x ~0 when APs identical', multi.sightings[0].apPoint.x, 0, 1e-6);
+      var single = SightCalc.computeLopGeometry(90, 5);
+      assertClose('multi-LOP: intercept matches single-sight geometry', multi.sightings[0].interceptPoint.x, single.interceptPoint.x, 1e-6);
+
+      var diffAP = [
+        { lat: 40.0, lon: -74.0, zn: 0, interceptNM: 10 },
+        { lat: 41.0, lon: -74.0, zn: 90, interceptNM: 10 }
+      ];
+      var multiDiff = SightCalc.computeMultiLopGeometry(diffAP);
+      assertClose('multi-LOP: differing-AP offset (nm)', multiDiff.sightings[0].apPoint.y, -30, 0.01);
+    })();
+
+    // --- signedPositionFromRecord ---
+    (function testSignedPositionFromRecord() {
+      var pos = SightCalc.signedPositionFromRecord({ latDeg: 40, latMin: 32.2, latNS: 'N', lonDeg: 73, lonMin: 56.3, lonEW: 'W' });
+      assertClose('signedPositionFromRecord lat', pos.lat, 40.536667, 0.0001);
+      assertClose('signedPositionFromRecord lon (W negative)', pos.lon, -73.938333, 0.0001);
     })();
 
     console.log('--- ' + pass + ' passed, ' + fail + ' failed ---');

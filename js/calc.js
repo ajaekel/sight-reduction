@@ -239,6 +239,97 @@
     return { deg: d, min: m };
   }
 
+  /**
+   * Pure: given a stored sighting's "position" sub-object (the shape
+   * collectFormState() produces: latDeg/latMin/latNS/lonDeg/lonMin/lonEW),
+   * returns signed decimal degrees (S/W negative). This is the non-DOM
+   * counterpart to app.js's getAssumedPositionSigned() -- used when reading
+   * a saved sighting record directly (e.g. for a Fix plot) rather than
+   * live form fields.
+   */
+  function signedPositionFromRecord(position) {
+    var p = position || {};
+    var latTotal = dmToDecimal(p.latDeg, p.latMin);
+    var lonTotal = dmToDecimal(p.lonDeg, p.lonMin);
+    return {
+      lat: p.latNS === 'S' ? -latTotal : latTotal,
+      lon: p.lonEW === 'W' ? -lonTotal : lonTotal
+    };
+  }
+
+  /**
+   * Pure: lays out multiple sightings' AP + LOP geometry in one shared
+   * North-up, nm-based plane, so they can be overlaid on a single chart.
+   *
+   * Each sighting's AP may differ slightly (e.g. a 3-star fix taken over a
+   * few minutes, or genuinely different APs) -- the shared origin is the
+   * centroid of all APs, and each sighting's own AP is placed at its offset
+   * from that centroid (flat-earth approximation: dx = dLon*60*cos(refLat),
+   * dy = dLat*60, both in nm -- entirely adequate at chart-plotting scale).
+   * A sighting's own LOP geometry (computeLopGeometry, relative to ITS OWN
+   * AP) is then translated by that same offset into the shared frame.
+   *
+   * sightings: [{ lat, lon, zn, interceptNM, ...anything else the caller
+   *               wants carried through untouched, e.g. label/color/id }]
+   *
+   * Returns {
+   *   originLat, originLon,          -- the centroid AP (decimal degrees)
+   *   maxExtentNM,                    -- farthest point from origin, for scale selection
+   *   sightings: [{
+   *     ...all original fields carried through,
+   *     apPoint, azimuthUnit, interceptPoint, lopDirection   -- all in shared nm frame
+   *   }]
+   * }
+   */
+  function computeMultiLopGeometry(sightings) {
+    if (!sightings || sightings.length === 0) {
+      return { originLat: 0, originLon: 0, maxExtentNM: 0, sightings: [] };
+    }
+
+    var n = sightings.length;
+    var originLat = sightings.reduce(function (sum, s) { return sum + s.lat; }, 0) / n;
+    var originLon = sightings.reduce(function (sum, s) { return sum + s.lon; }, 0) / n;
+    var originLatRad = rad(originLat);
+    var cosOriginLat = Math.cos(originLatRad);
+
+    var maxExtentNM = 0;
+    var results = sightings.map(function (s) {
+      var dLat = s.lat - originLat;
+      var dLon = s.lon - originLon;
+      var apPoint = {
+        x: dLon * 60 * cosOriginLat, // East nm
+        y: dLat * 60                // North nm
+      };
+
+      var localGeo = computeLopGeometry(s.zn, s.interceptNM); // relative to this sighting's own AP
+      var interceptPoint = {
+        x: apPoint.x + localGeo.interceptPoint.x,
+        y: apPoint.y + localGeo.interceptPoint.y
+      };
+
+      maxExtentNM = Math.max(maxExtentNM, Math.hypot(apPoint.x, apPoint.y), Math.hypot(interceptPoint.x, interceptPoint.y));
+
+      var out = {};
+      for (var key in s) { if (Object.prototype.hasOwnProperty.call(s, key)) out[key] = s[key]; }
+      out.apPoint = apPoint;
+      out.azimuthUnit = localGeo.azimuthUnit;
+      out.interceptPoint = interceptPoint;
+      out.lopDirection = localGeo.lopDirection;
+      return out;
+    });
+
+    return { originLat: originLat, originLon: originLon, maxExtentNM: maxExtentNM, sightings: results };
+  }
+
+  /** Pure: {type, name} -> display label, e.g. "Sun", "Star Aldebaran", "Planet Jupiter". */
+  function formatBodyLabel(body) {
+    if (!body) return 'Body';
+    if (body.type === 'star' || body.type === 'planet') {
+      return body.name ? (body.type.charAt(0).toUpperCase() + body.type.slice(1) + ' ' + body.name) : body.type;
+    }
+    return body.type.charAt(0).toUpperCase() + body.type.slice(1);
+  }
+
   global.SightCalc = {
     rad: rad,
     deg: deg,
@@ -254,6 +345,9 @@
     reduceSight: reduceSight,
     computeLopGeometry: computeLopGeometry,
     chooseNiceScale: chooseNiceScale,
-    decimalToDM: decimalToDM
+    decimalToDM: decimalToDM,
+    signedPositionFromRecord: signedPositionFromRecord,
+    computeMultiLopGeometry: computeMultiLopGeometry,
+    formatBodyLabel: formatBodyLabel
   };
 })(window);
