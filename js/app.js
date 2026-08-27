@@ -10,7 +10,6 @@
  * never on the DOM directly.
  */
 
-var APP_VERSION = 'v1.13';
 var sightingCount = 0;
 
 document.addEventListener('DOMContentLoaded', initApp);

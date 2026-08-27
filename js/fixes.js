@@ -7,7 +7,6 @@
  * separation of concerns as app.js).
  */
 
-var APP_VERSION = 'v1.11';
 var currentFix = null;
 var fixRenderToken = 0;
 

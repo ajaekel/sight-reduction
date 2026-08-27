@@ -1,6 +1,8 @@
 // Bump CACHE_NAME on every deploy that changes any precached file.
 // (Also update APP_VERSION in js/app.js so the on-screen version label matches.)
-var CACHE_NAME = 'ocsr-v1.13';
+importScripts('./js/version.js');
+
+var CACHE_NAME = 'ocsr-' + APP_VERSION;
 
 var PRECACHE_URLS = [
   './',
@@ -16,7 +18,8 @@ var PRECACHE_URLS = [
   './js/stars.js',
   './js/nav.js',
   './js/app.js',
-  './js/fixes.js'
+  './js/fixes.js',
+  './js/version.js'
 ];
 
 self.addEventListener('install', function (e) {
