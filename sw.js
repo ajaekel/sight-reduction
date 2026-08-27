@@ -38,6 +38,8 @@ self.addEventListener('activate', function (e) {
           }
         })
       );
+    }).then(function () {
+      return clients.claim();
     })
   );
 });
