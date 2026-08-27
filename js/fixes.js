@@ -7,7 +7,7 @@
  * separation of concerns as app.js).
  */
 
-var APP_VERSION = 'v1.10';
+var APP_VERSION = 'v1.11';
 var currentFix = null;
 var fixRenderToken = 0;
 
@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('swVersion').textContent = APP_VERSION;
   initNavMenu();
 
-  document.getElementById('btnCreateFix').addEventListener('click', onCreateFix);
+  document.getElementById('btnNewFix').addEventListener('click', onNewFixClick);
   document.getElementById('btnBackToList').addEventListener('click', function () {
     location.hash = '';
   });
@@ -112,16 +112,20 @@ function refreshFixList() {
   });
 }
 
-function onCreateFix() {
-  var nameInput = document.getElementById('newFixName');
-  var name = nameInput.value.trim();
-  if (!name) {
-    showToast('Enter a name for the fix first.', true);
-    return;
-  }
+/** "Fix - m/dd/yyyy" using today's local date, e.g. "Fix - 8/27/2026". */
+function defaultFixName() {
+  var d = new Date();
+  return 'Fix - ' + (d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0') + '/' + d.getFullYear();
+}
+
+function onNewFixClick() {
+  var suggested = defaultFixName();
+  var name = prompt('Name this fix:', suggested);
+  if (name === null) return; // cancelled
+
+  name = name.trim() || suggested;
 
   FixStorage.save({ name: name, sightingIds: [] }).then(function (saved) {
-    nameInput.value = '';
     showToast('Created "' + name + '".');
     location.hash = 'fix=' + encodeURIComponent(saved.id);
   }).catch(function (err) {
@@ -194,15 +198,22 @@ function renderFixSightings(token) {
         var id = idsAtRenderTime[i];
         var item = document.createElement('div');
         item.className = 'saved-item';
+        var swatchColor = SightCalc.paletteColor(i);
 
         if (!record) {
           item.innerHTML =
-            '<div class="saved-item-info"><div class="saved-item-title">(sighting no longer exists)</div></div>' +
+            '<div class="saved-item-info">' +
+              '<div class="saved-item-info-row"><span class="sighting-color-dot" style="background:' + swatchColor + '"></span>' +
+              '<div class="saved-item-title">(sighting no longer exists)</div></div>' +
+            '</div>' +
             '<div class="saved-item-actions"><button class="btn-mini btn-mini-del">Remove</button></div>';
         } else {
           var labels = sightingRowLabel(record);
           item.innerHTML =
-            '<div class="saved-item-info"><div class="saved-item-title"></div><div class="saved-item-meta"></div></div>' +
+            '<div class="saved-item-info">' +
+              '<div class="saved-item-info-row"><span class="sighting-color-dot" style="background:' + swatchColor + '"></span>' +
+              '<div><div class="saved-item-title"></div><div class="saved-item-meta"></div></div></div>' +
+            '</div>' +
             '<div class="saved-item-actions"><button class="btn-mini btn-mini-del">Remove</button></div>';
           item.querySelector('.saved-item-title').textContent = labels.title;
           item.querySelector('.saved-item-meta').textContent = labels.meta;
@@ -286,32 +297,35 @@ function onPlotFix() {
     .then(function (records) {
       var skippedMissing = 0;
       var skippedNoResults = 0;
+      var chartInput = [];
 
-      var plottable = records.filter(function (r) {
-        if (!r) { skippedMissing++; return false; }
-        if (!r.results || typeof r.results.zn !== 'number' || typeof r.results.interceptNM !== 'number') {
+      // Color and badge number are keyed to each sighting's position in the
+      // FULL fix list (not the filtered/plottable subset), so a sighting's
+      // color always matches its swatch in the "Sightings in this Fix" list
+      // above -- even when an earlier sighting gets skipped from the plot.
+      records.forEach(function (record, i) {
+        if (!record) { skippedMissing++; return; }
+        if (!record.results || typeof record.results.zn !== 'number' || typeof record.results.interceptNM !== 'number') {
           skippedNoResults++;
-          return false;
+          return;
         }
-        return true;
-      });
-
-      if (!plottable.length) {
-        setFixPlotStatus('None of this fix\u2019s sightings have calculated results to plot. Recalculate and re-save them on the Sight Reduction page.', 'error');
-        return;
-      }
-
-      var chartInput = plottable.map(function (record) {
         var pos = SightCalc.signedPositionFromRecord(record.position);
         var labels = sightingRowLabel(record);
-        return {
+        chartInput.push({
           lat: pos.lat,
           lon: pos.lon,
           zn: record.results.zn,
           interceptNM: record.results.interceptNM,
-          label: labels.title
-        };
+          label: labels.title,
+          color: SightCalc.paletteColor(i),
+          badgeNumber: i + 1
+        });
       });
+
+      if (!chartInput.length) {
+        setFixPlotStatus('None of this fix\u2019s sightings have calculated results to plot. Recalculate and re-save them on the Sight Reduction page.', 'error');
+        return;
+      }
 
       var container = document.getElementById('fixChartContainer');
       var result = SightChart.renderMultiSightChart(container, chartInput);
@@ -323,13 +337,13 @@ function onPlotFix() {
         item.className = 'chart-legend-item';
         item.innerHTML =
           '<span class="chart-swatch" style="border-top-color: ' + entry.color + '; border-top-style: solid;"></span> ' +
-          entry.index + '. ' + entry.label + ' (' + entry.interceptText + ')';
+          entry.index + '. ' + entry.label + ' \u2014 Zn ' + entry.znText + ' (' + entry.interceptText + ')';
         legendEl.appendChild(item);
       });
 
       document.getElementById('fixChartCard').style.display = 'block';
 
-      var msg = 'Plotted ' + plottable.length + ' of ' + currentFix.sightingIds.length + ' sighting' + (currentFix.sightingIds.length === 1 ? '' : 's') +
+      var msg = 'Plotted ' + chartInput.length + ' of ' + currentFix.sightingIds.length + ' sighting' + (currentFix.sightingIds.length === 1 ? '' : 's') +
                 ' (scale: range ring = ' + result.scaleNM + ' nm).';
       if (skippedMissing || skippedNoResults) {
         msg += ' Skipped ' + (skippedMissing + skippedNoResults) + ' (missing or not yet calculated).';

@@ -10,7 +10,7 @@
  * never on the DOM directly.
  */
 
-var APP_VERSION = 'v1.10';
+var APP_VERSION = 'v1.11';
 var sightingCount = 0;
 
 document.addEventListener('DOMContentLoaded', initApp);
@@ -688,7 +688,7 @@ function calculateSight() {
 
   document.getElementById('outputCard').style.display = 'block';
 
-  renderChart(state, result, apString);
+  renderChart(state, result, apString, built);
 
   // The exact UTC instant the averaged sighting corresponds to (same
   // construction used elsewhere to bracket the almanac hour).
@@ -717,20 +717,23 @@ function formatBodyLabel(body) {
   return SightCalc.formatBodyLabel(body);
 }
 
-function renderChart(state, result, apString) {
+function renderChart(state, result, apString, built) {
   var container = document.getElementById('chartContainer');
   var bodyLabel = formatBodyLabel(state.body);
+  var lonSigned = (state.position.lonEW === 'W') ? -built.lonTotal : built.lonTotal;
 
   var chartInfo = SightChart.renderSightChart(container, {
     zn: result.zn,
     interceptNM: result.interceptNM,
+    apLat: built.lat,
+    apLon: lonSigned,
     apLabel: apString,
     bodyLabel: bodyLabel
   });
 
   document.getElementById('chartCaption').innerText =
     'AP ' + apString + '  \u00B7  Zn ' + chartInfo.znLabel + '  \u00B7  Intercept ' + chartInfo.interceptText +
-    '  \u00B7  Range ring = ' + chartInfo.scaleNM + ' nm';
+    '  \u00B7  Grid edge = ' + chartInfo.scaleNM + ' nm';
 
   document.getElementById('chartCard').style.display = 'block';
 }

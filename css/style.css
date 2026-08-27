@@ -470,6 +470,39 @@ select {
   vertical-align: middle;
 }
 
+/* --- Fixes list page --- */
+.fix-list-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.btn-new-fix {
+  background: var(--accent);
+  color: #000;
+  font-weight: bold;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.sighting-color-dot {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  margin-right: 10px;
+  vertical-align: middle;
+}
+.saved-item-info-row {
+  display: flex;
+  align-items: center;
+}
+
 /* --- <details>/<summary> collapsible section (Offline Almanac Cache) --- */
 details > summary.cache-summary-toggle {
   cursor: pointer;
@@ -546,12 +579,12 @@ details:not([open]) > summary.cache-summary-toggle {
 }
 .chart-svg {
   width: 100%;
-  max-width: 340px;
   height: auto;
+  max-width: 100%;
 }
-.chart-compass-label {
-  font-size: 11px;
-  fill: #888;
+.chart-axis-label {
+  font-size: 10px;
+  fill: #999;
 }
 .chart-point-label {
   font-size: 12px;

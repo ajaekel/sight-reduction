@@ -330,6 +330,14 @@
     return body.type.charAt(0).toUpperCase() + body.type.slice(1);
   }
 
+  var CHART_PALETTE = ['#00bcd4', '#ff9800', '#8bc34a', '#e91e63', '#9c27b0', '#ffeb3b', '#03a9f4', '#ff5722'];
+
+  /** Stable color for a given sighting index, cycling through CHART_PALETTE. Single source of truth so a sighting's color is identical everywhere it's shown (a fix's sighting list, its plot, its legend). */
+  function paletteColor(index) {
+    var i = ((index % CHART_PALETTE.length) + CHART_PALETTE.length) % CHART_PALETTE.length;
+    return CHART_PALETTE[i];
+  }
+
   global.SightCalc = {
     rad: rad,
     deg: deg,
@@ -348,6 +356,7 @@
     decimalToDM: decimalToDM,
     signedPositionFromRecord: signedPositionFromRecord,
     computeMultiLopGeometry: computeMultiLopGeometry,
-    formatBodyLabel: formatBodyLabel
+    formatBodyLabel: formatBodyLabel,
+    paletteColor: paletteColor
   };
 })(window);
