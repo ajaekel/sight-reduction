@@ -448,6 +448,69 @@
     return results;
   }
 
+  /**
+   * Inverse of the flat-earth projection used in computeMultiLopGeometry:
+   * converts a point in the shared nm-plane (origin at originLat/originLon)
+   * back into decimal-degree lat/lon.
+   */
+  function nmPointToLatLon(originLat, originLon, point) {
+    var cosOriginLat = Math.cos(rad(originLat)) || 1e-9;
+    return {
+      lat: originLat + point.y / 60,
+      lon: originLon + point.x / (60 * cosOriginLat)
+    };
+  }
+
+  /**
+   * Estimates where a set of bisector lines converge (the refined "most
+   * probable position" from the cocked-hat method), in the same nm-plane
+   * the bisectors are expressed in.
+   *
+   * For the classic N=3 case (3 bisectors from 3 LOPs) the three lines are
+   * mathematically concurrent at the triangle's incenter, so every pairwise
+   * intersection among them coincides there exactly -- the centroid below
+   * reduces to that exact point. For more than 3 LOPs there is no single
+   * point of exact concurrency in general, so this returns the centroid of
+   * all pairwise bisector-line intersections as a reasonable estimate,
+   * after discarding intersections from near-parallel bisector pairs
+   * (optional maxDistance, in the same nm units, guards against those
+   * shooting off to unreliable extremes and skewing the average).
+   *
+   * Returns null if fewer than 2 bisector lines are given (no intersection
+   * exists yet) or if every pair happens to be parallel.
+   */
+  function computeBisectorFix(bisectors, maxDistance) {
+    if (!bisectors || bisectors.length < 2) return null;
+
+    var pts = [];
+    for (var i = 0; i < bisectors.length; i++) {
+      for (var j = i + 1; j < bisectors.length; j++) {
+        var inter = lineLineIntersection(bisectors[i].point, bisectors[i].direction, bisectors[j].point, bisectors[j].direction);
+        if (inter) pts.push(inter);
+      }
+    }
+    if (!pts.length) return null;
+
+    if (typeof maxDistance === 'number' && pts.length > 1) {
+      var cx = 0, cy = 0;
+      pts.forEach(function (p) { cx += p.x; cy += p.y; });
+      cx /= pts.length; cy /= pts.length;
+      var filtered = pts.filter(function (p) { return Math.hypot(p.x - cx, p.y - cy) <= maxDistance; });
+      if (filtered.length) pts = filtered;
+    }
+
+    var sx = 0, sy = 0;
+    pts.forEach(function (p) { sx += p.x; sy += p.y; });
+    return { x: sx / pts.length, y: sy / pts.length };
+  }
+
+  /** Pure: signed lat/lon decimal degrees -> "40° 32.1'N 73° 55.8'W". */
+  function formatLatLon(lat, lon) {
+    var latStr = formatDegMin(Math.abs(lat)) + (lat >= 0 ? 'N' : 'S');
+    var lonStr = formatDegMin(Math.abs(lon)) + (lon >= 0 ? 'E' : 'W');
+    return latStr + ' ' + lonStr;
+  }
+
   global.SightCalc = {
     rad: rad,
     deg: deg,
@@ -469,6 +532,9 @@
     formatBodyLabel: formatBodyLabel,
     paletteColor: paletteColor,
     lineLineIntersection: lineLineIntersection,
-    computeBisectors: computeBisectors
+    computeBisectors: computeBisectors,
+    nmPointToLatLon: nmPointToLatLon,
+    computeBisectorFix: computeBisectorFix,
+    formatLatLon: formatLatLon
   };
 })(window);

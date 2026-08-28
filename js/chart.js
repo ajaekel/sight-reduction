@@ -216,6 +216,9 @@
     // Bisector lines: best-practice cocked-hat method, generalized to any
     // number of LOPs >= 2 (see SightCalc.computeBisectors for the geometry).
     var bisectorLines = '';
+    var bisectorFixMarker = '';
+    var bisectorFixLat = null;
+    var bisectorFixLon = null;
     var bisectorInputs = multiGeo.sightings.map(function (s) {
       return { point: s.interceptPoint, direction: s.lopDirection };
     });
@@ -227,6 +230,20 @@
       bisectorLines += '<line x1="' + b1Px.x + '" y1="' + b1Px.y + '" x2="' + b2Px.x + '" y2="' + b2Px.y + '" stroke="var(--chart-bisector)" stroke-width="1.5" stroke-dasharray="1,3" stroke-linecap="round"/>';
     });
 
+    var bisectorFixNm = SightCalc.computeBisectorFix(bisectors, scale * 10);
+    if (bisectorFixNm) {
+      var fixLatLon = SightCalc.nmPointToLatLon(multiGeo.originLat, multiGeo.originLon, bisectorFixNm);
+      bisectorFixLat = fixLatLon.lat;
+      bisectorFixLon = fixLatLon.lon;
+
+      var fixPx = toPx(bisectorFixNm, pxPerNm);
+      var d = 7; // diamond half-size, px
+      bisectorFixMarker =
+        '<path d="M' + fixPx.x + ',' + (fixPx.y - d) + ' L' + (fixPx.x + d) + ',' + fixPx.y +
+        ' L' + fixPx.x + ',' + (fixPx.y + d) + ' L' + (fixPx.x - d) + ',' + fixPx.y + ' Z" ' +
+        'fill="var(--chart-bisector)" stroke="var(--bg)" stroke-width="1"/>';
+    }
+
     defs += '</defs>';
 
     var svg =
@@ -235,7 +252,7 @@
         defs +
         '<g clip-path="url(#' + clipId + ')">' +
           lopLines +
-          '<g class="chart-bisector-group">' + bisectorLines + '</g>' +
+          '<g class="chart-bisector-group">' + bisectorLines + bisectorFixMarker + '</g>' +
           '<g class="chart-azimuth-group">' + azimuthLines + '</g>' +
         '</g>' +
         markers +
@@ -243,7 +260,13 @@
 
     container.innerHTML = svg;
 
-    return { scaleNM: scale, legend: legend, bisectorCount: bisectors.length };
+    return {
+      scaleNM: scale,
+      legend: legend,
+      bisectorCount: bisectors.length,
+      bisectorFixLat: bisectorFixLat,
+      bisectorFixLon: bisectorFixLon
+    };
   }
 
   global.SightChart = {

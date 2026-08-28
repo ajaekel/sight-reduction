@@ -303,6 +303,57 @@
       else { fail++; console.error('FAIL: N=0/N=1 edge case'); }
     })();
 
+    // --- nmPointToLatLon round-trips computeMultiLopGeometry's forward projection ---
+    (function testNmPointToLatLonRoundTrip() {
+      var sightings = [
+        { lat: 40.0, lon: -74.0, zn: 10, interceptNM: 2 },
+        { lat: 41.0, lon: -73.5, zn: 100, interceptNM: -1 }
+      ];
+      var multi = SightCalc.computeMultiLopGeometry(sightings);
+      var back = SightCalc.nmPointToLatLon(multi.originLat, multi.originLon, multi.sightings[0].apPoint);
+      assertClose('nmPointToLatLon round-trip lat', back.lat, sightings[0].lat, 1e-9);
+      assertClose('nmPointToLatLon round-trip lon', back.lon, sightings[0].lon, 1e-9);
+    })();
+
+    // --- computeBisectorFix: N=3 cocked hat converges exactly on the true incenter ---
+    (function testBisectorFixIncenter() {
+      var s2 = 1 / Math.sqrt(2);
+      var lines = [
+        { point: { x: 0, y: 0 }, direction: { x: 1, y: 0 } },
+        { point: { x: 0, y: 0 }, direction: { x: 0, y: 1 } },
+        { point: { x: 10, y: 0 }, direction: { x: -s2, y: s2 } }
+      ];
+      var bis = SightCalc.computeBisectors(lines);
+      var fix = SightCalc.computeBisectorFix(bis);
+      var r = (10 + 10 - 10 * Math.sqrt(2)) / 2;
+      assertClose('computeBisectorFix matches true incenter x', fix.x, r, 1e-6);
+      assertClose('computeBisectorFix matches true incenter y', fix.y, r, 1e-6);
+    })();
+
+    // --- computeBisectorFix: N=2 (only 1 bisector line) has no intersection to report ---
+    (function testBisectorFixN2() {
+      var bis2 = SightCalc.computeBisectors([
+        { point: { x: 0, y: 0 }, direction: { x: 1, y: 0 } },
+        { point: { x: 0, y: 0 }, direction: { x: 0, y: 1 } }
+      ]);
+      if (SightCalc.computeBisectorFix(bis2) === null) {
+        pass++; console.log('PASS: N=2 computeBisectorFix returns null (no fix point possible)');
+      } else {
+        fail++; console.error('FAIL: N=2 computeBisectorFix should return null');
+      }
+    })();
+
+    // --- formatLatLon ---
+    (function testFormatLatLon() {
+      var s = SightCalc.formatLatLon(40.536667, -73.938333);
+      if (s.indexOf('N') !== -1 && s.indexOf('W') !== -1) { pass++; console.log('PASS: formatLatLon N/W: ' + s); }
+      else { fail++; console.error('FAIL: formatLatLon N/W, got ' + s); }
+
+      var s2 = SightCalc.formatLatLon(-35.25, 15.55);
+      if (s2.indexOf('S') !== -1 && s2.indexOf('E') !== -1) { pass++; console.log('PASS: formatLatLon S/E: ' + s2); }
+      else { fail++; console.error('FAIL: formatLatLon S/E, got ' + s2); }
+    })();
+
     console.log('--- ' + pass + ' passed, ' + fail + ' failed ---');
     if (fail > 0) {
       throw new Error(fail + ' calc.js regression test(s) failed. See console above.');

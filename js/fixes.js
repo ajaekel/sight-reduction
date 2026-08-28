@@ -9,6 +9,7 @@
 
 var currentFix = null;
 var fixRenderToken = 0;
+var lastBisectorFix = null;
 
 document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('swVersion').textContent = APP_VERSION;
@@ -289,8 +290,17 @@ function setFixPlotStatus(msg, kind) {
 /** Toggles the azimuth/bisector line groups' visibility via CSS classes -- no re-render needed. */
 function applyChartToggleClasses() {
   var container = document.getElementById('fixChartContainer');
+  var showBisectors = document.getElementById('toggleBisectors').checked;
   container.classList.toggle('hide-azimuth', !document.getElementById('toggleAzimuth').checked);
-  container.classList.toggle('hide-bisectors', !document.getElementById('toggleBisectors').checked);
+  container.classList.toggle('hide-bisectors', !showBisectors);
+
+  var labelEl = document.getElementById('fixBisectorFixLabel');
+  if (showBisectors && lastBisectorFix) {
+    labelEl.textContent = 'Bisector Fix: ' + SightCalc.formatLatLon(lastBisectorFix.lat, lastBisectorFix.lon);
+    labelEl.style.display = 'block';
+  } else {
+    labelEl.style.display = 'none';
+  }
 }
 
 function onPlotFix() {
@@ -337,6 +347,7 @@ function onPlotFix() {
 
       var container = document.getElementById('fixChartContainer');
       var result = SightChart.renderMultiSightChart(container, chartInput);
+      lastBisectorFix = (typeof result.bisectorFixLat === 'number') ? { lat: result.bisectorFixLat, lon: result.bisectorFixLon } : null;
       applyChartToggleClasses();
 
       var legendEl = document.getElementById('fixChartLegend');
