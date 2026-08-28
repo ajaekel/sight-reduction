@@ -9,7 +9,7 @@
 
 var currentFix = null;
 var fixRenderToken = 0;
-var lastBisectorFix = null;
+var lastChartInput = null; // cached so toggling azimuth/bisectors doesn't need to re-fetch sightings
 
 document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('swVersion').textContent = APP_VERSION;
@@ -21,8 +21,8 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   document.getElementById('btnDeleteFix').addEventListener('click', onDeleteFix);
   document.getElementById('btnPlotFix').addEventListener('click', onPlotFix);
-  document.getElementById('toggleAzimuth').addEventListener('change', applyChartToggleClasses);
-  document.getElementById('toggleBisectors').addEventListener('change', applyChartToggleClasses);
+  document.getElementById('toggleShowAzimuth').addEventListener('change', renderCurrentPlot);
+  document.getElementById('toggleShowBisectors').addEventListener('change', renderCurrentPlot);
 
   window.addEventListener('hashchange', routeFromHash);
   routeFromHash();
@@ -159,6 +159,7 @@ function openFix(id) {
 
     document.getElementById('fixChartCard').style.display = 'none';
     document.getElementById('fixPlotStatus').textContent = '';
+    lastChartInput = null;
 
     renderFixSightings(myToken);
     renderAvailableSightings(myToken);
@@ -287,20 +288,10 @@ function setFixPlotStatus(msg, kind) {
   el.className = 'cache-progress' + (kind ? ' ' + kind : '');
 }
 
-/** Toggles the azimuth/bisector line groups' visibility via CSS classes -- no re-render needed. */
-function applyChartToggleClasses() {
-  var container = document.getElementById('fixChartContainer');
-  var showBisectors = document.getElementById('toggleBisectors').checked;
-  container.classList.toggle('hide-azimuth', !document.getElementById('toggleAzimuth').checked);
-  container.classList.toggle('hide-bisectors', !showBisectors);
-
-  var labelEl = document.getElementById('fixBisectorFixLabel');
-  if (showBisectors && lastBisectorFix) {
-    labelEl.textContent = 'Bisector Fix: ' + SightCalc.formatLatLon(lastBisectorFix.lat, lastBisectorFix.lon);
-    labelEl.style.display = 'block';
-  } else {
-    labelEl.style.display = 'none';
-  }
+function setFixResultStatus(msg, kind) {
+  var el = document.getElementById('fixResultStatus');
+  el.textContent = msg;
+  el.className = 'cache-progress' + (kind ? ' ' + kind : '');
 }
 
 function onPlotFix() {
@@ -345,28 +336,16 @@ function onPlotFix() {
         return;
       }
 
-      var container = document.getElementById('fixChartContainer');
-      var result = SightChart.renderMultiSightChart(container, chartInput);
-      lastBisectorFix = (typeof result.bisectorFixLat === 'number') ? { lat: result.bisectorFixLat, lon: result.bisectorFixLon } : null;
-      applyChartToggleClasses();
+      lastChartInput = chartInput;
 
-      var legendEl = document.getElementById('fixChartLegend');
-      legendEl.innerHTML = '';
-      result.legend.forEach(function (entry) {
-        var item = document.createElement('div');
-        item.className = 'chart-legend-item';
-        item.innerHTML =
-          '<span class="chart-swatch" style="border-top-color: ' + entry.color + '; border-top-style: solid;"></span> ' +
-          entry.index + '. ' + entry.label + ' \u2014 Zn ' + entry.znText + ' (' + entry.interceptText + ')';
-        legendEl.appendChild(item);
-      });
+      var toggleBisectors = document.getElementById('toggleShowBisectors');
+      toggleBisectors.disabled = chartInput.length < 3;
+      if (toggleBisectors.disabled) toggleBisectors.checked = false;
 
       document.getElementById('fixChartCard').style.display = 'block';
+      renderCurrentPlot();
 
-      var msg = 'Plotted ' + chartInput.length + ' of ' + currentFix.sightingIds.length + ' sighting' + (currentFix.sightingIds.length === 1 ? '' : 's') +
-                ' (grid edge = ' + result.scaleNM + ' nm' +
-                (result.bisectorCount ? ', ' + result.bisectorCount + ' bisector line' + (result.bisectorCount === 1 ? '' : 's') : '') +
-                ').';
+      var msg = 'Plotted ' + chartInput.length + ' of ' + currentFix.sightingIds.length + ' sighting' + (currentFix.sightingIds.length === 1 ? '' : 's') + '.';
       if (skippedMissing || skippedNoResults) {
         msg += ' Skipped ' + (skippedMissing + skippedNoResults) + ' (missing or not yet calculated).';
       }
@@ -376,4 +355,54 @@ function onPlotFix() {
       console.error(err);
       setFixPlotStatus('Could not plot this fix.', 'error');
     });
+}
+
+/** Re-renders the already-fetched plot using the current toggle states -- no re-fetch needed. */
+function renderCurrentPlot() {
+  if (!lastChartInput) return;
+
+  var opts = {
+    showAzimuth: document.getElementById('toggleShowAzimuth').checked,
+    showBisectors: document.getElementById('toggleShowBisectors').checked
+  };
+
+  var container = document.getElementById('fixChartContainer');
+  var result = SightChart.renderMultiSightChart(container, lastChartInput, opts);
+
+  var legendEl = document.getElementById('fixChartLegend');
+  legendEl.innerHTML = '';
+  result.legend.forEach(function (entry) {
+    var item = document.createElement('div');
+    item.className = 'chart-legend-item';
+    item.innerHTML =
+      '<span class="chart-swatch" style="border-top-color: ' + entry.color + '; border-top-style: solid;"></span> ' +
+      entry.index + '. ' + entry.label + ' \u2014 Zn ' + entry.znText + ' (' + entry.interceptText + ')';
+    legendEl.appendChild(item);
+  });
+
+  renderFixResult(result.fix, lastChartInput.length);
+}
+
+function renderFixResult(fix, sightingCount) {
+  var caption = document.getElementById('fixResultCaption');
+  caption.textContent = '';
+
+  if (!fix.solvable) {
+    setFixResultStatus('Fix: ' + fix.reason, 'error');
+    return;
+  }
+
+  var methodLabel = fix.source === 'bisector' ? 'method of bisectors' : 'least-squares';
+  setFixResultStatus('Fix (' + methodLabel + '): ' + fix.positionText, 'ok');
+
+  // Shown whenever a 3-LOP triangle exists, regardless of which method is
+  // currently displayed -- it's useful context (fix quality / which
+  // sightings were auto-selected) either way.
+  if (typeof fix.bisectorMaxSideNM === 'number') {
+    var note = 'Cocked hat spread: ' + fix.bisectorMaxSideNM.toFixed(1) + ' nm';
+    if (fix.bisectorBadgeNumbers && fix.bisectorBadgeNumbers.length === 3 && sightingCount > 3) {
+      note += ' (using sightings #' + fix.bisectorBadgeNumbers.join(', #') + ' \u2014 widest azimuth spread)';
+    }
+    caption.textContent = note;
+  }
 }

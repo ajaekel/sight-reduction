@@ -79,25 +79,27 @@
       <div class="cache-progress" id="fixPlotStatus"></div>
 
       <div id="fixChartCard" style="display: none; margin-top: 16px;">
-        <div class="chart-toggle-row">
-          <label class="chart-toggle">
-            <input type="checkbox" id="toggleAzimuth" checked>
-            Azimuth lines
+        <div class="plot-toggles">
+          <label class="toggle-row">
+            <span class="switch"><input type="checkbox" id="toggleShowAzimuth" checked><span class="switch-track"></span></span>
+            <span class="toggle-label">Azimuth lines</span>
           </label>
-          <label class="chart-toggle">
-            <input type="checkbox" id="toggleBisectors">
-            Bisector lines
+          <label class="toggle-row">
+            <span class="switch"><input type="checkbox" id="toggleShowBisectors"><span class="switch-track"></span></span>
+            <span class="toggle-label">Bisector lines</span>
           </label>
         </div>
         <div class="chart-wrap" id="fixChartContainer"></div>
         <div class="chart-legend" id="fixChartLegend"></div>
-        <div class="cache-summary-text" id="fixBisectorFixLabel" style="display: none; text-align: center;"></div>
+        <div class="cache-progress" id="fixResultStatus"></div>
+        <div class="chart-caption" id="fixResultCaption"></div>
       </div>
     </div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
+
 
 <script src="js/calc.js"></script>
 <script src="js/storage.js"></script>

@@ -150,10 +150,28 @@
    *   should pass both explicitly, keyed off that sighting's position in
    *   its own full list rather than the filtered/plotted subset.
    *
-   * Returns { scaleNM, legend: [{ index, color, label, znText, interceptText }] }
+   * opts = {
+   *   showAzimuth: boolean (default true)   -- dashed azimuth-to-body lines
+   *   showBisectors: boolean (default false) -- dotted "method of bisectors"
+   *     construction lines (see SightCalc.resolveCockedHatBisectors). Also
+   *     decides which candidate point is drawn/reported as "the Fix": the
+   *     bisector incenter when true and resolvable, otherwise the
+   *     least-squares point.
+   * }
+   *
+   * Returns {
+   *   scaleNM,
+   *   legend: [{ index, color, label, znText, interceptText }],
+   *   fix: { solvable: false, reason } | {
+   *     solvable: true, source: 'bisector'|'least-squares', positionText,
+   *     lat, lon, bisectorMaxSideNM?, bisectorBadgeNumbers?
+   *   }
+   * }
    */
   function renderMultiSightChart(container, sightingsInput, opts) {
     opts = opts || {};
+    var showAzimuth = opts.showAzimuth !== false;
+    var showBisectors = !!opts.showBisectors;
 
     var withColor = sightingsInput.map(function (s, i) {
       var out = {};
@@ -164,20 +182,42 @@
     });
 
     var multiGeo = SightCalc.computeMultiLopGeometry(withColor);
-    var scale = SightCalc.chooseNiceScale(multiGeo.maxExtentNM);
+    var fixResult = SightCalc.resolveMultiLopFix(multiGeo.sightings);
+
+    // Which point (if any) is actually drawn/reported as "the Fix" is
+    // entirely driven by the bisector toggle: bisector incenter when on (and
+    // resolvable), otherwise the least-squares point.
+    var activeFixPoint = null;
+    var bisectorGeom = null; // { vertices, incenter, maxSideNM, tripleIndices } when shown
+    if (fixResult.solvable) {
+      if (showBisectors && fixResult.bisector) {
+        activeFixPoint = fixResult.bisector.incenter;
+        bisectorGeom = fixResult.bisector;
+      } else {
+        activeFixPoint = fixResult.leastSquaresPoint;
+      }
+    }
+
+    var maxExtentNM = multiGeo.maxExtentNM;
+    if (activeFixPoint) maxExtentNM = Math.max(maxExtentNM, Math.hypot(activeFixPoint.x, activeFixPoint.y));
+    if (bisectorGeom) {
+      bisectorGeom.vertices.forEach(function (v) {
+        maxExtentNM = Math.max(maxExtentNM, Math.hypot(v.x, v.y));
+      });
+    }
+
+    var scale = SightCalc.chooseNiceScale(maxExtentNM);
     var pxPerNm = HALF / scale;
 
     var clipId = 'plotClipMulti';
     var defs = '<defs>';
-    var lopLines = '';
-    var azimuthLines = '';
+    var clippedLines = '';
     var markers = '';
     var legend = [];
 
     multiGeo.sightings.forEach(function (s) {
       var idx = s.badgeNumber;
       var apPx = toPx(s.apPoint, pxPerNm);
-      var azEndPx = toPx({ x: s.apPoint.x + s.azimuthUnit.x * scale, y: s.apPoint.y + s.azimuthUnit.y * scale }, pxPerNm);
 
       var lopExtendNm = scale * 2.2;
       var lopP1Px = toPx({
@@ -189,14 +229,16 @@
         y: s.interceptPoint.y - s.lopDirection.y * lopExtendNm
       }, pxPerNm);
 
-      defs += '<marker id="azArrowMulti' + idx + '" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto">' +
-              '<path d="M0,0 L9,4.5 L0,9 Z" fill="' + s.color + '"/></marker>';
-
-      lopLines +=
+      clippedLines +=
         '<line x1="' + lopP1Px.x + '" y1="' + lopP1Px.y + '" x2="' + lopP2Px.x + '" y2="' + lopP2Px.y + '" stroke="' + s.color + '" stroke-width="2.5"/>';
 
-      azimuthLines +=
-        '<line x1="' + apPx.x + '" y1="' + apPx.y + '" x2="' + azEndPx.x + '" y2="' + azEndPx.y + '" stroke="' + s.color + '" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azArrowMulti' + idx + ')"/>';
+      if (showAzimuth) {
+        var azEndPx = toPx({ x: s.apPoint.x + s.azimuthUnit.x * scale, y: s.apPoint.y + s.azimuthUnit.y * scale }, pxPerNm);
+        defs += '<marker id="azArrowMulti' + idx + '" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto">' +
+                '<path d="M0,0 L9,4.5 L0,9 Z" fill="' + s.color + '"/></marker>';
+        clippedLines +=
+          '<line x1="' + apPx.x + '" y1="' + apPx.y + '" x2="' + azEndPx.x + '" y2="' + azEndPx.y + '" stroke="' + s.color + '" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azArrowMulti' + idx + ')"/>';
+      }
 
       markers +=
         '<circle cx="' + apPx.x + '" cy="' + apPx.y + '" r="9" fill="' + s.color + '" stroke="var(--bg)" stroke-width="1.5"/>' +
@@ -213,35 +255,43 @@
       });
     });
 
-    // Bisector lines: best-practice cocked-hat method, generalized to any
-    // number of LOPs >= 2 (see SightCalc.computeBisectors for the geometry).
-    var bisectorLines = '';
-    var bisectorFixMarker = '';
-    var bisectorFixLat = null;
-    var bisectorFixLon = null;
-    var bisectorInputs = multiGeo.sightings.map(function (s) {
-      return { point: s.interceptPoint, direction: s.lopDirection };
-    });
-    var bisectors = SightCalc.computeBisectors(bisectorInputs);
-    var bisectorExtendNm = scale * 1.1;
-    bisectors.forEach(function (b) {
-      var b1Px = toPx({ x: b.point.x + b.direction.x * bisectorExtendNm, y: b.point.y + b.direction.y * bisectorExtendNm }, pxPerNm);
-      var b2Px = toPx({ x: b.point.x - b.direction.x * bisectorExtendNm, y: b.point.y - b.direction.y * bisectorExtendNm }, pxPerNm);
-      bisectorLines += '<line x1="' + b1Px.x + '" y1="' + b1Px.y + '" x2="' + b2Px.x + '" y2="' + b2Px.y + '" stroke="var(--chart-bisector)" stroke-width="1.5" stroke-dasharray="1,3" stroke-linecap="round"/>';
-    });
+    if (bisectorGeom) {
+      var incenterPx = toPx(bisectorGeom.incenter, pxPerNm);
+      bisectorGeom.vertices.forEach(function (v) {
+        var vPx = toPx(v, pxPerNm);
+        clippedLines += '<line x1="' + vPx.x + '" y1="' + vPx.y + '" x2="' + incenterPx.x + '" y2="' + incenterPx.y +
+          '" stroke="var(--chart-bisector)" stroke-width="1.5" stroke-dasharray="1,3" stroke-linecap="round"/>';
+      });
+    }
 
-    var bisectorFixNm = SightCalc.computeBisectorFix(bisectors, scale * 10);
-    if (bisectorFixNm) {
-      var fixLatLon = SightCalc.nmPointToLatLon(multiGeo.originLat, multiGeo.originLon, bisectorFixNm);
-      bisectorFixLat = fixLatLon.lat;
-      bisectorFixLon = fixLatLon.lon;
+    var fixMarkup = '';
+    var fix = fixResult.solvable ? { solvable: true } : { solvable: false, reason: fixResult.reason };
 
-      var fixPx = toPx(bisectorFixNm, pxPerNm);
-      var d = 7; // diamond half-size, px
-      bisectorFixMarker =
-        '<path d="M' + fixPx.x + ',' + (fixPx.y - d) + ' L' + (fixPx.x + d) + ',' + fixPx.y +
-        ' L' + fixPx.x + ',' + (fixPx.y + d) + ' L' + (fixPx.x - d) + ',' + fixPx.y + ' Z" ' +
-        'fill="var(--chart-bisector)" stroke="var(--bg)" stroke-width="1"/>';
+    if (activeFixPoint) {
+      var fixPx = toPx(activeFixPoint, pxPerNm);
+      fixMarkup =
+        '<g>' +
+          '<circle cx="' + fixPx.x + '" cy="' + fixPx.y + '" r="6" fill="none" stroke="var(--chart-fix)" stroke-width="2"/>' +
+          '<line x1="' + (fixPx.x - 9) + '" y1="' + fixPx.y + '" x2="' + (fixPx.x + 9) + '" y2="' + fixPx.y + '" stroke="var(--chart-fix)" stroke-width="1.5"/>' +
+          '<line x1="' + fixPx.x + '" y1="' + (fixPx.y - 9) + '" x2="' + fixPx.x + '" y2="' + (fixPx.y + 9) + '" stroke="var(--chart-fix)" stroke-width="1.5"/>' +
+          '<text x="' + (fixPx.x + 11) + '" y="' + (fixPx.y - 9) + '" class="chart-fix-label">FIX</text>' +
+        '</g>';
+
+      var pos = SightCalc.positionFromOffset(multiGeo.originLat, multiGeo.originLon, activeFixPoint);
+      fix.source = bisectorGeom ? 'bisector' : 'least-squares';
+      fix.lat = pos.lat;
+      fix.lon = pos.lon;
+      fix.positionText = formatLat(pos.lat) + ' ' + formatLon(pos.lon);
+    }
+
+    // Reported regardless of the toggle, if a triangle exists, so the caller
+    // can always show fix quality/selection context -- not just when the
+    // bisector lines happen to be visible.
+    if (fixResult.bisector) {
+      fix.bisectorMaxSideNM = fixResult.bisector.maxSideNM;
+      fix.bisectorBadgeNumbers = fixResult.bisector.tripleIndices.map(function (idx) {
+        return multiGeo.sightings[idx].badgeNumber;
+      });
     }
 
     defs += '</defs>';
@@ -250,23 +300,14 @@
       '<svg viewBox="0 0 ' + SIZE + ' ' + SIZE + '" xmlns="http://www.w3.org/2000/svg" class="chart-svg" role="img" aria-label="Plot of multiple lines of position">' +
         buildFrame(multiGeo.originLat, multiGeo.originLon, scale, clipId) +
         defs +
-        '<g clip-path="url(#' + clipId + ')">' +
-          lopLines +
-          '<g class="chart-bisector-group">' + bisectorLines + bisectorFixMarker + '</g>' +
-          '<g class="chart-azimuth-group">' + azimuthLines + '</g>' +
-        '</g>' +
+        '<g clip-path="url(#' + clipId + ')">' + clippedLines + '</g>' +
         markers +
+        fixMarkup +
       '</svg>';
 
     container.innerHTML = svg;
 
-    return {
-      scaleNM: scale,
-      legend: legend,
-      bisectorCount: bisectors.length,
-      bisectorFixLat: bisectorFixLat,
-      bisectorFixLon: bisectorFixLon
-    };
+    return { scaleNM: scale, legend: legend, fix: fix };
   }
 
   global.SightChart = {

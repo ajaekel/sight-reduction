@@ -244,114 +244,77 @@
       assertClose('signedPositionFromRecord lon (W negative)', pos.lon, -73.938333, 0.0001);
     })();
 
-    // --- computeBisectors: N=2, perpendicular lines through origin ---
-    (function testBisectorsN2() {
-      var bis = SightCalc.computeBisectors([
-        { point: { x: 0, y: 0 }, direction: { x: 1, y: 0 } },
-        { point: { x: 0, y: 0 }, direction: { x: 0, y: 1 } }
-      ]);
-      if (bis.length === 1) { pass++; console.log('PASS: N=2 bisector count is 1'); }
-      else { fail++; console.error('FAIL: N=2 bisector count, got ' + bis.length); }
-
-      var expected = 1 / Math.sqrt(2);
-      assertClose('N=2 bisector direction x', Math.abs(bis[0].direction.x), expected, 0.001);
-      assertClose('N=2 bisector direction y', Math.abs(bis[0].direction.y), expected, 0.001);
+    // --- resolveMultiLopFix: 2-LOP fix reduces to the exact intersection ---
+    (function testResolveMultiLopFixTwoLops() {
+      var geoA = SightCalc.computeLopGeometry(0, 10);
+      var geoB = SightCalc.computeLopGeometry(90, 5);
+      var fix = SightCalc.resolveMultiLopFix([geoA, geoB]);
+      assertClose('2-LOP fix is solvable', fix.solvable ? 1 : 0, 1, 0);
+      assertClose('2-LOP fix x (exact intersection)', fix.leastSquaresPoint.x, 5, 0.001);
+      assertClose('2-LOP fix y (exact intersection)', fix.leastSquaresPoint.y, 10, 0.001);
+      assertClose('2-LOP fix has no bisector', fix.bisector ? 1 : 0, 0, 0);
     })();
 
-    // --- computeBisectors: N=3 cocked hat -- bisectors must pass exactly
-    // through the triangle's true incenter (verified against the known
-    // closed-form incenter of a right triangle with legs on the axes). ---
-    (function testBisectorsIncenter() {
-      var s2 = 1 / Math.sqrt(2);
-      var lines = [
-        { point: { x: 0, y: 0 }, direction: { x: 1, y: 0 } },
-        { point: { x: 0, y: 0 }, direction: { x: 0, y: 1 } },
-        { point: { x: 10, y: 0 }, direction: { x: -s2, y: s2 } }
-      ];
-      var bis = SightCalc.computeBisectors(lines);
-      if (bis.length === 3) { pass++; console.log('PASS: N=3 bisector count is 3'); }
-      else { fail++; console.error('FAIL: N=3 bisector count, got ' + bis.length); }
+    // --- resolveMultiLopFix: parallel LOPs are correctly reported unsolvable ---
+    (function testResolveMultiLopFixParallel() {
+      var geoA = SightCalc.computeLopGeometry(45, 10);
+      var geoB = SightCalc.computeLopGeometry(45, 5);
+      var fix = SightCalc.resolveMultiLopFix([geoA, geoB]);
+      assertClose('parallel LOPs unsolvable', fix.solvable ? 1 : 0, 0, 0);
+    })();
 
-      var r = (10 + 10 - 10 * Math.sqrt(2)) / 2; // true incenter of this triangle is (r, r)
-
-      function distLineToPoint(b, target) {
-        var t = (target.x - b.point.x) * b.direction.x + (target.y - b.point.y) * b.direction.y;
-        var closest = { x: b.point.x + t * b.direction.x, y: b.point.y + t * b.direction.y };
-        return Math.hypot(closest.x - r, closest.y - r);
+    // --- resolveMultiLopFix: 3 LOPs built to pass exactly through a known
+    // point should resolve both methods back to that point, with ~0 spread ---
+    (function testResolveMultiLopFixThreeLopsConcurrent() {
+      var truePoint = { x: 3, y: 4 };
+      function sightingThrough(zn) {
+        var geo = SightCalc.computeLopGeometry(zn, 0);
+        var interceptNM = geo.azimuthUnit.x * truePoint.x + geo.azimuthUnit.y * truePoint.y;
+        return SightCalc.computeLopGeometry(zn, interceptNM);
       }
-
-      bis.forEach(function (b, idx) {
-        var d = distLineToPoint(b, { x: r, y: r });
-        if (d < 1e-6) { pass++; console.log('PASS: bisector ' + idx + ' passes exactly through the true incenter'); }
-        else { fail++; console.error('FAIL: bisector ' + idx + ' misses incenter by ' + d); }
-      });
+      var sightings = [10, 130, 250].map(sightingThrough);
+      var fix = SightCalc.resolveMultiLopFix(sightings);
+      assertClose('3-LOP concurrent: least-squares x', fix.leastSquaresPoint.x, 3, 0.001);
+      assertClose('3-LOP concurrent: least-squares y', fix.leastSquaresPoint.y, 4, 0.001);
+      // Exact concurrency is a degenerate (zero-area) triangle -- the incenter
+      // formula divides by the perimeter, so `bisector` is correctly omitted
+      // rather than returning a meaningless 0/0 result.
+      assertClose('3-LOP exact concurrency has no bisector (degenerate triangle)', fix.bisector ? 1 : 0, 0, 0);
     })();
 
-    // --- computeBisectors: parallel pair is skipped gracefully; N=0/N=1 don't crash ---
-    (function testBisectorsEdgeCases() {
-      var withParallel = SightCalc.computeBisectors([
-        { point: { x: 0, y: 0 }, direction: { x: 1, y: 0 } },
-        { point: { x: 0, y: 5 }, direction: { x: 1, y: 0 } },
-        { point: { x: 3, y: 0 }, direction: { x: 0, y: 1 } }
-      ]);
-      if (withParallel.length === 2) { pass++; console.log('PASS: parallel pair correctly skipped (2 of 3 possible pairs)'); }
-      else { fail++; console.error('FAIL: expected 2 bisectors with one parallel pair, got ' + withParallel.length); }
-
-      var n1 = SightCalc.computeBisectors([{ point: { x: 0, y: 0 }, direction: { x: 1, y: 0 } }]);
-      var n0 = SightCalc.computeBisectors([]);
-      if (n1.length === 0 && n0.length === 0) { pass++; console.log('PASS: N=0 and N=1 do not crash, return empty'); }
-      else { fail++; console.error('FAIL: N=0/N=1 edge case'); }
-    })();
-
-    // --- nmPointToLatLon round-trips computeMultiLopGeometry's forward projection ---
-    (function testNmPointToLatLonRoundTrip() {
+    // --- resolveMultiLopFix: 3 LOPs with one deliberately off should produce
+    // a real (non-degenerate) cocked hat, and least-squares vs. bisector
+    // should genuinely differ for an asymmetric error ---
+    (function testResolveMultiLopFixCockedHat() {
+      var truePoint = { x: 3, y: 4 };
+      function sightingThrough(zn, extraNM) {
+        var geo0 = SightCalc.computeLopGeometry(zn, 0);
+        var interceptNM = geo0.azimuthUnit.x * truePoint.x + geo0.azimuthUnit.y * truePoint.y + (extraNM || 0);
+        return SightCalc.computeLopGeometry(zn, interceptNM);
+      }
       var sightings = [
-        { lat: 40.0, lon: -74.0, zn: 10, interceptNM: 2 },
-        { lat: 41.0, lon: -73.5, zn: 100, interceptNM: -1 }
+        sightingThrough(15, 1),
+        sightingThrough(60, -0.4),
+        sightingThrough(260, 0.3)
       ];
-      var multi = SightCalc.computeMultiLopGeometry(sightings);
-      var back = SightCalc.nmPointToLatLon(multi.originLat, multi.originLon, multi.sightings[0].apPoint);
-      assertClose('nmPointToLatLon round-trip lat', back.lat, sightings[0].lat, 1e-9);
-      assertClose('nmPointToLatLon round-trip lon', back.lon, sightings[0].lon, 1e-9);
+      var fix = SightCalc.resolveMultiLopFix(sightings);
+      assertClose('cocked hat produced (non-degenerate)', fix.bisector ? 1 : 0, 1, 0);
+      assertClose('cocked hat maxSideNM is positive', fix.bisector.maxSideNM > 0 ? 1 : 0, 1, 0);
+      var distApart = Math.hypot(
+        fix.leastSquaresPoint.x - fix.bisector.incenter.x,
+        fix.leastSquaresPoint.y - fix.bisector.incenter.y
+      );
+      assertClose('least-squares and incenter genuinely differ for an asymmetric cocked hat', distApart > 0.01 ? 1 : 0, 1, 0);
     })();
 
-    // --- computeBisectorFix: N=3 cocked hat converges exactly on the true incenter ---
-    (function testBisectorFixIncenter() {
-      var s2 = 1 / Math.sqrt(2);
-      var lines = [
-        { point: { x: 0, y: 0 }, direction: { x: 1, y: 0 } },
-        { point: { x: 0, y: 0 }, direction: { x: 0, y: 1 } },
-        { point: { x: 10, y: 0 }, direction: { x: -s2, y: s2 } }
-      ];
-      var bis = SightCalc.computeBisectors(lines);
-      var fix = SightCalc.computeBisectorFix(bis);
-      var r = (10 + 10 - 10 * Math.sqrt(2)) / 2;
-      assertClose('computeBisectorFix matches true incenter x', fix.x, r, 1e-6);
-      assertClose('computeBisectorFix matches true incenter y', fix.y, r, 1e-6);
-    })();
-
-    // --- computeBisectorFix: N=2 (only 1 bisector line) has no intersection to report ---
-    (function testBisectorFixN2() {
-      var bis2 = SightCalc.computeBisectors([
-        { point: { x: 0, y: 0 }, direction: { x: 1, y: 0 } },
-        { point: { x: 0, y: 0 }, direction: { x: 0, y: 1 } }
-      ]);
-      if (SightCalc.computeBisectorFix(bis2) === null) {
-        pass++; console.log('PASS: N=2 computeBisectorFix returns null (no fix point possible)');
-      } else {
-        fail++; console.error('FAIL: N=2 computeBisectorFix should return null');
-      }
-    })();
-
-    // --- formatLatLon ---
-    (function testFormatLatLon() {
-      var s = SightCalc.formatLatLon(40.536667, -73.938333);
-      if (s.indexOf('N') !== -1 && s.indexOf('W') !== -1) { pass++; console.log('PASS: formatLatLon N/W: ' + s); }
-      else { fail++; console.error('FAIL: formatLatLon N/W, got ' + s); }
-
-      var s2 = SightCalc.formatLatLon(-35.25, 15.55);
-      if (s2.indexOf('S') !== -1 && s2.indexOf('E') !== -1) { pass++; console.log('PASS: formatLatLon S/E: ' + s2); }
-      else { fail++; console.error('FAIL: formatLatLon S/E, got ' + s2); }
+    // --- selectWidestAzimuthSpreadTriple: avoids pairing two close azimuths ---
+    (function testSelectWidestAzimuthSpreadTriple() {
+      var sightings = [0, 5, 130, 250].map(function (zn) { return SightCalc.computeLopGeometry(zn, 10); });
+      var triple = SightCalc.selectWidestAzimuthSpreadTriple(sightings);
+      assertClose('widest-spread triple excludes index 0 (too close to index 1)', triple.indexOf(0), -1, 0);
+      assertClose('widest-spread triple includes index 1', triple.indexOf(1) !== -1 ? 1 : 0, 1, 0);
+      assertClose('widest-spread triple includes index 2', triple.indexOf(2) !== -1 ? 1 : 0, 1, 0);
+      assertClose('widest-spread triple includes index 3', triple.indexOf(3) !== -1 ? 1 : 0, 1, 0);
     })();
 
     console.log('--- ' + pass + ' passed, ' + fail + ' failed ---');
