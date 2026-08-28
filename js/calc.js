@@ -338,6 +338,116 @@
     return CHART_PALETTE[i];
   }
 
+  function normalizeVec(v) {
+    var len = Math.hypot(v.x, v.y);
+    if (len < 1e-9) return null;
+    return { x: v.x / len, y: v.y / len };
+  }
+
+  /**
+   * Intersection of two infinite lines, each given as a point + direction
+   * vector. Returns {x,y}, or null if the lines are parallel (within a
+   * small tolerance).
+   */
+  function lineLineIntersection(p1, dir1, p2, dir2) {
+    var denom = dir1.x * dir2.y - dir1.y * dir2.x;
+    if (Math.abs(denom) < 1e-9) return null; // parallel (or nearly so)
+
+    var diffX = p2.x - p1.x;
+    var diffY = p2.y - p1.y;
+    var t = (diffX * dir2.y - diffY * dir2.x) / denom;
+
+    return { x: p1.x + t * dir1.x, y: p1.y + t * dir1.y };
+  }
+
+  /**
+   * Best-practice bisector-method geometry for resolving multiple LOPs into
+   * a refined estimated position (the classic "cocked hat" technique,
+   * generalized to any number of LOPs >= 2).
+   *
+   * lopLines: [{ point, direction }] -- one entry per LOP, point = any point
+   * on that LOP (e.g. its intercept point), direction = its unit direction
+   * vector (e.g. lopDirection from computeLopGeometry/computeMultiLopGeometry).
+   *
+   * For the classic 3-LOP cocked hat: each pair of LOPs crosses at a vertex
+   * of the triangle; the internal angle bisector at each vertex points
+   * toward the OTHER two vertices (one on each of the two lines meeting
+   * there). This generalizes cleanly to N LOPs: at the intersection of
+   * lines i and j, orient line i's local direction toward the centroid of
+   * ALL of line i's intersections with every line other than j (not just a
+   * single "other" line), and likewise for line j; the bisector direction
+   * is the normalized sum of those two oriented directions. For exactly 2
+   * LOPs there are no "other" intersections to orient toward, so that
+   * line's own fixed direction convention is used directly -- a reasonable,
+   * deterministic choice, though for N=2 the bisector is more an
+   * illustrative construct than a position refinement (2 LOPs already
+   * define an unambiguous single fix at their crossing).
+   *
+   * Returns [{ i, j, point, direction }] -- one entry per non-parallel pair
+   * of input lines (skips pairs that are parallel; there is no
+   * intersection to bisect).
+   */
+  function computeBisectors(lopLines) {
+    var n = lopLines.length;
+    var intersections = {}; // "i_j" (i<j) -> {x,y}
+
+    for (var i = 0; i < n; i++) {
+      for (var j = i + 1; j < n; j++) {
+        var inter = lineLineIntersection(lopLines[i].point, lopLines[i].direction, lopLines[j].point, lopLines[j].direction);
+        if (inter) intersections[i + '_' + j] = inter;
+      }
+    }
+
+    function otherIntersectionsForLine(lineIdx, excludeIdx) {
+      var pts = [];
+      for (var k = 0; k < n; k++) {
+        if (k === lineIdx || k === excludeIdx) continue;
+        var key = lineIdx < k ? (lineIdx + '_' + k) : (k + '_' + lineIdx);
+        if (intersections[key]) pts.push(intersections[key]);
+      }
+      return pts;
+    }
+
+    function centroidOf(pts) {
+      var sx = 0, sy = 0;
+      pts.forEach(function (p) { sx += p.x; sy += p.y; });
+      return { x: sx / pts.length, y: sy / pts.length };
+    }
+
+    var results = [];
+    for (var a = 0; a < n; a++) {
+      for (var b = a + 1; b < n; b++) {
+        var P = intersections[a + '_' + b];
+        if (!P) continue; // parallel lines -- no intersection to bisect
+
+        var othersA = otherIntersectionsForLine(a, b);
+        var othersB = otherIntersectionsForLine(b, a);
+
+        var dirA = othersA.length
+          ? normalizeVec({ x: centroidOf(othersA).x - P.x, y: centroidOf(othersA).y - P.y })
+          : lopLines[a].direction;
+        var dirB = othersB.length
+          ? normalizeVec({ x: centroidOf(othersB).x - P.x, y: centroidOf(othersB).y - P.y })
+          : lopLines[b].direction;
+
+        if (!dirA) dirA = lopLines[a].direction;
+        if (!dirB) dirB = lopLines[b].direction;
+
+        var bisectorDir = normalizeVec({ x: dirA.x + dirB.x, y: dirA.y + dirB.y });
+        if (!bisectorDir) {
+          // dirA and dirB exactly cancel (rare, near-opposite orientation) --
+          // fall back to a perpendicular of dirA as an arbitrary but
+          // well-defined and deterministic choice.
+          bisectorDir = { x: -dirA.y, y: dirA.x };
+        }
+
+        results.push({ i: a, j: b, point: P, direction: bisectorDir });
+      }
+    }
+
+    return results;
+  }
+
   global.SightCalc = {
     rad: rad,
     deg: deg,
@@ -357,6 +467,8 @@
     signedPositionFromRecord: signedPositionFromRecord,
     computeMultiLopGeometry: computeMultiLopGeometry,
     formatBodyLabel: formatBodyLabel,
-    paletteColor: paletteColor
+    paletteColor: paletteColor,
+    lineLineIntersection: lineLineIntersection,
+    computeBisectors: computeBisectors
   };
 })(window);

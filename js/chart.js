@@ -169,7 +169,8 @@
 
     var clipId = 'plotClipMulti';
     var defs = '<defs>';
-    var clippedLines = '';
+    var lopLines = '';
+    var azimuthLines = '';
     var markers = '';
     var legend = [];
 
@@ -191,8 +192,10 @@
       defs += '<marker id="azArrowMulti' + idx + '" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto">' +
               '<path d="M0,0 L9,4.5 L0,9 Z" fill="' + s.color + '"/></marker>';
 
-      clippedLines +=
-        '<line x1="' + lopP1Px.x + '" y1="' + lopP1Px.y + '" x2="' + lopP2Px.x + '" y2="' + lopP2Px.y + '" stroke="' + s.color + '" stroke-width="2.5"/>' +
+      lopLines +=
+        '<line x1="' + lopP1Px.x + '" y1="' + lopP1Px.y + '" x2="' + lopP2Px.x + '" y2="' + lopP2Px.y + '" stroke="' + s.color + '" stroke-width="2.5"/>';
+
+      azimuthLines +=
         '<line x1="' + apPx.x + '" y1="' + apPx.y + '" x2="' + azEndPx.x + '" y2="' + azEndPx.y + '" stroke="' + s.color + '" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azArrowMulti' + idx + ')"/>';
 
       markers +=
@@ -210,19 +213,37 @@
       });
     });
 
+    // Bisector lines: best-practice cocked-hat method, generalized to any
+    // number of LOPs >= 2 (see SightCalc.computeBisectors for the geometry).
+    var bisectorLines = '';
+    var bisectorInputs = multiGeo.sightings.map(function (s) {
+      return { point: s.interceptPoint, direction: s.lopDirection };
+    });
+    var bisectors = SightCalc.computeBisectors(bisectorInputs);
+    var bisectorExtendNm = scale * 1.1;
+    bisectors.forEach(function (b) {
+      var b1Px = toPx({ x: b.point.x + b.direction.x * bisectorExtendNm, y: b.point.y + b.direction.y * bisectorExtendNm }, pxPerNm);
+      var b2Px = toPx({ x: b.point.x - b.direction.x * bisectorExtendNm, y: b.point.y - b.direction.y * bisectorExtendNm }, pxPerNm);
+      bisectorLines += '<line x1="' + b1Px.x + '" y1="' + b1Px.y + '" x2="' + b2Px.x + '" y2="' + b2Px.y + '" stroke="var(--chart-bisector)" stroke-width="1.5" stroke-dasharray="1,3" stroke-linecap="round"/>';
+    });
+
     defs += '</defs>';
 
     var svg =
       '<svg viewBox="0 0 ' + SIZE + ' ' + SIZE + '" xmlns="http://www.w3.org/2000/svg" class="chart-svg" role="img" aria-label="Plot of multiple lines of position">' +
         buildFrame(multiGeo.originLat, multiGeo.originLon, scale, clipId) +
         defs +
-        '<g clip-path="url(#' + clipId + ')">' + clippedLines + '</g>' +
+        '<g clip-path="url(#' + clipId + ')">' +
+          lopLines +
+          '<g class="chart-bisector-group">' + bisectorLines + '</g>' +
+          '<g class="chart-azimuth-group">' + azimuthLines + '</g>' +
+        '</g>' +
         markers +
       '</svg>';
 
     container.innerHTML = svg;
 
-    return { scaleNM: scale, legend: legend };
+    return { scaleNM: scale, legend: legend, bisectorCount: bisectors.length };
   }
 
   global.SightChart = {

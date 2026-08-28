@@ -244,6 +244,65 @@
       assertClose('signedPositionFromRecord lon (W negative)', pos.lon, -73.938333, 0.0001);
     })();
 
+    // --- computeBisectors: N=2, perpendicular lines through origin ---
+    (function testBisectorsN2() {
+      var bis = SightCalc.computeBisectors([
+        { point: { x: 0, y: 0 }, direction: { x: 1, y: 0 } },
+        { point: { x: 0, y: 0 }, direction: { x: 0, y: 1 } }
+      ]);
+      if (bis.length === 1) { pass++; console.log('PASS: N=2 bisector count is 1'); }
+      else { fail++; console.error('FAIL: N=2 bisector count, got ' + bis.length); }
+
+      var expected = 1 / Math.sqrt(2);
+      assertClose('N=2 bisector direction x', Math.abs(bis[0].direction.x), expected, 0.001);
+      assertClose('N=2 bisector direction y', Math.abs(bis[0].direction.y), expected, 0.001);
+    })();
+
+    // --- computeBisectors: N=3 cocked hat -- bisectors must pass exactly
+    // through the triangle's true incenter (verified against the known
+    // closed-form incenter of a right triangle with legs on the axes). ---
+    (function testBisectorsIncenter() {
+      var s2 = 1 / Math.sqrt(2);
+      var lines = [
+        { point: { x: 0, y: 0 }, direction: { x: 1, y: 0 } },
+        { point: { x: 0, y: 0 }, direction: { x: 0, y: 1 } },
+        { point: { x: 10, y: 0 }, direction: { x: -s2, y: s2 } }
+      ];
+      var bis = SightCalc.computeBisectors(lines);
+      if (bis.length === 3) { pass++; console.log('PASS: N=3 bisector count is 3'); }
+      else { fail++; console.error('FAIL: N=3 bisector count, got ' + bis.length); }
+
+      var r = (10 + 10 - 10 * Math.sqrt(2)) / 2; // true incenter of this triangle is (r, r)
+
+      function distLineToPoint(b, target) {
+        var t = (target.x - b.point.x) * b.direction.x + (target.y - b.point.y) * b.direction.y;
+        var closest = { x: b.point.x + t * b.direction.x, y: b.point.y + t * b.direction.y };
+        return Math.hypot(closest.x - r, closest.y - r);
+      }
+
+      bis.forEach(function (b, idx) {
+        var d = distLineToPoint(b, { x: r, y: r });
+        if (d < 1e-6) { pass++; console.log('PASS: bisector ' + idx + ' passes exactly through the true incenter'); }
+        else { fail++; console.error('FAIL: bisector ' + idx + ' misses incenter by ' + d); }
+      });
+    })();
+
+    // --- computeBisectors: parallel pair is skipped gracefully; N=0/N=1 don't crash ---
+    (function testBisectorsEdgeCases() {
+      var withParallel = SightCalc.computeBisectors([
+        { point: { x: 0, y: 0 }, direction: { x: 1, y: 0 } },
+        { point: { x: 0, y: 5 }, direction: { x: 1, y: 0 } },
+        { point: { x: 3, y: 0 }, direction: { x: 0, y: 1 } }
+      ]);
+      if (withParallel.length === 2) { pass++; console.log('PASS: parallel pair correctly skipped (2 of 3 possible pairs)'); }
+      else { fail++; console.error('FAIL: expected 2 bisectors with one parallel pair, got ' + withParallel.length); }
+
+      var n1 = SightCalc.computeBisectors([{ point: { x: 0, y: 0 }, direction: { x: 1, y: 0 } }]);
+      var n0 = SightCalc.computeBisectors([]);
+      if (n1.length === 0 && n0.length === 0) { pass++; console.log('PASS: N=0 and N=1 do not crash, return empty'); }
+      else { fail++; console.error('FAIL: N=0/N=1 edge case'); }
+    })();
+
     console.log('--- ' + pass + ' passed, ' + fail + ' failed ---');
     if (fail > 0) {
       throw new Error(fail + ' calc.js regression test(s) failed. See console above.');

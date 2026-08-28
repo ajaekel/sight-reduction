@@ -20,6 +20,8 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   document.getElementById('btnDeleteFix').addEventListener('click', onDeleteFix);
   document.getElementById('btnPlotFix').addEventListener('click', onPlotFix);
+  document.getElementById('toggleAzimuth').addEventListener('change', applyChartToggleClasses);
+  document.getElementById('toggleBisectors').addEventListener('change', applyChartToggleClasses);
 
   window.addEventListener('hashchange', routeFromHash);
   routeFromHash();
@@ -284,6 +286,13 @@ function setFixPlotStatus(msg, kind) {
   el.className = 'cache-progress' + (kind ? ' ' + kind : '');
 }
 
+/** Toggles the azimuth/bisector line groups' visibility via CSS classes -- no re-render needed. */
+function applyChartToggleClasses() {
+  var container = document.getElementById('fixChartContainer');
+  container.classList.toggle('hide-azimuth', !document.getElementById('toggleAzimuth').checked);
+  container.classList.toggle('hide-bisectors', !document.getElementById('toggleBisectors').checked);
+}
+
 function onPlotFix() {
   if (!currentFix || !currentFix.sightingIds.length) {
     setFixPlotStatus('Add at least one sighting to this fix first.', 'error');
@@ -328,6 +337,7 @@ function onPlotFix() {
 
       var container = document.getElementById('fixChartContainer');
       var result = SightChart.renderMultiSightChart(container, chartInput);
+      applyChartToggleClasses();
 
       var legendEl = document.getElementById('fixChartLegend');
       legendEl.innerHTML = '';
@@ -343,7 +353,9 @@ function onPlotFix() {
       document.getElementById('fixChartCard').style.display = 'block';
 
       var msg = 'Plotted ' + chartInput.length + ' of ' + currentFix.sightingIds.length + ' sighting' + (currentFix.sightingIds.length === 1 ? '' : 's') +
-                ' (scale: range ring = ' + result.scaleNM + ' nm).';
+                ' (grid edge = ' + result.scaleNM + ' nm' +
+                (result.bisectorCount ? ', ' + result.bisectorCount + ' bisector line' + (result.bisectorCount === 1 ? '' : 's') : '') +
+                ').';
       if (skippedMissing || skippedNoResults) {
         msg += ' Skipped ' + (skippedMissing + skippedNoResults) + ' (missing or not yet calculated).';
       }
