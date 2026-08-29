@@ -21,11 +21,12 @@
   var SIZE = 340;          // SVG viewBox size (viewBox units, not px -- actual
                             // rendered size is controlled by CSS and scales
                             // with the available card width)
-  var MARGIN = 34;          // reserved for edge lat/lon labels
+  var EDGE = 6;             // tiny inset so the 1.5px border stroke isn't clipped by the viewBox edge
   var CENTER = SIZE / 2;
-  var HALF = (SIZE - 2 * MARGIN) / 2;   // plot area half-width, replaces the old circular RADIUS
-  var PLOT_MIN = MARGIN;
-  var PLOT_MAX = SIZE - MARGIN;
+  var HALF = SIZE / 2 - EDGE;   // plot area half-width -- nearly the full viewBox now that
+                                 // lat/lon labels render inside the grid instead of in a margin
+  var PLOT_MIN = EDGE;
+  var PLOT_MAX = SIZE - EDGE;
   var GRID_FRACTIONS = [-1, -0.5, 0, 0.5, 1]; // as a fraction of scale; only -1/0/1 get text labels
 
   function pad3(n) {
@@ -43,9 +44,13 @@
   }
 
   /**
-   * Builds the shared square frame: border, lat/lon gridlines with edge
-   * labels, and a clipPath (id clipId) other content can be clipped to.
-   * Returns an SVG markup string (defs + visible frame elements).
+   * Builds the shared square frame: border, lat/lon gridlines, and a
+   * clipPath (id clipId) other content can be clipped to. Edge/center
+   * lat/lon values are labeled INSIDE the grid (longitude along the top,
+   * latitude along the left) rather than in an outer margin, so the grid
+   * itself can use nearly the entire viewBox -- .chart-axis-label carries a
+   * card-colored text stroke (a "halo") so the labels stay legible sitting
+   * on top of gridlines or plotted content. Returns an SVG markup string.
    */
   function buildFrame(originLat, originLon, scale, clipId) {
     var pxPerNm = HALF / scale;
@@ -73,12 +78,18 @@
         var lonHere = originLon + nm / (60 * cosOriginLat);
         var latHere = originLat + nm / 60;
 
-        var lonLabelY = (f === 1) ? PLOT_MAX + 13 : PLOT_MIN - 6;
-        svg += '<text x="' + px + '" y="' + lonLabelY + '" text-anchor="middle" class="chart-axis-label">' + formatLon(lonHere) + '</text>';
+        // Longitude labels: always along the top inside edge, one row.
+        // West/east are anchored away from their corner so they can't run
+        // off the grid; center is anchored on it.
+        var lonAnchor = (f === -1) ? 'start' : (f === 1 ? 'end' : 'middle');
+        var lonX = (f === -1) ? PLOT_MIN + 4 : (f === 1 ? PLOT_MAX - 4 : px);
+        svg += '<text x="' + lonX + '" y="' + (PLOT_MIN + 13) + '" text-anchor="' + lonAnchor + '" class="chart-axis-label">' + formatLon(lonHere) + '</text>';
 
-        var latLabelX = (f === 1) ? PLOT_MIN - 4 : PLOT_MAX + 4;
-        var latAnchor = (f === 1) ? 'end' : 'start';
-        svg += '<text x="' + latLabelX + '" y="' + (py + 3.5) + '" text-anchor="' + latAnchor + '" class="chart-axis-label">' + formatLat(latHere) + '</text>';
+        // Latitude labels: always along the left inside edge, one column.
+        // The north (f=1) label sits a line below the top row so it doesn't
+        // collide with the west longitude label sharing that corner.
+        var latY = (f === 1) ? (PLOT_MIN + 28) : (f === -1 ? PLOT_MAX - 6 : py + 3.5);
+        svg += '<text x="' + (PLOT_MIN + 4) + '" y="' + latY + '" text-anchor="start" class="chart-axis-label">' + formatLat(latHere) + '</text>';
       }
     });
 
@@ -119,7 +130,7 @@
     var interceptAbs = Math.abs(opts.interceptNM).toFixed(1);
     var interceptDir = opts.interceptNM >= 0 ? 'TOWARD' : 'AWAY';
 
-    var znLabelX = Math.min(Math.max(azEndPx.x, MARGIN + 22), SIZE - MARGIN - 22);
+    var znLabelX = Math.min(Math.max(azEndPx.x, PLOT_MIN + 22), PLOT_MAX - 22);
     var znLabelY = Math.min(Math.max(azEndPx.y - 8, 14), SIZE - 6);
 
     var clipId = 'plotClipSingle';
@@ -274,7 +285,6 @@
           '<circle cx="' + fixPx.x + '" cy="' + fixPx.y + '" r="6" fill="none" stroke="var(--chart-fix)" stroke-width="2"/>' +
           '<line x1="' + (fixPx.x - 9) + '" y1="' + fixPx.y + '" x2="' + (fixPx.x + 9) + '" y2="' + fixPx.y + '" stroke="var(--chart-fix)" stroke-width="1.5"/>' +
           '<line x1="' + fixPx.x + '" y1="' + (fixPx.y - 9) + '" x2="' + fixPx.x + '" y2="' + (fixPx.y + 9) + '" stroke="var(--chart-fix)" stroke-width="1.5"/>' +
-          '<text x="' + (fixPx.x + 11) + '" y="' + (fixPx.y - 9) + '" class="chart-fix-label">FIX</text>' +
         '</g>';
 
       var pos = SightCalc.positionFromOffset(multiGeo.originLat, multiGeo.originLon, activeFixPoint);

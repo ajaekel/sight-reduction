@@ -10,6 +10,7 @@
 var currentFix = null;
 var fixRenderToken = 0;
 var lastChartInput = null; // cached so toggling azimuth/bisectors doesn't need to re-fetch sightings
+var bisectorMethodSelected = false; // false = least-squares, true = method of bisectors
 
 document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('swVersion').textContent = APP_VERSION;
@@ -22,7 +23,8 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('btnDeleteFix').addEventListener('click', onDeleteFix);
   document.getElementById('btnPlotFix').addEventListener('click', onPlotFix);
   document.getElementById('toggleShowAzimuth').addEventListener('change', renderCurrentPlot);
-  document.getElementById('toggleShowBisectors').addEventListener('change', renderCurrentPlot);
+  document.getElementById('methodLeastSquares').addEventListener('click', function () { setFixMethod(false); });
+  document.getElementById('methodBisectors').addEventListener('click', function () { setFixMethod(true); });
 
   window.addEventListener('hashchange', routeFromHash);
   routeFromHash();
@@ -160,6 +162,7 @@ function openFix(id) {
     document.getElementById('fixChartCard').style.display = 'none';
     document.getElementById('fixPlotStatus').textContent = '';
     lastChartInput = null;
+    setFixMethodState(false); // fresh fix: always start on least-squares
 
     renderFixSightings(myToken);
     renderAvailableSightings(myToken);
@@ -294,6 +297,19 @@ function setFixResultStatus(msg, kind) {
   el.className = 'cache-progress' + (kind ? ' ' + kind : '');
 }
 
+/** Updates bisectorMethodSelected + both buttons' aria-pressed, without re-rendering. */
+function setFixMethodState(useBisectors) {
+  bisectorMethodSelected = useBisectors;
+  document.getElementById('methodLeastSquares').setAttribute('aria-pressed', useBisectors ? 'false' : 'true');
+  document.getElementById('methodBisectors').setAttribute('aria-pressed', useBisectors ? 'true' : 'false');
+}
+
+/** Same, but also re-renders -- used by the button clicks themselves. */
+function setFixMethod(useBisectors) {
+  setFixMethodState(useBisectors);
+  renderCurrentPlot();
+}
+
 function onPlotFix() {
   if (!currentFix || !currentFix.sightingIds.length) {
     setFixPlotStatus('Add at least one sighting to this fix first.', 'error');
@@ -338,9 +354,9 @@ function onPlotFix() {
 
       lastChartInput = chartInput;
 
-      var toggleBisectors = document.getElementById('toggleShowBisectors');
-      toggleBisectors.disabled = chartInput.length < 3;
-      if (toggleBisectors.disabled) toggleBisectors.checked = false;
+      var methodBisectorsBtn = document.getElementById('methodBisectors');
+      methodBisectorsBtn.disabled = chartInput.length < 3;
+      if (methodBisectorsBtn.disabled && bisectorMethodSelected) setFixMethodState(false);
 
       document.getElementById('fixChartCard').style.display = 'block';
       renderCurrentPlot();
@@ -357,13 +373,13 @@ function onPlotFix() {
     });
 }
 
-/** Re-renders the already-fetched plot using the current toggle states -- no re-fetch needed. */
+/** Re-renders the already-fetched plot using the current toggle/method states -- no re-fetch needed. */
 function renderCurrentPlot() {
   if (!lastChartInput) return;
 
   var opts = {
     showAzimuth: document.getElementById('toggleShowAzimuth').checked,
-    showBisectors: document.getElementById('toggleShowBisectors').checked
+    showBisectors: bisectorMethodSelected
   };
 
   var container = document.getElementById('fixChartContainer');
@@ -380,10 +396,18 @@ function renderCurrentPlot() {
     legendEl.appendChild(item);
   });
 
-  renderFixResult(result.fix, lastChartInput.length);
+  renderFixResult(result.fix, lastChartInput.length, legendEl);
 }
 
-function renderFixResult(fix, sightingCount) {
+function fixIconSvg() {
+  return '<svg width="16" height="16" viewBox="0 0 16 16" class="fix-icon" aria-hidden="true">' +
+    '<circle cx="8" cy="8" r="5" fill="none" stroke="var(--chart-fix)" stroke-width="2"/>' +
+    '<line x1="1" y1="8" x2="15" y2="8" stroke="var(--chart-fix)" stroke-width="1.5"/>' +
+    '<line x1="8" y1="1" x2="8" y2="15" stroke="var(--chart-fix)" stroke-width="1.5"/>' +
+  '</svg>';
+}
+
+function renderFixResult(fix, sightingCount, legendEl) {
   var caption = document.getElementById('fixResultCaption');
   caption.textContent = '';
 
@@ -391,9 +415,13 @@ function renderFixResult(fix, sightingCount) {
     setFixResultStatus('Fix: ' + fix.reason, 'error');
     return;
   }
+  setFixResultStatus('', '');
 
   var methodLabel = fix.source === 'bisector' ? 'method of bisectors' : 'least-squares';
-  setFixResultStatus('Fix (' + methodLabel + '): ' + fix.positionText, 'ok');
+  var item = document.createElement('div');
+  item.className = 'chart-legend-item fix-legend-item';
+  item.innerHTML = fixIconSvg() + ' Fix (' + methodLabel + '): ' + fix.positionText;
+  legendEl.appendChild(item);
 
   // Shown whenever a 3-LOP triangle exists, regardless of which method is
   // currently displayed -- it's useful context (fix quality / which
