@@ -19,7 +19,7 @@
 ## Support multiple sightings
 
 * [X] Support multiple sightings in a session
-* [ ] Add bisectors / multi-LOP fix
+* [X] Add bisectors / multi-LOP fix
 * [ ] Add running fix; accept inputs for SOG and bearing
 
 ## Miscellaneous

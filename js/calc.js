@@ -321,6 +321,199 @@
     return { originLat: originLat, originLon: originLon, maxExtentNM: maxExtentNM, sightings: results };
   }
 
+  /**
+   * Pure: bearing (0-360, clockwise from North) that a given azimuthUnit {x,y} points along.
+   */
+  function azimuthDegFromUnit(u) {
+    return (deg(Math.atan2(u.x, u.y)) + 360) % 360;
+  }
+
+  /**
+   * Pure: out of 3+ sightings, picks the 3 whose azimuths are most evenly
+   * spread around the compass -- specifically, the triple that maximizes the
+   * smallest of the three gaps between them. A narrow gap between any two
+   * means those two LOPs cross at a shallow angle, which is exactly what
+   * makes both a plain intersection AND the bisector construction below
+   * unreliable (small altitude errors swing the crossing point a long way).
+   * Returns [i, j, k] (indices into `sightings`), or null if fewer than 3.
+   */
+  function selectWidestAzimuthSpreadTriple(sightings) {
+    if (!sightings || sightings.length < 3) return null;
+
+    var azimuths = sightings.map(function (s) { return azimuthDegFromUnit(s.azimuthUnit); });
+    var best = null;
+    var bestScore = -1;
+
+    for (var i = 0; i < sightings.length; i++) {
+      for (var j = i + 1; j < sightings.length; j++) {
+        for (var k = j + 1; k < sightings.length; k++) {
+          var sorted = [azimuths[i], azimuths[j], azimuths[k]].sort(function (a, b) { return a - b; });
+          var gapA = sorted[1] - sorted[0];
+          var gapB = sorted[2] - sorted[1];
+          var gapC = 360 - sorted[2] + sorted[0];
+          var minGap = Math.min(gapA, gapB, gapC);
+          if (minGap > bestScore) {
+            bestScore = minGap;
+            best = [i, j, k];
+          }
+        }
+      }
+    }
+
+    return best;
+  }
+
+  /**
+   * Pure: intersection of two LOPs, each given as a point + its normal
+   * (a LOP's normal is exactly its sighting's azimuthUnit -- the LOP is
+   * defined by azimuthUnit . (P - interceptPoint) = 0). Returns null if the
+   * two azimuths are too nearly parallel to intersect reliably.
+   */
+  function intersectTwoLops(s1, s2) {
+    var a1 = s1.azimuthUnit.x, b1 = s1.azimuthUnit.y;
+    var a2 = s2.azimuthUnit.x, b2 = s2.azimuthUnit.y;
+    var c1 = a1 * s1.interceptPoint.x + b1 * s1.interceptPoint.y;
+    var c2 = a2 * s2.interceptPoint.x + b2 * s2.interceptPoint.y;
+
+    var det = a1 * b2 - a2 * b1;
+    if (Math.abs(det) < 1e-9) return null;
+
+    return {
+      x: (c1 * b2 - c2 * b1) / det,
+      y: (a1 * c2 - a2 * c1) / det
+    };
+  }
+
+  /**
+   * Pure: the classical "method of bisectors" for a cocked hat -- the
+   * triangle formed by exactly 3 LOPs (Bini 1955, Davies 1956; still cited
+   * in modern nav references). At each vertex, the internal angle bisector
+   * of the two LOPs crossing there passes through the triangle's incenter (a
+   * basic concurrency result), so rather than compute bisector directions
+   * directly, this finds the 3 vertices and the incenter via the standard
+   * "weighted by opposite side length" formula. Callers draw each bisector
+   * as the segment from its vertex to the incenter.
+   *
+   * This method is best-justified when the 3 LOPs are trusted equally; if
+   * one sight is known to be better than the others, the incenter has no
+   * way to reflect that and should be treated skeptically.
+   *
+   * triple: exactly 3 sightings, each { azimuthUnit: {x,y}, interceptPoint: {x,y} }
+   * Returns { vertices: [v0, v1, v2], incenter: {x,y}, maxSideNM } or null if
+   * any pair is too nearly parallel, or the "triangle" has ~zero perimeter.
+   * vertices[0] = LOP1 x LOP2 (opposite LOP0), and so on -- standard
+   * "vertex opposite its non-participating LOP" triangle labeling.
+   */
+  function resolveCockedHatBisectors(triple) {
+    var v0 = intersectTwoLops(triple[1], triple[2]);
+    var v1 = intersectTwoLops(triple[0], triple[2]);
+    var v2 = intersectTwoLops(triple[0], triple[1]);
+    if (!v0 || !v1 || !v2) return null;
+
+    var sideOpp0 = Math.hypot(v1.x - v2.x, v1.y - v2.y);
+    var sideOpp1 = Math.hypot(v0.x - v2.x, v0.y - v2.y);
+    var sideOpp2 = Math.hypot(v0.x - v1.x, v0.y - v1.y);
+    var perimeter = sideOpp0 + sideOpp1 + sideOpp2;
+    if (perimeter < 1e-9) return null;
+
+    var incenter = {
+      x: (sideOpp0 * v0.x + sideOpp1 * v1.x + sideOpp2 * v2.x) / perimeter,
+      y: (sideOpp0 * v0.y + sideOpp1 * v1.y + sideOpp2 * v2.y) / perimeter
+    };
+
+    return {
+      vertices: [v0, v1, v2],
+      incenter: incenter,
+      maxSideNM: Math.max(sideOpp0, sideOpp1, sideOpp2)
+    };
+  }
+
+  /**
+   * Pure: resolves a fix from 2+ LOPs already laid out in one shared plane
+   * by computeMultiLopGeometry. Returns up to two independent candidate
+   * points -- the caller (chart.js, driven by the bisector show/hide toggle)
+   * decides which one is presented as "the Fix":
+   *
+   *  - leastSquaresPoint: least-squares solution of the overdetermined
+   *    system formed by each LOP's equation azimuthUnit_i . P =
+   *    azimuthUnit_i . interceptPoint_i. Works for any N >= 2, and for
+   *    exactly 2 LOPs is an exactly-determined 2x2 system -- i.e. their
+   *    literal intersection -- so "2-LOP fix" and "3+ LOP most probable
+   *    position" fall out of the same formula with no special case. (For 3
+   *    equal-weight LOPs this point is the triangle's symmedian point -- a
+   *    better-justified "center" than the incenter below when no LOP is
+   *    known to be more trustworthy than the others.)
+   *
+   *  - bisector: the classical "method of bisectors" result (see
+   *    resolveCockedHatBisectors) -- only present when 3+ LOPs are given.
+   *    With exactly 3, bisects that triangle directly. With 4+, first picks
+   *    the 3 LOPs with the widest mutual azimuth spread (see
+   *    selectWidestAzimuthSpreadTriple), since the bisector construction
+   *    degrades the same way a plain intersection does when LOPs cross at a
+   *    shallow angle.
+   *
+   * sightings: [{ azimuthUnit: {x,y}, interceptPoint: {x,y} }, ...]
+   *
+   * Returns { solvable: false, reason } or
+   *         { solvable: true, leastSquaresPoint: {x,y}, bisector?: {...} }
+   */
+  function resolveMultiLopFix(sightings) {
+    if (!sightings || sightings.length < 2) {
+      return { solvable: false, reason: 'Need at least 2 plotted LOPs to resolve a fix.' };
+    }
+
+    var Sxx = 0, Sxy = 0, Syy = 0, Sxc = 0, Syc = 0;
+    sightings.forEach(function (s) {
+      var a = s.azimuthUnit.x, b = s.azimuthUnit.y;
+      var c = a * s.interceptPoint.x + b * s.interceptPoint.y;
+      Sxx += a * a; Sxy += a * b; Syy += b * b;
+      Sxc += a * c; Syc += b * c;
+    });
+
+    var det = Sxx * Syy - Sxy * Sxy;
+    if (Math.abs(det) < 1e-9) {
+      return { solvable: false, reason: 'These LOPs are too nearly parallel to resolve a reliable fix.' };
+    }
+
+    var result = {
+      solvable: true,
+      leastSquaresPoint: {
+        x: (Syy * Sxc - Sxy * Syc) / det,
+        y: (Sxx * Syc - Sxy * Sxc) / det
+      }
+    };
+
+    if (sightings.length >= 3) {
+      var tripleIndices = sightings.length === 3 ? [0, 1, 2] : selectWidestAzimuthSpreadTriple(sightings);
+      var triple = tripleIndices.map(function (idx) { return sightings[idx]; });
+      var bisectors = resolveCockedHatBisectors(triple);
+      if (bisectors) {
+        result.bisector = {
+          incenter: bisectors.incenter,
+          vertices: bisectors.vertices,
+          maxSideNM: bisectors.maxSideNM,
+          tripleIndices: tripleIndices
+        };
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Pure: inverse of the flat-earth nm offset used throughout this file --
+   * turns a {x,y} nm offset from (originLat, originLon) back into signed
+   * decimal degrees. Shared by chart.js (axis labels) and the fix-resolution
+   * path (turning the resolved point back into a position).
+   */
+  function positionFromOffset(originLat, originLon, offsetNM) {
+    var cosOriginLat = Math.cos(rad(originLat)) || 1e-9; // guard against exactly 90deg
+    return {
+      lat: originLat + offsetNM.y / 60,
+      lon: originLon + offsetNM.x / (60 * cosOriginLat)
+    };
+  }
+
   /** Pure: {type, name} -> display label, e.g. "Sun", "Star Aldebaran", "Planet Jupiter". */
   function formatBodyLabel(body) {
     if (!body) return 'Body';
@@ -336,179 +529,6 @@
   function paletteColor(index) {
     var i = ((index % CHART_PALETTE.length) + CHART_PALETTE.length) % CHART_PALETTE.length;
     return CHART_PALETTE[i];
-  }
-
-  function normalizeVec(v) {
-    var len = Math.hypot(v.x, v.y);
-    if (len < 1e-9) return null;
-    return { x: v.x / len, y: v.y / len };
-  }
-
-  /**
-   * Intersection of two infinite lines, each given as a point + direction
-   * vector. Returns {x,y}, or null if the lines are parallel (within a
-   * small tolerance).
-   */
-  function lineLineIntersection(p1, dir1, p2, dir2) {
-    var denom = dir1.x * dir2.y - dir1.y * dir2.x;
-    if (Math.abs(denom) < 1e-9) return null; // parallel (or nearly so)
-
-    var diffX = p2.x - p1.x;
-    var diffY = p2.y - p1.y;
-    var t = (diffX * dir2.y - diffY * dir2.x) / denom;
-
-    return { x: p1.x + t * dir1.x, y: p1.y + t * dir1.y };
-  }
-
-  /**
-   * Best-practice bisector-method geometry for resolving multiple LOPs into
-   * a refined estimated position (the classic "cocked hat" technique,
-   * generalized to any number of LOPs >= 2).
-   *
-   * lopLines: [{ point, direction }] -- one entry per LOP, point = any point
-   * on that LOP (e.g. its intercept point), direction = its unit direction
-   * vector (e.g. lopDirection from computeLopGeometry/computeMultiLopGeometry).
-   *
-   * For the classic 3-LOP cocked hat: each pair of LOPs crosses at a vertex
-   * of the triangle; the internal angle bisector at each vertex points
-   * toward the OTHER two vertices (one on each of the two lines meeting
-   * there). This generalizes cleanly to N LOPs: at the intersection of
-   * lines i and j, orient line i's local direction toward the centroid of
-   * ALL of line i's intersections with every line other than j (not just a
-   * single "other" line), and likewise for line j; the bisector direction
-   * is the normalized sum of those two oriented directions. For exactly 2
-   * LOPs there are no "other" intersections to orient toward, so that
-   * line's own fixed direction convention is used directly -- a reasonable,
-   * deterministic choice, though for N=2 the bisector is more an
-   * illustrative construct than a position refinement (2 LOPs already
-   * define an unambiguous single fix at their crossing).
-   *
-   * Returns [{ i, j, point, direction }] -- one entry per non-parallel pair
-   * of input lines (skips pairs that are parallel; there is no
-   * intersection to bisect).
-   */
-  function computeBisectors(lopLines) {
-    var n = lopLines.length;
-    var intersections = {}; // "i_j" (i<j) -> {x,y}
-
-    for (var i = 0; i < n; i++) {
-      for (var j = i + 1; j < n; j++) {
-        var inter = lineLineIntersection(lopLines[i].point, lopLines[i].direction, lopLines[j].point, lopLines[j].direction);
-        if (inter) intersections[i + '_' + j] = inter;
-      }
-    }
-
-    function otherIntersectionsForLine(lineIdx, excludeIdx) {
-      var pts = [];
-      for (var k = 0; k < n; k++) {
-        if (k === lineIdx || k === excludeIdx) continue;
-        var key = lineIdx < k ? (lineIdx + '_' + k) : (k + '_' + lineIdx);
-        if (intersections[key]) pts.push(intersections[key]);
-      }
-      return pts;
-    }
-
-    function centroidOf(pts) {
-      var sx = 0, sy = 0;
-      pts.forEach(function (p) { sx += p.x; sy += p.y; });
-      return { x: sx / pts.length, y: sy / pts.length };
-    }
-
-    var results = [];
-    for (var a = 0; a < n; a++) {
-      for (var b = a + 1; b < n; b++) {
-        var P = intersections[a + '_' + b];
-        if (!P) continue; // parallel lines -- no intersection to bisect
-
-        var othersA = otherIntersectionsForLine(a, b);
-        var othersB = otherIntersectionsForLine(b, a);
-
-        var dirA = othersA.length
-          ? normalizeVec({ x: centroidOf(othersA).x - P.x, y: centroidOf(othersA).y - P.y })
-          : lopLines[a].direction;
-        var dirB = othersB.length
-          ? normalizeVec({ x: centroidOf(othersB).x - P.x, y: centroidOf(othersB).y - P.y })
-          : lopLines[b].direction;
-
-        if (!dirA) dirA = lopLines[a].direction;
-        if (!dirB) dirB = lopLines[b].direction;
-
-        var bisectorDir = normalizeVec({ x: dirA.x + dirB.x, y: dirA.y + dirB.y });
-        if (!bisectorDir) {
-          // dirA and dirB exactly cancel (rare, near-opposite orientation) --
-          // fall back to a perpendicular of dirA as an arbitrary but
-          // well-defined and deterministic choice.
-          bisectorDir = { x: -dirA.y, y: dirA.x };
-        }
-
-        results.push({ i: a, j: b, point: P, direction: bisectorDir });
-      }
-    }
-
-    return results;
-  }
-
-  /**
-   * Inverse of the flat-earth projection used in computeMultiLopGeometry:
-   * converts a point in the shared nm-plane (origin at originLat/originLon)
-   * back into decimal-degree lat/lon.
-   */
-  function nmPointToLatLon(originLat, originLon, point) {
-    var cosOriginLat = Math.cos(rad(originLat)) || 1e-9;
-    return {
-      lat: originLat + point.y / 60,
-      lon: originLon + point.x / (60 * cosOriginLat)
-    };
-  }
-
-  /**
-   * Estimates where a set of bisector lines converge (the refined "most
-   * probable position" from the cocked-hat method), in the same nm-plane
-   * the bisectors are expressed in.
-   *
-   * For the classic N=3 case (3 bisectors from 3 LOPs) the three lines are
-   * mathematically concurrent at the triangle's incenter, so every pairwise
-   * intersection among them coincides there exactly -- the centroid below
-   * reduces to that exact point. For more than 3 LOPs there is no single
-   * point of exact concurrency in general, so this returns the centroid of
-   * all pairwise bisector-line intersections as a reasonable estimate,
-   * after discarding intersections from near-parallel bisector pairs
-   * (optional maxDistance, in the same nm units, guards against those
-   * shooting off to unreliable extremes and skewing the average).
-   *
-   * Returns null if fewer than 2 bisector lines are given (no intersection
-   * exists yet) or if every pair happens to be parallel.
-   */
-  function computeBisectorFix(bisectors, maxDistance) {
-    if (!bisectors || bisectors.length < 2) return null;
-
-    var pts = [];
-    for (var i = 0; i < bisectors.length; i++) {
-      for (var j = i + 1; j < bisectors.length; j++) {
-        var inter = lineLineIntersection(bisectors[i].point, bisectors[i].direction, bisectors[j].point, bisectors[j].direction);
-        if (inter) pts.push(inter);
-      }
-    }
-    if (!pts.length) return null;
-
-    if (typeof maxDistance === 'number' && pts.length > 1) {
-      var cx = 0, cy = 0;
-      pts.forEach(function (p) { cx += p.x; cy += p.y; });
-      cx /= pts.length; cy /= pts.length;
-      var filtered = pts.filter(function (p) { return Math.hypot(p.x - cx, p.y - cy) <= maxDistance; });
-      if (filtered.length) pts = filtered;
-    }
-
-    var sx = 0, sy = 0;
-    pts.forEach(function (p) { sx += p.x; sy += p.y; });
-    return { x: sx / pts.length, y: sy / pts.length };
-  }
-
-  /** Pure: signed lat/lon decimal degrees -> "40° 32.1'N 73° 55.8'W". */
-  function formatLatLon(lat, lon) {
-    var latStr = formatDegMin(Math.abs(lat)) + (lat >= 0 ? 'N' : 'S');
-    var lonStr = formatDegMin(Math.abs(lon)) + (lon >= 0 ? 'E' : 'W');
-    return latStr + ' ' + lonStr;
   }
 
   global.SightCalc = {
@@ -529,12 +549,13 @@
     decimalToDM: decimalToDM,
     signedPositionFromRecord: signedPositionFromRecord,
     computeMultiLopGeometry: computeMultiLopGeometry,
+    azimuthDegFromUnit: azimuthDegFromUnit,
+    selectWidestAzimuthSpreadTriple: selectWidestAzimuthSpreadTriple,
+    intersectTwoLops: intersectTwoLops,
+    resolveCockedHatBisectors: resolveCockedHatBisectors,
+    resolveMultiLopFix: resolveMultiLopFix,
+    positionFromOffset: positionFromOffset,
     formatBodyLabel: formatBodyLabel,
-    paletteColor: paletteColor,
-    lineLineIntersection: lineLineIntersection,
-    computeBisectors: computeBisectors,
-    nmPointToLatLon: nmPointToLatLon,
-    computeBisectorFix: computeBisectorFix,
-    formatLatLon: formatLatLon
+    paletteColor: paletteColor
   };
 })(window);

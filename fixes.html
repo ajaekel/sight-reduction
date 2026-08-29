@@ -79,25 +79,33 @@
       <div class="cache-progress" id="fixPlotStatus"></div>
 
       <div id="fixChartCard" style="display: none; margin-top: 16px;">
-        <div class="chart-toggle-row">
+        <div class="plot-controls-row">
           <label class="chart-toggle">
-            <input type="checkbox" id="toggleAzimuth" checked>
+            <input type="checkbox" id="toggleShowAzimuth" checked>
             Azimuth lines
           </label>
-          <label class="chart-toggle">
-            <input type="checkbox" id="toggleBisectors">
-            Bisector lines
-          </label>
+          <div class="method-select" role="radiogroup" aria-label="Fix method">
+            <label class="method-option">
+              <input type="radio" name="fixMethod" id="methodLeastSquares" value="least-squares" checked>
+              Least-squares
+            </label>
+            <label class="method-option">
+              <input type="radio" name="fixMethod" id="methodBisectors" value="bisectors">
+              Bisectors (3 LOPs)
+            </label>
+          </div>
         </div>
         <div class="chart-wrap" id="fixChartContainer"></div>
         <div class="chart-legend" id="fixChartLegend"></div>
-        <div class="cache-summary-text" id="fixBisectorFixLabel" style="display: none; text-align: center;"></div>
+        <div class="cache-progress" id="fixResultStatus"></div>
+        <div class="chart-caption" id="fixResultCaption"></div>
       </div>
     </div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
+
 
 <script src="js/calc.js"></script>
 <script src="js/storage.js"></script>
