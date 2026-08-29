@@ -9,6 +9,8 @@
   --chart-az: #00bcd4;
   --chart-lop: #ffca28;
   --chart-grid: #3a3a3a;
+  --chart-fix: #ffffff;
+  --chart-bisector: #bdbdbd;
 }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -585,6 +587,9 @@ details:not([open]) > summary.cache-summary-toggle {
 .chart-axis-label {
   font-size: 10px;
   fill: #999;
+  stroke: var(--card);
+  stroke-width: 3px;
+  paint-order: stroke fill;
 }
 .chart-point-label {
   font-size: 12px;
@@ -600,6 +605,59 @@ details:not([open]) > summary.cache-summary-toggle {
   font-size: 10px;
   font-weight: bold;
   fill: #000;
+}
+.plot-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.plot-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text);
+  cursor: pointer;
+}
+.plot-checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  -webkit-appearance: checkbox;
+  appearance: checkbox;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.method-picker {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.method-btn {
+  background: transparent;
+  color: var(--text);
+  border: none;
+  padding: 7px 12px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.method-btn + .method-btn {
+  border-left: 1px solid var(--border);
+}
+.method-btn[aria-pressed="true"] {
+  background: var(--accent);
+  color: #000;
+  font-weight: bold;
+}
+.method-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 .chart-legend {
   display: flex;
@@ -628,6 +686,13 @@ details:not([open]) > summary.cache-summary-toggle {
 }
 .chart-swatch.lop {
   border-top-color: var(--chart-lop);
+}
+.chart-legend-item.fix-legend-item {
+  font-weight: bold;
+  color: var(--text);
+}
+.fix-icon {
+  flex-shrink: 0;
 }
 .chart-caption {
   text-align: center;

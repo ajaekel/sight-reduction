@@ -19,7 +19,7 @@
 ## Support multiple sightings
 
 * [X] Support multiple sightings in a session
-* [ ] Add bisectors / multi-LOP fix
+* [X] Add bisectors / multi-LOP fix
 * [ ] Add running fix; accept inputs for SOG and bearing
 
 ## Miscellaneous
@@ -47,8 +47,6 @@
 Expected behavior, if a sighting is saved and renamed, it's saved as a new sighting
 
 # Completed
-
-* [X] Set up separate prod a dev URLs for testing
 
 * [X] Fix mobile display of Section 3 → Declination (overflows off right of screen)
         Ensure that the three veritcal separation lines [between a) the header, highlghted blue that displays the time/date , b) GHA and c) Declination] are all aligned

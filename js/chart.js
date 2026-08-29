@@ -21,11 +21,12 @@
   var SIZE = 340;          // SVG viewBox size (viewBox units, not px -- actual
                             // rendered size is controlled by CSS and scales
                             // with the available card width)
-  var MARGIN = 34;          // reserved for edge lat/lon labels
+  var EDGE = 6;             // tiny inset so the 1.5px border stroke isn't clipped by the viewBox edge
   var CENTER = SIZE / 2;
-  var HALF = (SIZE - 2 * MARGIN) / 2;   // plot area half-width, replaces the old circular RADIUS
-  var PLOT_MIN = MARGIN;
-  var PLOT_MAX = SIZE - MARGIN;
+  var HALF = SIZE / 2 - EDGE;   // plot area half-width -- nearly the full viewBox now that
+                                 // lat/lon labels render inside the grid instead of in a margin
+  var PLOT_MIN = EDGE;
+  var PLOT_MAX = SIZE - EDGE;
   var GRID_FRACTIONS = [-1, -0.5, 0, 0.5, 1]; // as a fraction of scale; only -1/0/1 get text labels
 
   function pad3(n) {
@@ -43,9 +44,13 @@
   }
 
   /**
-   * Builds the shared square frame: border, lat/lon gridlines with edge
-   * labels, and a clipPath (id clipId) other content can be clipped to.
-   * Returns an SVG markup string (defs + visible frame elements).
+   * Builds the shared square frame: border, lat/lon gridlines, and a
+   * clipPath (id clipId) other content can be clipped to. Edge/center
+   * lat/lon values are labeled INSIDE the grid (longitude along the top,
+   * latitude along the left) rather than in an outer margin, so the grid
+   * itself can use nearly the entire viewBox -- .chart-axis-label carries a
+   * card-colored text stroke (a "halo") so the labels stay legible sitting
+   * on top of gridlines or plotted content. Returns an SVG markup string.
    */
   function buildFrame(originLat, originLon, scale, clipId) {
     var pxPerNm = HALF / scale;
@@ -73,12 +78,18 @@
         var lonHere = originLon + nm / (60 * cosOriginLat);
         var latHere = originLat + nm / 60;
 
-        var lonLabelY = (f === 1) ? PLOT_MAX + 13 : PLOT_MIN - 6;
-        svg += '<text x="' + px + '" y="' + lonLabelY + '" text-anchor="middle" class="chart-axis-label">' + formatLon(lonHere) + '</text>';
+        // Longitude labels: always along the top inside edge, one row.
+        // West/east are anchored away from their corner so they can't run
+        // off the grid; center is anchored on it.
+        var lonAnchor = (f === -1) ? 'start' : (f === 1 ? 'end' : 'middle');
+        var lonX = (f === -1) ? PLOT_MIN + 4 : (f === 1 ? PLOT_MAX - 4 : px);
+        svg += '<text x="' + lonX + '" y="' + (PLOT_MIN + 13) + '" text-anchor="' + lonAnchor + '" class="chart-axis-label">' + formatLon(lonHere) + '</text>';
 
-        var latLabelX = (f === 1) ? PLOT_MIN - 4 : PLOT_MAX + 4;
-        var latAnchor = (f === 1) ? 'end' : 'start';
-        svg += '<text x="' + latLabelX + '" y="' + (py + 3.5) + '" text-anchor="' + latAnchor + '" class="chart-axis-label">' + formatLat(latHere) + '</text>';
+        // Latitude labels: always along the left inside edge, one column.
+        // The north (f=1) label sits a line below the top row so it doesn't
+        // collide with the west longitude label sharing that corner.
+        var latY = (f === 1) ? (PLOT_MIN + 28) : (f === -1 ? PLOT_MAX - 6 : py + 3.5);
+        svg += '<text x="' + (PLOT_MIN + 4) + '" y="' + latY + '" text-anchor="start" class="chart-axis-label">' + formatLat(latHere) + '</text>';
       }
     });
 
@@ -119,7 +130,7 @@
     var interceptAbs = Math.abs(opts.interceptNM).toFixed(1);
     var interceptDir = opts.interceptNM >= 0 ? 'TOWARD' : 'AWAY';
 
-    var znLabelX = Math.min(Math.max(azEndPx.x, MARGIN + 22), SIZE - MARGIN - 22);
+    var znLabelX = Math.min(Math.max(azEndPx.x, PLOT_MIN + 22), PLOT_MAX - 22);
     var znLabelY = Math.min(Math.max(azEndPx.y - 8, 14), SIZE - 6);
 
     var clipId = 'plotClipSingle';
@@ -150,10 +161,28 @@
    *   should pass both explicitly, keyed off that sighting's position in
    *   its own full list rather than the filtered/plotted subset.
    *
-   * Returns { scaleNM, legend: [{ index, color, label, znText, interceptText }] }
+   * opts = {
+   *   showAzimuth: boolean (default true)   -- dashed azimuth-to-body lines
+   *   showBisectors: boolean (default false) -- dotted "method of bisectors"
+   *     construction lines (see SightCalc.resolveCockedHatBisectors). Also
+   *     decides which candidate point is drawn/reported as "the Fix": the
+   *     bisector incenter when true and resolvable, otherwise the
+   *     least-squares point.
+   * }
+   *
+   * Returns {
+   *   scaleNM,
+   *   legend: [{ index, color, label, znText, interceptText }],
+   *   fix: { solvable: false, reason } | {
+   *     solvable: true, source: 'bisector'|'least-squares', positionText,
+   *     lat, lon, bisectorMaxSideNM?, bisectorBadgeNumbers?
+   *   }
+   * }
    */
   function renderMultiSightChart(container, sightingsInput, opts) {
     opts = opts || {};
+    var showAzimuth = opts.showAzimuth !== false;
+    var showBisectors = !!opts.showBisectors;
 
     var withColor = sightingsInput.map(function (s, i) {
       var out = {};
@@ -164,7 +193,31 @@
     });
 
     var multiGeo = SightCalc.computeMultiLopGeometry(withColor);
-    var scale = SightCalc.chooseNiceScale(multiGeo.maxExtentNM);
+    var fixResult = SightCalc.resolveMultiLopFix(multiGeo.sightings);
+
+    // Which point (if any) is actually drawn/reported as "the Fix" is
+    // entirely driven by the bisector toggle: bisector incenter when on (and
+    // resolvable), otherwise the least-squares point.
+    var activeFixPoint = null;
+    var bisectorGeom = null; // { vertices, incenter, maxSideNM, tripleIndices } when shown
+    if (fixResult.solvable) {
+      if (showBisectors && fixResult.bisector) {
+        activeFixPoint = fixResult.bisector.incenter;
+        bisectorGeom = fixResult.bisector;
+      } else {
+        activeFixPoint = fixResult.leastSquaresPoint;
+      }
+    }
+
+    var maxExtentNM = multiGeo.maxExtentNM;
+    if (activeFixPoint) maxExtentNM = Math.max(maxExtentNM, Math.hypot(activeFixPoint.x, activeFixPoint.y));
+    if (bisectorGeom) {
+      bisectorGeom.vertices.forEach(function (v) {
+        maxExtentNM = Math.max(maxExtentNM, Math.hypot(v.x, v.y));
+      });
+    }
+
+    var scale = SightCalc.chooseNiceScale(maxExtentNM);
     var pxPerNm = HALF / scale;
 
     var clipId = 'plotClipMulti';
@@ -176,7 +229,6 @@
     multiGeo.sightings.forEach(function (s) {
       var idx = s.badgeNumber;
       var apPx = toPx(s.apPoint, pxPerNm);
-      var azEndPx = toPx({ x: s.apPoint.x + s.azimuthUnit.x * scale, y: s.apPoint.y + s.azimuthUnit.y * scale }, pxPerNm);
 
       var lopExtendNm = scale * 2.2;
       var lopP1Px = toPx({
@@ -188,12 +240,16 @@
         y: s.interceptPoint.y - s.lopDirection.y * lopExtendNm
       }, pxPerNm);
 
-      defs += '<marker id="azArrowMulti' + idx + '" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto">' +
-              '<path d="M0,0 L9,4.5 L0,9 Z" fill="' + s.color + '"/></marker>';
-
       clippedLines +=
-        '<line x1="' + lopP1Px.x + '" y1="' + lopP1Px.y + '" x2="' + lopP2Px.x + '" y2="' + lopP2Px.y + '" stroke="' + s.color + '" stroke-width="2.5"/>' +
-        '<line x1="' + apPx.x + '" y1="' + apPx.y + '" x2="' + azEndPx.x + '" y2="' + azEndPx.y + '" stroke="' + s.color + '" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azArrowMulti' + idx + ')"/>';
+        '<line x1="' + lopP1Px.x + '" y1="' + lopP1Px.y + '" x2="' + lopP2Px.x + '" y2="' + lopP2Px.y + '" stroke="' + s.color + '" stroke-width="2.5"/>';
+
+      if (showAzimuth) {
+        var azEndPx = toPx({ x: s.apPoint.x + s.azimuthUnit.x * scale, y: s.apPoint.y + s.azimuthUnit.y * scale }, pxPerNm);
+        defs += '<marker id="azArrowMulti' + idx + '" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto">' +
+                '<path d="M0,0 L9,4.5 L0,9 Z" fill="' + s.color + '"/></marker>';
+        clippedLines +=
+          '<line x1="' + apPx.x + '" y1="' + apPx.y + '" x2="' + azEndPx.x + '" y2="' + azEndPx.y + '" stroke="' + s.color + '" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#azArrowMulti' + idx + ')"/>';
+      }
 
       markers +=
         '<circle cx="' + apPx.x + '" cy="' + apPx.y + '" r="9" fill="' + s.color + '" stroke="var(--bg)" stroke-width="1.5"/>' +
@@ -210,6 +266,44 @@
       });
     });
 
+    if (bisectorGeom) {
+      var incenterPx = toPx(bisectorGeom.incenter, pxPerNm);
+      bisectorGeom.vertices.forEach(function (v) {
+        var vPx = toPx(v, pxPerNm);
+        clippedLines += '<line x1="' + vPx.x + '" y1="' + vPx.y + '" x2="' + incenterPx.x + '" y2="' + incenterPx.y +
+          '" stroke="var(--chart-bisector)" stroke-width="1.5" stroke-dasharray="1,3" stroke-linecap="round"/>';
+      });
+    }
+
+    var fixMarkup = '';
+    var fix = fixResult.solvable ? { solvable: true } : { solvable: false, reason: fixResult.reason };
+
+    if (activeFixPoint) {
+      var fixPx = toPx(activeFixPoint, pxPerNm);
+      fixMarkup =
+        '<g>' +
+          '<circle cx="' + fixPx.x + '" cy="' + fixPx.y + '" r="6" fill="none" stroke="var(--chart-fix)" stroke-width="2"/>' +
+          '<line x1="' + (fixPx.x - 9) + '" y1="' + fixPx.y + '" x2="' + (fixPx.x + 9) + '" y2="' + fixPx.y + '" stroke="var(--chart-fix)" stroke-width="1.5"/>' +
+          '<line x1="' + fixPx.x + '" y1="' + (fixPx.y - 9) + '" x2="' + fixPx.x + '" y2="' + (fixPx.y + 9) + '" stroke="var(--chart-fix)" stroke-width="1.5"/>' +
+        '</g>';
+
+      var pos = SightCalc.positionFromOffset(multiGeo.originLat, multiGeo.originLon, activeFixPoint);
+      fix.source = bisectorGeom ? 'bisector' : 'least-squares';
+      fix.lat = pos.lat;
+      fix.lon = pos.lon;
+      fix.positionText = formatLat(pos.lat) + ' ' + formatLon(pos.lon);
+    }
+
+    // Reported regardless of the toggle, if a triangle exists, so the caller
+    // can always show fix quality/selection context -- not just when the
+    // bisector lines happen to be visible.
+    if (fixResult.bisector) {
+      fix.bisectorMaxSideNM = fixResult.bisector.maxSideNM;
+      fix.bisectorBadgeNumbers = fixResult.bisector.tripleIndices.map(function (idx) {
+        return multiGeo.sightings[idx].badgeNumber;
+      });
+    }
+
     defs += '</defs>';
 
     var svg =
@@ -218,11 +312,12 @@
         defs +
         '<g clip-path="url(#' + clipId + ')">' + clippedLines + '</g>' +
         markers +
+        fixMarkup +
       '</svg>';
 
     container.innerHTML = svg;
 
-    return { scaleNM: scale, legend: legend };
+    return { scaleNM: scale, legend: legend, fix: fix };
   }
 
   global.SightChart = {

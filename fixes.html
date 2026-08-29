@@ -79,14 +79,27 @@
       <div class="cache-progress" id="fixPlotStatus"></div>
 
       <div id="fixChartCard" style="display: none; margin-top: 16px;">
+        <div class="plot-controls">
+          <label class="plot-checkbox">
+            <input type="checkbox" id="toggleShowAzimuth" checked>
+            Azimuth lines
+          </label>
+          <div class="method-picker" role="group" aria-label="Fix resolution method">
+            <button type="button" class="method-btn" id="methodLeastSquares" aria-pressed="true">Least-squares</button>
+            <button type="button" class="method-btn" id="methodBisectors" aria-pressed="false">Bisectors</button>
+          </div>
+        </div>
         <div class="chart-wrap" id="fixChartContainer"></div>
         <div class="chart-legend" id="fixChartLegend"></div>
+        <div class="cache-progress" id="fixResultStatus"></div>
+        <div class="chart-caption" id="fixResultCaption"></div>
       </div>
     </div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
+
 
 <script src="js/calc.js"></script>
 <script src="js/storage.js"></script>
