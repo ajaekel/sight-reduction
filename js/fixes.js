@@ -172,6 +172,24 @@ function openFix(id) {
   });
 }
 
+/**
+ * A sighting is "active" (used in the plot and fed into fix resolution) by
+ * default -- activeSightingIds only gets materialized the first time
+ * someone deselects one, so old fixes (and new ones nobody's touched yet)
+ * correctly treat every member as active without needing a migration.
+ */
+function getActiveSightingIds(fix) {
+  return new Set(fix.activeSightingIds || fix.sightingIds);
+}
+
+function setSightingActive(fix, id, isActive) {
+  var current = fix.activeSightingIds ? fix.activeSightingIds.slice() : fix.sightingIds.slice();
+  var idx = current.indexOf(id);
+  if (isActive && idx === -1) current.push(id);
+  if (!isActive && idx !== -1) current.splice(idx, 1);
+  fix.activeSightingIds = current;
+}
+
 function sightingRowLabel(record) {
   var title = record.label || SightCalc.formatBodyLabel(record.body);
   var meta = SightCalc.formatBodyLabel(record.body) + ' \u00B7 ' + (record.date || 'no date');
@@ -227,6 +245,9 @@ function renderFixSightings(token) {
 
         item.querySelector('.btn-mini-del').addEventListener('click', function () {
           currentFix.sightingIds = currentFix.sightingIds.filter(function (sid) { return sid !== id; });
+          if (currentFix.activeSightingIds) {
+            currentFix.activeSightingIds = currentFix.activeSightingIds.filter(function (sid) { return sid !== id; });
+          }
           FixStorage.save(currentFix).then(function () { openFix(currentFix.id); });
         });
 
@@ -264,6 +285,10 @@ function renderAvailableSightings(token) {
 
       item.querySelector('.btn-mini-load').addEventListener('click', function () {
         currentFix.sightingIds.push(entry.id);
+        // New members default to active -- only append here if activeSightingIds
+        // has already been materialized (an untouched fix's fallback already
+        // includes everyone via getActiveSightingIds()).
+        if (currentFix.activeSightingIds) currentFix.activeSightingIds.push(entry.id);
         FixStorage.save(currentFix).then(function () { openFix(currentFix.id); });
       });
 
@@ -339,6 +364,7 @@ function autoPlotFix() {
         var pos = SightCalc.signedPositionFromRecord(record.position);
         var labels = sightingRowLabel(record);
         chartInput.push({
+          id: currentFix.sightingIds[i],
           lat: pos.lat,
           lon: pos.lon,
           zn: record.results.zn,
@@ -357,10 +383,6 @@ function autoPlotFix() {
 
       lastChartInput = chartInput;
 
-      var methodBisectorsBtn = document.getElementById('methodBisectors');
-      methodBisectorsBtn.disabled = chartInput.length < 3;
-      if (methodBisectorsBtn.disabled && bisectorMethodSelected) setFixMethodState(false);
-
       document.getElementById('fixChartCard').style.display = 'block';
       renderCurrentPlot();
 
@@ -377,9 +399,30 @@ function autoPlotFix() {
     });
 }
 
-/** Re-renders the already-fetched plot using the current toggle/method states -- no re-fetch needed. */
+/** 0-360 zn -> "045°" the same way chart.js's legend text does. */
+function formatZnBadge(zn) {
+  return String(Math.round(((zn % 360) + 360) % 360)).padStart(3, '0') + '\u00B0';
+}
+
+function formatInterceptBadge(interceptNM) {
+  return Math.abs(interceptNM).toFixed(1) + ' nm ' + (interceptNM >= 0 ? 'TOWARD' : 'AWAY');
+}
+
+/**
+ * Re-renders the already-fetched plot using the current toggle/method/active
+ * states -- no re-fetch needed. The legend always lists every plottable
+ * sighting (so a deselected one can be switched back on); only the ones in
+ * the active set are actually fed into the chart and the fix resolution.
+ */
 function renderCurrentPlot() {
   if (!lastChartInput) return;
+
+  var activeSet = getActiveSightingIds(currentFix);
+  var plotInput = lastChartInput.filter(function (item) { return activeSet.has(item.id); });
+
+  var methodBisectorsBtn = document.getElementById('methodBisectors');
+  methodBisectorsBtn.disabled = plotInput.length < 3;
+  if (methodBisectorsBtn.disabled && bisectorMethodSelected) setFixMethodState(false);
 
   var opts = {
     showAzimuth: document.getElementById('toggleShowAzimuth').checked,
@@ -387,20 +430,29 @@ function renderCurrentPlot() {
   };
 
   var container = document.getElementById('fixChartContainer');
-  var result = SightChart.renderMultiSightChart(container, lastChartInput, opts);
+  var result = SightChart.renderMultiSightChart(container, plotInput, opts);
 
   var legendEl = document.getElementById('fixChartLegend');
   legendEl.innerHTML = '';
-  result.legend.forEach(function (entry) {
-    var item = document.createElement('div');
-    item.className = 'chart-legend-item';
-    item.innerHTML =
-      '<span class="chart-swatch" style="border-top-color: ' + entry.color + '; border-top-style: solid;"></span> ' +
-      entry.index + '. ' + entry.label + ' \u2014 Zn ' + entry.znText + ' (' + entry.interceptText + ')';
-    legendEl.appendChild(item);
+
+  lastChartInput.forEach(function (item) {
+    var isActive = activeSet.has(item.id);
+    var row = document.createElement('label');
+    row.className = 'chart-legend-item chart-legend-toggle';
+    row.innerHTML =
+      '<input type="checkbox"' + (isActive ? ' checked' : '') + '>' +
+      '<span class="chart-swatch" style="border-top-color: ' + item.color + '; border-top-style: solid;"></span> ' +
+      item.badgeNumber + '. ' + item.label + ' \u2014 Zn ' + formatZnBadge(item.zn) + ' (' + formatInterceptBadge(item.interceptNM) + ')';
+
+    row.querySelector('input').addEventListener('change', function (e) {
+      setSightingActive(currentFix, item.id, e.target.checked);
+      FixStorage.save(currentFix).then(renderCurrentPlot);
+    });
+
+    legendEl.appendChild(row);
   });
 
-  renderFixResult(result.fix, lastChartInput.length, legendEl);
+  renderFixResult(result.fix, plotInput.length, legendEl);
 }
 
 function fixIconSvg() {

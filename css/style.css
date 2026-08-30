@@ -300,6 +300,17 @@ input, select {
   box-sizing: border-box;
   -webkit-appearance: none;
 }
+input[type="checkbox"] {
+  width: auto;
+  height: auto;
+  -webkit-appearance: checkbox;
+  appearance: checkbox;
+  background: transparent;
+  border: none;
+  padding: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button {
   -webkit-appearance: none;
@@ -629,13 +640,6 @@ details:not([open]) > summary.cache-summary-toggle {
 .plot-checkbox input {
   width: 16px;
   height: 16px;
-  accent-color: var(--accent);
-  cursor: pointer;
-  -webkit-appearance: checkbox;
-  appearance: checkbox;
-  background: transparent;
-  border: none;
-  padding: 0;
 }
 .method-picker {
   display: inline-flex;
@@ -694,6 +698,13 @@ details:not([open]) > summary.cache-summary-toggle {
 .chart-legend-item.fix-legend-item {
   font-weight: bold;
   color: var(--text);
+}
+.chart-legend-toggle {
+  cursor: pointer;
+}
+.chart-legend-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
 }
 .fix-icon {
   flex-shrink: 0;
