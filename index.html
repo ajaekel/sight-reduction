@@ -219,7 +219,7 @@
   <div class="card">
     <div class="section-title">3. Nautical Almanac Data</div>
 
-    <button class="btn-secondary" id="btnFetchUsno" type="button">Auto-fill &mdash; Try cache then fetch from USNO</button>
+    <button class="btn-secondary" id="btnFetchUsno" type="button" disabled>Auto-fill &ndash; fetch from USNO</button>
     <div class="usno-status" id="usnoStatus"></div>
 
     <!-- STAR FORM FIELDS -->
@@ -357,7 +357,11 @@
       </div>
     </div>
 
-    <button class="btn-calc" id="btnCalc">Calculate Reduction</button>
+    <div class="summary-box" id="almanacInterpBox" style="margin-top: 16px;">
+      <div><strong>Interpolated GHA:</strong> <span id="resGHA">--&deg; --.-'</span></div>
+      <div><strong>Interpolated Declination:</strong> <span id="resDec">--&deg; --.-'</span></div>
+      <div><strong>LHA (Local Hour Angle):</strong> <span id="resLHA">--&deg; --.-'</span></div>
+    </div>
   </div>
 
   <!-- SIGHT REDUCTION RESULTS CARD -->
@@ -365,18 +369,6 @@
     <div class="section-title">Sight Reduction Results</div>
 
     <div class="results">
-      <div class="res-box">
-        <div class="res-label">Interp. GHA</div>
-        <div class="res-value" id="resGHA">--</div>
-      </div>
-      <div class="res-box">
-        <div class="res-label">Interp. Dec</div>
-        <div class="res-value" id="resDec">--</div>
-      </div>
-      <div class="res-box">
-        <div class="res-label">Local Hour Angle (LHA)</div>
-        <div class="res-value" id="resLHA">--</div>
-      </div>
       <div class="res-box">
         <div class="res-label">Calculated Height (Hc)</div>
         <div class="res-value" id="resHc">--</div>

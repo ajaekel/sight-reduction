@@ -21,7 +21,6 @@ document.addEventListener('DOMContentLoaded', function () {
     location.hash = '';
   });
   document.getElementById('btnDeleteFix').addEventListener('click', onDeleteFix);
-  document.getElementById('btnPlotFix').addEventListener('click', onPlotFix);
   document.getElementById('toggleShowAzimuth').addEventListener('change', renderCurrentPlot);
   document.getElementById('methodLeastSquares').addEventListener('click', function () { setFixMethod(false); });
   document.getElementById('methodBisectors').addEventListener('click', function () { setFixMethod(true); });
@@ -166,6 +165,7 @@ function openFix(id) {
 
     renderFixSightings(myToken);
     renderAvailableSightings(myToken);
+    autoPlotFix();
   }).catch(function (err) {
     console.error(err);
     showToast('Could not load that fix.', true);
@@ -310,9 +310,11 @@ function setFixMethod(useBisectors) {
   renderCurrentPlot();
 }
 
-function onPlotFix() {
+/** Plots automatically whenever the fix's sightings change -- called from openFix(). */
+function autoPlotFix() {
   if (!currentFix || !currentFix.sightingIds.length) {
-    setFixPlotStatus('Add at least one sighting to this fix first.', 'error');
+    document.getElementById('fixChartCard').style.display = 'none';
+    setFixPlotStatus('Add at least one sighting to this fix to see its plot.', '');
     return;
   }
 
@@ -348,6 +350,7 @@ function onPlotFix() {
       });
 
       if (!chartInput.length) {
+        document.getElementById('fixChartCard').style.display = 'none';
         setFixPlotStatus('None of this fix\u2019s sightings have calculated results to plot. Recalculate and re-save them on the Sight Reduction page.', 'error');
         return;
       }
@@ -369,6 +372,7 @@ function onPlotFix() {
     })
     .catch(function (err) {
       console.error(err);
+      document.getElementById('fixChartCard').style.display = 'none';
       setFixPlotStatus('Could not plot this fix.', 'error');
     });
 }

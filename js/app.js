@@ -23,19 +23,21 @@ function initApp() {
     document.getElementById('sightDate').value = new Date().toISOString().split('T')[0];
   } catch (e) {}
 
-  document.getElementById('bodyType').addEventListener('change', handleBodyTypeChange);
+  document.getElementById('bodyType').addEventListener('change', function () {
+    handleBodyTypeChange();
+    refreshLiveCalculations();
+  });
   initStarCombo();
   initNavMenu();
   document.getElementById('planetSelect').addEventListener('change', function () {
-    updateAverages();
     updateHeaders();
+    refreshLiveCalculations();
   });
 
   document.getElementById('btnAddSight').addEventListener('click', function () {
     addSightingLine(true);
   });
   document.getElementById('btnClearAll').addEventListener('click', clearAllData);
-  document.getElementById('btnCalc').addEventListener('click', calculateSight);
 
   document.getElementById('btnSaveSight').addEventListener('click', onSaveSight);
   document.getElementById('btnExportJson').addEventListener('click', onExportJson);
@@ -44,24 +46,29 @@ function initApp() {
   document.getElementById('btnCacheRange').addEventListener('click', onCacheRange);
   document.getElementById('btnClearCache').addEventListener('click', onClearCache);
 
+  document.getElementById('sightDate').addEventListener('change', refreshLiveCalculations);
+
   ['tzOffset', 'ieMin', 'dipMin', 'altCorrMin', 'addAltCorrMin'].forEach(function (id) {
-    document.getElementById(id).addEventListener('input', updateAverages);
+    document.getElementById(id).addEventListener('input', refreshLiveCalculations);
   });
   ['ieSign', 'altCorrSign', 'addAltCorrSign'].forEach(function (id) {
-    document.getElementById(id).addEventListener('change', updateAverages);
+    document.getElementById(id).addEventListener('change', refreshLiveCalculations);
   });
 
   // --- SECTION 1: AP POSITION VALIDATION ---
   var errLat = document.getElementById('errLat');
   var errLon = document.getElementById('errLon');
 
-  var validateLat = function () { validateDegMinPair(document.getElementById('latDeg'), document.getElementById('latMin'), 90, 'Latitude', errLat); };
-  var validateLon = function () { validateDegMinPair(document.getElementById('lonDeg'), document.getElementById('lonMin'), 180, 'Longitude', errLon); };
+  var validateLat = function () { validateDegMinPair(document.getElementById('latDeg'), document.getElementById('latMin'), 90, 'Latitude', errLat); refreshLiveCalculations(); };
+  var validateLon = function () { validateDegMinPair(document.getElementById('lonDeg'), document.getElementById('lonMin'), 180, 'Longitude', errLon); refreshLiveCalculations(); };
 
   document.getElementById('latDeg').addEventListener('input', validateLat);
   document.getElementById('latMin').addEventListener('input', validateLat);
   document.getElementById('lonDeg').addEventListener('input', validateLon);
   document.getElementById('lonMin').addEventListener('input', validateLon);
+  ['latNS', 'lonEW'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', refreshLiveCalculations);
+  });
 
   // --- SECTION 3: STAR ALMANAC VALIDATION ---
   var errGhaAriesBase = document.getElementById('errGhaAriesBase');
@@ -69,10 +76,10 @@ function initApp() {
   var errSha = document.getElementById('errSha');
   var errDecStar = document.getElementById('errDecStar');
 
-  var validateGhaAriesBase = function () { validateDegMinPair(document.getElementById('ghaAriesBaseDeg'), document.getElementById('ghaAriesBaseMin'), 360, 'GHA Aries Base', errGhaAriesBase); };
-  var validateGhaAriesNext = function () { validateDegMinPair(document.getElementById('ghaAriesNextDeg'), document.getElementById('ghaAriesNextMin'), 360, 'GHA Aries Next', errGhaAriesNext); };
-  var validateSha = function () { validateDegMinPair(document.getElementById('shaDeg'), document.getElementById('shaMin'), 360, 'SHA', errSha); };
-  var validateDecStar = function () { validateDegMinPair(document.getElementById('decStarDeg'), document.getElementById('decStarMin'), 90, 'Star Declination', errDecStar); };
+  var validateGhaAriesBase = function () { validateDegMinPair(document.getElementById('ghaAriesBaseDeg'), document.getElementById('ghaAriesBaseMin'), 360, 'GHA Aries Base', errGhaAriesBase); refreshLiveCalculations(); };
+  var validateGhaAriesNext = function () { validateDegMinPair(document.getElementById('ghaAriesNextDeg'), document.getElementById('ghaAriesNextMin'), 360, 'GHA Aries Next', errGhaAriesNext); refreshLiveCalculations(); };
+  var validateSha = function () { validateDegMinPair(document.getElementById('shaDeg'), document.getElementById('shaMin'), 360, 'SHA', errSha); refreshLiveCalculations(); };
+  var validateDecStar = function () { validateDegMinPair(document.getElementById('decStarDeg'), document.getElementById('decStarMin'), 90, 'Star Declination', errDecStar); refreshLiveCalculations(); };
 
   document.getElementById('ghaAriesBaseDeg').addEventListener('input', validateGhaAriesBase);
   document.getElementById('ghaAriesBaseMin').addEventListener('input', validateGhaAriesBase);
@@ -82,6 +89,7 @@ function initApp() {
   document.getElementById('shaMin').addEventListener('input', validateSha);
   document.getElementById('decStarDeg').addEventListener('input', validateDecStar);
   document.getElementById('decStarMin').addEventListener('input', validateDecStar);
+  document.getElementById('decStarNS').addEventListener('change', refreshLiveCalculations);
 
   // --- SECTION 3: NON-STAR ALMANAC VALIDATION ---
   var errGhaBase = document.getElementById('errGhaBase');
@@ -89,10 +97,10 @@ function initApp() {
   var errDecBase = document.getElementById('errDecBase');
   var errDecNext = document.getElementById('errDecNext');
 
-  var validateGhaBase = function () { validateDegMinPair(document.getElementById('ghaBaseDeg'), document.getElementById('ghaBaseMin'), 360, 'GHA Base', errGhaBase); };
-  var validateGhaNext = function () { validateDegMinPair(document.getElementById('ghaNextDeg'), document.getElementById('ghaNextMin'), 360, 'GHA Next', errGhaNext); };
-  var validateDecBase = function () { validateDegMinPair(document.getElementById('decBaseDeg'), document.getElementById('decBaseMin'), 90, 'Declination Base', errDecBase); };
-  var validateDecNext = function () { validateDegMinPair(document.getElementById('decNextDeg'), document.getElementById('decNextMin'), 90, 'Declination Next', errDecNext); };
+  var validateGhaBase = function () { validateDegMinPair(document.getElementById('ghaBaseDeg'), document.getElementById('ghaBaseMin'), 360, 'GHA Base', errGhaBase); refreshLiveCalculations(); };
+  var validateGhaNext = function () { validateDegMinPair(document.getElementById('ghaNextDeg'), document.getElementById('ghaNextMin'), 360, 'GHA Next', errGhaNext); refreshLiveCalculations(); };
+  var validateDecBase = function () { validateDegMinPair(document.getElementById('decBaseDeg'), document.getElementById('decBaseMin'), 90, 'Declination Base', errDecBase); refreshLiveCalculations(); };
+  var validateDecNext = function () { validateDegMinPair(document.getElementById('decNextDeg'), document.getElementById('decNextMin'), 90, 'Declination Next', errDecNext); refreshLiveCalculations(); };
 
   document.getElementById('ghaBaseDeg').addEventListener('input', validateGhaBase);
   document.getElementById('ghaBaseMin').addEventListener('input', validateGhaBase);
@@ -102,9 +110,13 @@ function initApp() {
   document.getElementById('decBaseMin').addEventListener('input', validateDecBase);
   document.getElementById('decNextDeg').addEventListener('input', validateDecNext);
   document.getElementById('decNextMin').addEventListener('input', validateDecNext);
+  ['decBaseNS', 'decNextNS'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', refreshLiveCalculations);
+  });
 
   addSightingLine(false);
   handleBodyTypeChange();
+  refreshLiveCalculations();
   refreshSavedList();
   refreshCacheSummary();
 
@@ -232,6 +244,7 @@ function initStarCombo() {
         input.value = name;
         list.style.display = 'none';
         updateHeaders();
+        refreshLiveCalculations();
       });
       list.appendChild(item);
     });
@@ -242,6 +255,7 @@ function initStarCombo() {
   input.addEventListener('input', function () {
     renderSuggestions(input.value);
     updateHeaders();
+    refreshLiveCalculations();
   });
 
   input.addEventListener('focus', function () {
@@ -306,12 +320,12 @@ function addSightingLine(autoFocus) {
 
   sd.addEventListener('input', function () {
     validateField(this, 0, 90, 'Degrees', errBox, false);
-    updateAverages();
+    refreshLiveCalculations();
   });
 
   sm.addEventListener('input', function () {
     validateField(this, 0, 60, 'Height Minutes', errBox, true);
-    updateAverages();
+    refreshLiveCalculations();
   });
 
   [th, tm, ts, sd, sm].forEach(function (input) {
@@ -322,11 +336,11 @@ function addSightingLine(autoFocus) {
     var delBtn = div.querySelector('.btn-del');
     delBtn.addEventListener('click', function () {
       div.remove();
-      updateAverages();
+      refreshLiveCalculations();
     });
   }
 
-  updateAverages();
+  refreshLiveCalculations();
 
   if (autoFocus) {
     th.focus();
@@ -397,7 +411,7 @@ function autoFocusNext(el, maxChars, nextEl) {
       nextEl.select();
     }
   }
-  updateAverages();
+  refreshLiveCalculations();
 }
 
 // ---------------------------------------------------------------------
@@ -525,9 +539,7 @@ function applyFormState(state) {
   });
 
   updateHeaders();
-  updateAverages();
-  document.getElementById('outputCard').style.display = 'none';
-  document.getElementById('chartCard').style.display = 'none';
+  refreshLiveCalculations(); // recalculates immediately if the loaded record is complete
 }
 
 function getLineSeconds(row) {
@@ -633,33 +645,166 @@ function buildCalcInput(state, avg, ho, avgUtcSec) {
   return { input: input, lat: lat, latAbs: latTotal, lonTotal: lonTotal };
 }
 
-function calculateSight() {
-  if (document.querySelectorAll('.input-error').length > 0) {
-    alert('Please fix the highlighted invalid entries before calculating.');
+// ---------------------------------------------------------------------
+// LIVE / REACTIVE CALCULATION -- replaces the old "Calculate Reduction" /
+// "Plot This Fix" button model. refreshLiveCalculations() is the single
+// entry point every relevant input listener calls; it fans out to the
+// almanac cache auto-fill (network-free) and the full reduction
+// calculation, each independently gated on whether it has what it needs.
+// ---------------------------------------------------------------------
+
+/** True if every field id in `ids` has a non-blank value. Blank, not 0-vs-empty -- unlike collectFormState()'s num() helper, this can tell "never typed" from "typed 0". */
+function allFilled(ids) {
+  return ids.every(function (id) {
+    var el = document.getElementById(id);
+    return !!el && el.value.trim() !== '';
+  });
+}
+
+function getAlmanacFieldIds(bodyType) {
+  return bodyType === 'star'
+    ? ['ghaAriesBaseDeg', 'ghaAriesBaseMin', 'ghaAriesNextDeg', 'ghaAriesNextMin', 'shaDeg', 'shaMin', 'decStarDeg', 'decStarMin']
+    : ['ghaBaseDeg', 'ghaBaseMin', 'ghaNextDeg', 'ghaNextMin', 'decBaseDeg', 'decBaseMin', 'decNextDeg', 'decNextMin'];
+}
+
+/** True if NONE of this body type's almanac fields have been touched yet -- the "nothing to lose by auto-filling" case. */
+function almanacFieldsAreAllEmpty(bodyType) {
+  return getAlmanacFieldIds(bodyType).every(function (id) {
+    return document.getElementById(id).value.trim() === '';
+  });
+}
+
+function hasCompleteTimeAllRows() {
+  var rows = document.querySelectorAll('.sighting-item');
+  return rows.length > 0 && Array.prototype.every.call(rows, function (row) {
+    return row.querySelector('.t-h').value.trim() !== '' &&
+           row.querySelector('.t-m').value.trim() !== '' &&
+           row.querySelector('.t-s').value.trim() !== '';
+  });
+}
+
+function hasApEntered() {
+  var latEntered = document.getElementById('latDeg').value.trim() !== '' || document.getElementById('latMin').value.trim() !== '';
+  var lonEntered = document.getElementById('lonDeg').value.trim() !== '' || document.getElementById('lonMin').value.trim() !== '';
+  return latEntered && lonEntered;
+}
+
+function hasValidBodyName(bodyType) {
+  if (bodyType === 'star') return document.getElementById('bodyName').value.trim() !== '';
+  if (bodyType === 'planet') return document.getElementById('planetSelect').value.trim() !== '';
+  return true; // sun/moon need no name
+}
+
+/**
+ * Everything needed to attempt a cache-only almanac lookup: enough to know
+ * WHICH hour/body to look up, but deliberately not requiring the almanac
+ * fields themselves (filling those in is the point).
+ */
+function getAlmanacFetchReadiness(bodyType) {
+  return !!document.getElementById('sightDate').value &&
+         hasValidBodyName(bodyType) &&
+         hasCompleteTimeAllRows() &&
+         hasApEntered();
+}
+
+/** Everything needed to run a full sight reduction. */
+function getCalcReadiness(bodyType) {
+  return getAlmanacFetchReadiness(bodyType) &&
+         allFilled(getAlmanacFieldIds(bodyType)) &&
+         document.querySelectorAll('.input-error').length === 0;
+}
+
+function resetInterpAndResultsDisplay() {
+  document.getElementById('resGHA').innerText = "--\u00B0 --.-'";
+  document.getElementById('resDec').innerText = "--\u00B0 --.-'";
+  document.getElementById('resLHA').innerText = "--\u00B0 --.-'";
+  document.getElementById('almanacInterpBox').classList.remove('summary-box-error');
+  document.getElementById('outputCard').style.display = 'none';
+  document.getElementById('chartCard').style.display = 'none';
+  window._lastResult = null;
+  window._lastResultDisplay = null;
+}
+
+/**
+ * Stage A: as soon as we know which hour/body to look up, try the cache
+ * (never the network) and fill Section 3 if found. If the almanac fields
+ * already have anything in them -- manually entered or already filled --
+ * this leaves them alone rather than clobbering the user's data. On a
+ * cache miss, outlines the new interpolation box in red and enables the
+ * explicit "Auto-fill" button as the user's next move.
+ */
+function tryAutoFillAlmanacFromCache() {
+  var btn = document.getElementById('btnFetchUsno');
+  var box = document.getElementById('almanacInterpBox');
+  var bodyType = document.getElementById('bodyType').value;
+
+  if (!getAlmanacFetchReadiness(bodyType)) {
+    btn.disabled = true;
+    box.classList.remove('summary-box-error');
+    setUsnoStatus('', '');
     return;
   }
 
-  var rows = document.querySelectorAll('.sighting-item');
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    var hVal = row.querySelector('.t-h').value.trim();
-    var mVal = row.querySelector('.t-m').value.trim();
-    var sVal = row.querySelector('.t-s').value.trim();
-    if (hVal === '' || mVal === '' || sVal === '') {
-      alert('Please enter a complete time (Hours, Minutes, and Seconds) for all sightings.');
-      return;
-    }
+  if (!almanacFieldsAreAllEmpty(bodyType)) {
+    // Already has data (manual entry or a previous fill) -- nothing to fetch.
+    btn.disabled = true;
+    box.classList.remove('summary-box-error');
+    return;
   }
 
   var state = collectFormState();
+  var position = getAssumedPositionSigned();
+  var avg = SightCalc.averageObservations(state.observations);
+  var avgUtcSec = SightCalc.utcSecondsFromLocal(avg.avgLocalSec, state.position.tzOffset);
+  var dateInput = document.getElementById('sightDate').value;
+  var baseUtcDate = new Date(dateInput + 'T00:00:00Z');
+  baseUtcDate.setUTCSeconds(baseUtcDate.getUTCSeconds() + avgUtcSec);
+  baseUtcDate.setUTCMinutes(0, 0, 0); // floor to the top of the bracketing hour
+  var nextUtcDate = new Date(baseUtcDate.getTime() + 3600 * 1000);
 
-  if (state.body.type === 'planet' && !state.body.name) {
-    alert('Please select a planet from the dropdown.');
+  SightUsno.getAlmanacFillFromCacheOnly(state.body, baseUtcDate, nextUtcDate)
+    .then(function (result) {
+      // The body/fields may have changed while this lookup was in flight --
+      // only apply it if we'd still want it.
+      if (!getAlmanacFetchReadiness(bodyType) || !almanacFieldsAreAllEmpty(bodyType)) return;
+
+      if (!result) {
+        btn.disabled = false;
+        box.classList.add('summary-box-error');
+        setUsnoStatus('Not cached for this hour \u2014 tap Auto-fill to fetch from USNO.', '');
+        return;
+      }
+
+      applyUsnoFill(bodyType, result.fill); // also re-runs refreshLiveCalculations()
+      btn.disabled = true;
+      box.classList.remove('summary-box-error');
+      setUsnoStatus('Filled from cache.', 'ok');
+    })
+    .catch(function (err) {
+      console.error(err);
+      btn.disabled = false;
+      box.classList.add('summary-box-error');
+    });
+}
+
+/**
+ * Stage B: runs the full reduction the moment all the inputs it needs are
+ * present and valid, and populates both the Section 3 interpolation box and
+ * the Sight Reduction Results card. Resets both to their placeholder state
+ * (rather than erroring) when something's still missing -- there's no
+ * button click to gate on anymore, so a mid-typing form is a normal state,
+ * not an error.
+ */
+function tryAutoCalculateReduction() {
+  var state = collectFormState();
+
+  if (!getCalcReadiness(state.body.type)) {
+    resetInterpAndResultsDisplay();
     return;
   }
 
   var avg = SightCalc.averageObservations(state.observations);
-  if (!avg) return;
+  if (!avg) { resetInterpAndResultsDisplay(); return; }
 
   var ho = SightCalc.computeHo(avg.avgHsDeg, state.corrections);
   var avgUtcSec = SightCalc.utcSecondsFromLocal(avg.avgLocalSec, state.position.tzOffset);
@@ -680,6 +825,8 @@ function calculateSight() {
   document.getElementById('resGHA').innerText = SightCalc.formatDegMin(result.interpolatedGha);
   document.getElementById('resDec').innerText = decFormatted;
   document.getElementById('resLHA').innerText = SightCalc.formatDegMin(result.lha);
+  document.getElementById('almanacInterpBox').classList.remove('summary-box-error');
+
   document.getElementById('resHc').innerText = SightCalc.formatDegMin(result.hc);
   document.getElementById('resAP').innerText = apString;
   document.getElementById('resIntercept').innerText = interceptText;
@@ -710,6 +857,13 @@ function calculateSight() {
     ho: ho, apString: apString, interceptText: interceptText,
     zn: Math.round(result.zn).toString().padStart(3, '0') + '\u00B0'
   };
+}
+
+/** The single entry point every relevant input listener calls. */
+function refreshLiveCalculations() {
+  updateAverages();
+  tryAutoFillAlmanacFromCache();
+  tryAutoCalculateReduction();
 }
 
 function formatBodyLabel(body) {
@@ -751,13 +905,9 @@ function clearAllData() {
   document.getElementById('sightingsContainer').innerHTML = '';
   sightingCount = 0;
   addSightingLine(false);
-  document.getElementById('outputCard').style.display = 'none';
-  document.getElementById('chartCard').style.display = 'none';
-  window._lastResult = null;
-  window._lastResultDisplay = null;
   window._currentRecordId = null;
-  updateAverages();
   updateHeaders();
+  refreshLiveCalculations();
 }
 
 // ---------------------------------------------------------------------
@@ -805,7 +955,7 @@ function applyUsnoFill(bodyType, fill) {
      'decBaseDeg', 'decBaseMin', 'decNextDeg', 'decNextMin'].forEach(flashField);
   }
 
-  updateAverages(); // refreshes the "Xh UTC" hour labels and Ho display
+  refreshLiveCalculations(); // refreshes hour labels/Ho AND runs the reduction now that almanac data is in
 }
 
 /**
