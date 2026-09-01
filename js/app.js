@@ -736,6 +736,8 @@ function resetInterpAndResultsDisplay() {
  * the Download button available whenever we know enough to use it, and
  * clicking it becomes the only way anything gets filled.
  */
+var _autoFillLoopGuard = { signature: null, count: 0 };
+
 function tryAutoFillAlmanacFromCache() {
   var btn = document.getElementById('btnFetchUsno');
   var box = document.getElementById('almanacInterpBox');
@@ -746,6 +748,7 @@ function tryAutoFillAlmanacFromCache() {
     btn.disabled = true;
     box.classList.remove('summary-box-error');
     setUsnoStatus('', '');
+    _autoFillLoopGuard = { signature: null, count: 0 };
     return;
   }
 
@@ -755,6 +758,7 @@ function tryAutoFillAlmanacFromCache() {
     // ready, and it fills in whatever's blank when clicked.
     btn.disabled = false;
     box.classList.remove('summary-box-error');
+    _autoFillLoopGuard = { signature: null, count: 0 };
     return;
   }
 
@@ -762,6 +766,28 @@ function tryAutoFillAlmanacFromCache() {
     // Nothing left that auto-fill could add.
     btn.disabled = true;
     box.classList.remove('summary-box-error');
+    _autoFillLoopGuard = { signature: null, count: 0 };
+    return;
+  }
+
+  // Safety net: this reactive chain (applyUsnoFill -> refreshLiveCalculations
+  // -> tryAutoFillAlmanacFromCache -> cache hit -> applyUsnoFill -> ...) is
+  // supposed to always converge, since each successful fill clears a blank
+  // field. If the exact same set of field VALUES ends up asking for another
+  // fill attempt several times in a row, something isn't actually resolving
+  // -- stop retrying automatically instead of spinning forever.
+  var signature = bodyType + '|' + getAlmanacFieldIds(bodyType).map(function (id) {
+    return document.getElementById(id).value;
+  }).join(',');
+  if (_autoFillLoopGuard.signature === signature) {
+    _autoFillLoopGuard.count++;
+  } else {
+    _autoFillLoopGuard = { signature: signature, count: 1 };
+  }
+  if (_autoFillLoopGuard.count > 3) {
+    btn.disabled = false;
+    box.classList.add('summary-box-error');
+    setUsnoStatus('Auto-fill isn\u2019t able to complete this automatically \u2014 tap Download, or check the almanac fields manually.', 'error');
     return;
   }
 
@@ -944,20 +970,23 @@ function flashField(id) {
 
 /**
  * Fills one GHA/SHA (no sign) or Dec (with N/S sign) field-group from USNO
- * data, but ONLY if it's currently blank -- never overwrites something the
- * user already typed in, whether that was manual entry or an earlier fill.
- * Returns true if it actually filled something.
+ * data. Degrees and minutes are treated as independently blank -- if only
+ * one half of the pair is empty, only that half gets filled; if the user
+ * (or an earlier fill) already put something in both, this touches nothing.
+ * Never overwrites a piece that already has a value.
  */
 function fillDegMinIfBlank(degId, minId, signId, decimalDeg, signValue) {
   var degEl = document.getElementById(degId);
   var minEl = document.getElementById(minId);
-  if (degEl.value.trim() !== '' || minEl.value.trim() !== '') return false;
+  var degBlank = degEl.value.trim() === '';
+  var minBlank = minEl.value.trim() === '';
+  if (!degBlank && !minBlank) return false; // both already have values -- nothing to do here
 
   var dm = SightCalc.decimalToDM(decimalDeg);
-  degEl.value = dm.deg;
-  minEl.value = dm.min.toFixed(1);
-  flashField(degId);
-  flashField(minId);
+  if (degBlank) { degEl.value = dm.deg; flashField(degId); }
+  if (minBlank) { minEl.value = dm.min.toFixed(1); flashField(minId); }
+  // The N/S or E/W sign only means something alongside an actual value --
+  // set it whenever we filled anything in this group.
   if (signId) document.getElementById(signId).value = signValue;
   return true;
 }
