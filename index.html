@@ -219,7 +219,11 @@
   <div class="card">
     <div class="section-title">3. Nautical Almanac Data</div>
 
-    <button class="btn-secondary" id="btnFetchUsno" type="button" disabled>Auto-fill &ndash; fetch from USNO</button>
+    <label class="inline-checkbox" style="margin-bottom: 12px;">
+      <input type="checkbox" id="toggleAutoFillCache" checked>
+      Auto-fill with cached data
+    </label>
+    <button class="btn-secondary" id="btnFetchUsno" type="button" disabled>Download Nautical Almanac data from USNO</button>
     <div class="usno-status" id="usnoStatus"></div>
 
     <!-- STAR FORM FIELDS -->
@@ -370,19 +374,15 @@
 
     <div class="results">
       <div class="res-box">
-        <div class="res-label">Calculated Height (Hc)</div>
+        <div class="res-label">Hc (Calculated Height)</div>
         <div class="res-value" id="resHc">--</div>
-      </div>
-      <div class="res-box" style="grid-column: span 2;">
-        <div class="res-label">Assumed Position (AP)</div>
-        <div class="res-value" id="resAP">--</div>
       </div>
       <div class="res-box">
         <div class="res-label">Intercept</div>
         <div class="res-value" id="resIntercept">--</div>
       </div>
       <div class="res-box">
-        <div class="res-label">Azimuth (Zn)</div>
+        <div class="res-label">Zn (Azimuth)</div>
         <div class="res-value" id="resZn">--</div>
       </div>
     </div>

@@ -388,25 +388,28 @@ select {
 }
 .results {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
   margin-top: 8px;
 }
 .res-box {
   background: #252525;
-  padding: 12px;
+  padding: 10px 6px;
   border-radius: 6px;
   border-left: 3px solid var(--accent);
+  text-align: center;
+  min-width: 0;
 }
 .res-label {
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   color: #888;
   text-transform: uppercase;
 }
 .res-value {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: bold;
   margin-top: 4px;
+  word-break: break-word;
 }
 .input-error {
   border: 2px solid var(--danger) !important;
@@ -629,7 +632,7 @@ details:not([open]) > summary.cache-summary-toggle {
   gap: 12px;
   margin-bottom: 12px;
 }
-.plot-checkbox {
+.inline-checkbox {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -637,7 +640,7 @@ details:not([open]) > summary.cache-summary-toggle {
   color: var(--text);
   cursor: pointer;
 }
-.plot-checkbox input {
+.inline-checkbox input {
   width: 16px;
   height: 16px;
 }

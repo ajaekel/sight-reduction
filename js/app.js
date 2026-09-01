@@ -47,6 +47,7 @@ function initApp() {
   document.getElementById('btnClearCache').addEventListener('click', onClearCache);
 
   document.getElementById('sightDate').addEventListener('change', refreshLiveCalculations);
+  document.getElementById('toggleAutoFillCache').addEventListener('change', refreshLiveCalculations);
 
   ['tzOffset', 'ieMin', 'dipMin', 'altCorrMin', 'addAltCorrMin'].forEach(function (id) {
     document.getElementById(id).addEventListener('input', refreshLiveCalculations);
@@ -667,9 +668,9 @@ function getAlmanacFieldIds(bodyType) {
     : ['ghaBaseDeg', 'ghaBaseMin', 'ghaNextDeg', 'ghaNextMin', 'decBaseDeg', 'decBaseMin', 'decNextDeg', 'decNextMin'];
 }
 
-/** True if NONE of this body type's almanac fields have been touched yet -- the "nothing to lose by auto-filling" case. */
-function almanacFieldsAreAllEmpty(bodyType) {
-  return getAlmanacFieldIds(bodyType).every(function (id) {
+/** True if ANY of this body type's almanac fields is still blank -- i.e. there's something an auto-fill or Download could usefully add. */
+function almanacFieldsAnyBlank(bodyType) {
+  return getAlmanacFieldIds(bodyType).some(function (id) {
     return document.getElementById(id).value.trim() === '';
   });
 }
@@ -726,17 +727,20 @@ function resetInterpAndResultsDisplay() {
 }
 
 /**
- * Stage A: as soon as we know which hour/body to look up, try the cache
- * (never the network) and fill Section 3 if found. If the almanac fields
- * already have anything in them -- manually entered or already filled --
- * this leaves them alone rather than clobbering the user's data. On a
- * cache miss, outlines the new interpolation box in red and enables the
- * explicit "Auto-fill" button as the user's next move.
+ * Stage A: as soon as we know which hour/body to look up, and the "Auto-fill
+ * with cached data" toggle is on, try the cache (never the network) and fill
+ * whatever's still blank in Section 3. It never overwrites a field that
+ * already has something in it -- manual entry or an earlier fill.
+ *
+ * With the toggle off, this doesn't probe the cache at all; it just leaves
+ * the Download button available whenever we know enough to use it, and
+ * clicking it becomes the only way anything gets filled.
  */
 function tryAutoFillAlmanacFromCache() {
   var btn = document.getElementById('btnFetchUsno');
   var box = document.getElementById('almanacInterpBox');
   var bodyType = document.getElementById('bodyType').value;
+  var autoFillOn = document.getElementById('toggleAutoFillCache').checked;
 
   if (!getAlmanacFetchReadiness(bodyType)) {
     btn.disabled = true;
@@ -745,8 +749,17 @@ function tryAutoFillAlmanacFromCache() {
     return;
   }
 
-  if (!almanacFieldsAreAllEmpty(bodyType)) {
-    // Already has data (manual entry or a previous fill) -- nothing to fetch.
+  if (!autoFillOn) {
+    // Manual mode: no automatic cache probing or red-outline "not cached"
+    // signal -- the Download button is simply available whenever we're
+    // ready, and it fills in whatever's blank when clicked.
+    btn.disabled = false;
+    box.classList.remove('summary-box-error');
+    return;
+  }
+
+  if (!almanacFieldsAnyBlank(bodyType)) {
+    // Nothing left that auto-fill could add.
     btn.disabled = true;
     box.classList.remove('summary-box-error');
     return;
@@ -764,14 +777,15 @@ function tryAutoFillAlmanacFromCache() {
 
   SightUsno.getAlmanacFillFromCacheOnly(state.body, baseUtcDate, nextUtcDate)
     .then(function (result) {
-      // The body/fields may have changed while this lookup was in flight --
-      // only apply it if we'd still want it.
-      if (!getAlmanacFetchReadiness(bodyType) || !almanacFieldsAreAllEmpty(bodyType)) return;
+      // Readiness, the toggle, or the fields themselves may have changed
+      // while this lookup was in flight -- only apply it if we'd still want it.
+      if (!getAlmanacFetchReadiness(bodyType) || !document.getElementById('toggleAutoFillCache').checked) return;
+      if (!almanacFieldsAnyBlank(bodyType)) return;
 
       if (!result) {
         btn.disabled = false;
         box.classList.add('summary-box-error');
-        setUsnoStatus('Not cached for this hour \u2014 tap Auto-fill to fetch from USNO.', '');
+        setUsnoStatus('Not cached for this hour \u2014 tap Download to fetch from USNO.', '');
         return;
       }
 
@@ -828,7 +842,6 @@ function tryAutoCalculateReduction() {
   document.getElementById('almanacInterpBox').classList.remove('summary-box-error');
 
   document.getElementById('resHc').innerText = SightCalc.formatDegMin(result.hc);
-  document.getElementById('resAP').innerText = apString;
   document.getElementById('resIntercept').innerText = interceptText;
   document.getElementById('resZn').innerText = Math.round(result.zn).toString().padStart(3, '0') + '\u00B0';
 
@@ -929,33 +942,44 @@ function flashField(id) {
   el.classList.add('autofilled-flash');
 }
 
+/**
+ * Fills one GHA/SHA (no sign) or Dec (with N/S sign) field-group from USNO
+ * data, but ONLY if it's currently blank -- never overwrites something the
+ * user already typed in, whether that was manual entry or an earlier fill.
+ * Returns true if it actually filled something.
+ */
+function fillDegMinIfBlank(degId, minId, signId, decimalDeg, signValue) {
+  var degEl = document.getElementById(degId);
+  var minEl = document.getElementById(minId);
+  if (degEl.value.trim() !== '' || minEl.value.trim() !== '') return false;
+
+  var dm = SightCalc.decimalToDM(decimalDeg);
+  degEl.value = dm.deg;
+  minEl.value = dm.min.toFixed(1);
+  flashField(degId);
+  flashField(minId);
+  if (signId) document.getElementById(signId).value = signValue;
+  return true;
+}
+
+/** Fills whichever of this body type's almanac fields are still blank. Returns how many field-groups it filled. */
 function applyUsnoFill(bodyType, fill) {
-  var setDM = function (degId, minId, decimalDeg) {
-    var dm = SightCalc.decimalToDM(decimalDeg);
-    document.getElementById(degId).value = dm.deg;
-    document.getElementById(minId).value = dm.min.toFixed(1);
-  };
+  var filledGroups = 0;
 
   if (bodyType === 'star') {
-    setDM('ghaAriesBaseDeg', 'ghaAriesBaseMin', fill.ghaAriesBaseDeg);
-    setDM('ghaAriesNextDeg', 'ghaAriesNextMin', fill.ghaAriesNextDeg);
-    setDM('shaDeg', 'shaMin', fill.shaDeg);
-    setDM('decStarDeg', 'decStarMin', fill.decDeg);
-    document.getElementById('decStarNS').value = fill.decSign;
-    ['ghaAriesBaseDeg', 'ghaAriesBaseMin', 'ghaAriesNextDeg', 'ghaAriesNextMin',
-     'shaDeg', 'shaMin', 'decStarDeg', 'decStarMin'].forEach(flashField);
+    if (fillDegMinIfBlank('ghaAriesBaseDeg', 'ghaAriesBaseMin', null, fill.ghaAriesBaseDeg)) filledGroups++;
+    if (fillDegMinIfBlank('ghaAriesNextDeg', 'ghaAriesNextMin', null, fill.ghaAriesNextDeg)) filledGroups++;
+    if (fillDegMinIfBlank('shaDeg', 'shaMin', null, fill.shaDeg)) filledGroups++;
+    if (fillDegMinIfBlank('decStarDeg', 'decStarMin', 'decStarNS', fill.decDeg, fill.decSign)) filledGroups++;
   } else {
-    setDM('ghaBaseDeg', 'ghaBaseMin', fill.ghaBaseDeg);
-    setDM('ghaNextDeg', 'ghaNextMin', fill.ghaNextDeg);
-    setDM('decBaseDeg', 'decBaseMin', fill.decBaseDeg);
-    document.getElementById('decBaseNS').value = fill.decBaseSign;
-    setDM('decNextDeg', 'decNextMin', fill.decNextDeg);
-    document.getElementById('decNextNS').value = fill.decNextSign;
-    ['ghaBaseDeg', 'ghaBaseMin', 'ghaNextDeg', 'ghaNextMin',
-     'decBaseDeg', 'decBaseMin', 'decNextDeg', 'decNextMin'].forEach(flashField);
+    if (fillDegMinIfBlank('ghaBaseDeg', 'ghaBaseMin', null, fill.ghaBaseDeg)) filledGroups++;
+    if (fillDegMinIfBlank('ghaNextDeg', 'ghaNextMin', null, fill.ghaNextDeg)) filledGroups++;
+    if (fillDegMinIfBlank('decBaseDeg', 'decBaseMin', 'decBaseNS', fill.decBaseDeg, fill.decBaseSign)) filledGroups++;
+    if (fillDegMinIfBlank('decNextDeg', 'decNextMin', 'decNextNS', fill.decNextDeg, fill.decNextSign)) filledGroups++;
   }
 
   refreshLiveCalculations(); // refreshes hour labels/Ho AND runs the reduction now that almanac data is in
+  return filledGroups;
 }
 
 /**
@@ -1027,15 +1051,19 @@ function onFetchUsno() {
   // (and backfills the cache) only for whatever isn't already cached.
   SightUsno.getAlmanacFillWithCache(state.body, baseUtcDate, nextUtcDate, position.lat, position.lon)
     .then(function (result) {
-      applyUsnoFill(state.body.type, result.fill);
-      setUsnoStatus(
-        'Filled ' + (result.fromCache ? 'from cache' : 'from USNO') + ' for ' + formatBodyLabel(state.body) + ', hour ' +
-        String(baseUtcDate.getUTCHours()).padStart(2, '0') + '\u2013' +
-        String(nextUtcDate.getUTCHours()).padStart(2, '0') + 'z on ' +
-        baseUtcDate.toISOString().split('T')[0] + '.',
-        'ok'
-      );
-      showToast('Almanac data filled' + (result.fromCache ? ' (from cache).' : '.'));
+      var filledGroups = applyUsnoFill(state.body.type, result.fill);
+      var msg;
+      if (filledGroups === 0) {
+        msg = 'Nothing to fill \u2014 every almanac field already had a value.';
+      } else {
+        msg = 'Filled ' + filledGroups + ' field' + (filledGroups === 1 ? '' : 's') + ' ' +
+          (result.fromCache ? 'from cache' : 'from USNO') + ' for ' + formatBodyLabel(state.body) + ', hour ' +
+          String(baseUtcDate.getUTCHours()).padStart(2, '0') + '\u2013' +
+          String(nextUtcDate.getUTCHours()).padStart(2, '0') + 'z on ' +
+          baseUtcDate.toISOString().split('T')[0] + '.';
+      }
+      setUsnoStatus(msg, 'ok');
+      if (filledGroups > 0) showToast('Almanac data filled' + (result.fromCache ? ' (from cache).' : '.'));
       refreshCacheSummary();
     })
     .catch(function (err) {
@@ -1047,7 +1075,7 @@ function onFetchUsno() {
       setUsnoStatus(msg, 'error');
     })
     .finally(function () {
-      btn.disabled = false;
+      tryAutoFillAlmanacFromCache(); // re-derives the correct disabled/red-outline state either way
     });
 }
 
