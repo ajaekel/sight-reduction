@@ -473,19 +473,30 @@ function renderFixResult(fix, sightingCount, legendEl) {
   }
   setFixResultStatus('', '');
 
+  // Least-squares uses every checked/active sighting; the bisector method
+  // can only use exactly 3, auto-picked for widest azimuth spread when more
+  // than 3 are active (see the caption below). Naming the count here makes
+  // that difference visible instead of implied -- unchecking a sighting that
+  // ISN'T one of the bisector triple still changes the least-squares answer,
+  // because it was never excluded from that one to begin with.
   var methodLabel = fix.source === 'bisector' ? 'method of bisectors' : 'least-squares';
+  var scopeNote = fix.source === 'bisector'
+    ? ' (3 of ' + sightingCount + ' active)'
+    : ' (' + sightingCount + ' active sighting' + (sightingCount === 1 ? '' : 's') + ')';
   var item = document.createElement('div');
   item.className = 'chart-legend-item fix-legend-item';
-  item.innerHTML = fixIconSvg() + ' Fix (' + methodLabel + '): ' + fix.positionText;
+  item.innerHTML = fixIconSvg() + ' Fix (' + methodLabel + scopeNote + '): ' + fix.positionText;
   legendEl.appendChild(item);
 
   // Shown whenever a 3-LOP triangle exists, regardless of which method is
-  // currently displayed -- it's useful context (fix quality / which
-  // sightings were auto-selected) either way.
+  // currently displayed -- it's useful fix-quality context either way. But
+  // it describes ONLY the bisector triangle, so it's worded to never look
+  // like a statement about which sightings the (possibly different)
+  // currently-shown Fix number is based on.
   if (typeof fix.bisectorMaxSideNM === 'number') {
-    var note = 'Cocked hat spread: ' + fix.bisectorMaxSideNM.toFixed(1) + ' nm';
+    var note = 'Bisector triangle (cocked hat) spread: ' + fix.bisectorMaxSideNM.toFixed(1) + ' nm';
     if (fix.bisectorBadgeNumbers && fix.bisectorBadgeNumbers.length === 3 && sightingCount > 3) {
-      note += ' (using sightings #' + fix.bisectorBadgeNumbers.join(', #') + ' \u2014 widest azimuth spread)';
+      note += ', using sightings #' + fix.bisectorBadgeNumbers.join(', #') + ' (widest azimuth spread)';
     }
     caption.textContent = note;
   }

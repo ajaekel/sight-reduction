@@ -705,7 +705,8 @@ function getAlmanacFetchReadiness(bodyType) {
   return !!document.getElementById('sightDate').value &&
          hasValidBodyName(bodyType) &&
          hasCompleteTimeAllRows() &&
-         hasApEntered();
+         hasApEntered() &&
+         document.querySelectorAll('.input-error').length === 0;
 }
 
 /** Everything needed to run a full sight reduction. */
@@ -727,67 +728,43 @@ function resetInterpAndResultsDisplay() {
 }
 
 /**
- * Stage A: as soon as we know which hour/body to look up, and the "Auto-fill
- * with cached data" toggle is on, try the cache (never the network) and fill
- * whatever's still blank in Section 3. It never overwrites a field that
- * already has something in it -- manual entry or an earlier fill.
+ * Always checks the cache (read-only, never the network) as soon as we know
+ * which hour/body to look up -- that's cheap and safe regardless of the
+ * "Auto-fill with cached data" toggle, and it's what lets the Download
+ * button's label accurately say whether it'll be instant (cached) or needs
+ * the network. The toggle only controls whether a cache hit gets APPLIED
+ * automatically or just reported:
  *
- * With the toggle off, this doesn't probe the cache at all; it just leaves
- * the Download button available whenever we know enough to use it, and
- * clicking it becomes the only way anything gets filled.
+ *   toggle on,  cached     -> auto-fill it, disable the button
+ *   toggle on,  not cached -> red outline, button: "Download data"
+ *   toggle off, cached     -> button: "Fill with cached data"
+ *   toggle off, not cached -> button: "Download data and fill fields"
  */
 var _autoFillLoopGuard = { signature: null, count: 0 };
 
-function tryAutoFillAlmanacFromCache() {
+function setFetchButtonState(enabled, label) {
   var btn = document.getElementById('btnFetchUsno');
+  btn.disabled = !enabled;
+  btn.textContent = label;
+}
+
+function tryAutoFillAlmanacFromCache() {
   var box = document.getElementById('almanacInterpBox');
   var bodyType = document.getElementById('bodyType').value;
-  var autoFillOn = document.getElementById('toggleAutoFillCache').checked;
 
   if (!getAlmanacFetchReadiness(bodyType)) {
-    btn.disabled = true;
+    setFetchButtonState(false, 'Download data');
     box.classList.remove('summary-box-error');
     setUsnoStatus('', '');
     _autoFillLoopGuard = { signature: null, count: 0 };
     return;
   }
 
-  if (!autoFillOn) {
-    // Manual mode: no automatic cache probing or red-outline "not cached"
-    // signal -- the Download button is simply available whenever we're
-    // ready, and it fills in whatever's blank when clicked.
-    btn.disabled = false;
-    box.classList.remove('summary-box-error');
-    _autoFillLoopGuard = { signature: null, count: 0 };
-    return;
-  }
-
   if (!almanacFieldsAnyBlank(bodyType)) {
-    // Nothing left that auto-fill could add.
-    btn.disabled = true;
+    // Nothing left that a fill of any kind could add.
+    setFetchButtonState(false, 'Fill with cached data');
     box.classList.remove('summary-box-error');
     _autoFillLoopGuard = { signature: null, count: 0 };
-    return;
-  }
-
-  // Safety net: this reactive chain (applyUsnoFill -> refreshLiveCalculations
-  // -> tryAutoFillAlmanacFromCache -> cache hit -> applyUsnoFill -> ...) is
-  // supposed to always converge, since each successful fill clears a blank
-  // field. If the exact same set of field VALUES ends up asking for another
-  // fill attempt several times in a row, something isn't actually resolving
-  // -- stop retrying automatically instead of spinning forever.
-  var signature = bodyType + '|' + getAlmanacFieldIds(bodyType).map(function (id) {
-    return document.getElementById(id).value;
-  }).join(',');
-  if (_autoFillLoopGuard.signature === signature) {
-    _autoFillLoopGuard.count++;
-  } else {
-    _autoFillLoopGuard = { signature: signature, count: 1 };
-  }
-  if (_autoFillLoopGuard.count > 3) {
-    btn.disabled = false;
-    box.classList.add('summary-box-error');
-    setUsnoStatus('Auto-fill isn\u2019t able to complete this automatically \u2014 tap Download, or check the almanac fields manually.', 'error');
     return;
   }
 
@@ -803,26 +780,63 @@ function tryAutoFillAlmanacFromCache() {
 
   SightUsno.getAlmanacFillFromCacheOnly(state.body, baseUtcDate, nextUtcDate)
     .then(function (result) {
-      // Readiness, the toggle, or the fields themselves may have changed
-      // while this lookup was in flight -- only apply it if we'd still want it.
-      if (!getAlmanacFetchReadiness(bodyType) || !document.getElementById('toggleAutoFillCache').checked) return;
-      if (!almanacFieldsAnyBlank(bodyType)) return;
+      // Readiness or the fields themselves may have changed while this
+      // lookup was in flight -- only act on it if we'd still want to.
+      if (!getAlmanacFetchReadiness(bodyType) || !almanacFieldsAnyBlank(bodyType)) return;
 
-      if (!result) {
-        btn.disabled = false;
+      var cached = !!result;
+      var autoFillOn = document.getElementById('toggleAutoFillCache').checked;
+
+      if (!(autoFillOn && cached)) {
+        // Nothing gets written to the form in these three states -- just
+        // report what's known and let the button (or the checkbox) be the
+        // next move.
+        box.classList.toggle('summary-box-error', autoFillOn && !cached);
+        if (autoFillOn && !cached) {
+          setFetchButtonState(true, 'Download data');
+          setUsnoStatus('Not cached for this hour \u2014 tap Download to fetch from USNO.', '');
+        } else if (cached) {
+          setFetchButtonState(true, 'Fill with cached data');
+          setUsnoStatus('', '');
+        } else {
+          setFetchButtonState(true, 'Download data and fill fields');
+          setUsnoStatus('', '');
+        }
+        _autoFillLoopGuard = { signature: null, count: 0 };
+        return;
+      }
+
+      // toggle on + cached -> auto-apply it.
+      //
+      // Safety net: this reactive chain (applyUsnoFill -> refreshLiveCalculations
+      // -> tryAutoFillAlmanacFromCache -> cache hit -> applyUsnoFill -> ...) is
+      // supposed to always converge, since each successful fill clears a blank
+      // field. If the exact same set of field VALUES ends up asking for another
+      // fill attempt several times in a row, something isn't actually resolving
+      // -- stop retrying automatically instead of spinning forever.
+      var signature = bodyType + '|' + getAlmanacFieldIds(bodyType).map(function (id) {
+        return document.getElementById(id).value;
+      }).join(',');
+      if (_autoFillLoopGuard.signature === signature) {
+        _autoFillLoopGuard.count++;
+      } else {
+        _autoFillLoopGuard = { signature: signature, count: 1 };
+      }
+      if (_autoFillLoopGuard.count > 3) {
+        setFetchButtonState(true, 'Download data');
         box.classList.add('summary-box-error');
-        setUsnoStatus('Not cached for this hour \u2014 tap Download to fetch from USNO.', '');
+        setUsnoStatus('Auto-fill isn\u2019t able to complete this automatically \u2014 tap Download, or check the almanac fields manually.', 'error');
         return;
       }
 
       applyUsnoFill(bodyType, result.fill); // also re-runs refreshLiveCalculations()
-      btn.disabled = true;
+      setFetchButtonState(false, 'Fill with cached data');
       box.classList.remove('summary-box-error');
       setUsnoStatus('Filled from cache.', 'ok');
     })
     .catch(function (err) {
       console.error(err);
-      btn.disabled = false;
+      setFetchButtonState(true, 'Download data');
       box.classList.add('summary-box-error');
     });
 }
@@ -1036,21 +1050,15 @@ function onFetchUsno() {
   var btn = document.getElementById('btnFetchUsno');
   var state = collectFormState();
 
+  var missing = [];
+  if (!document.getElementById('sightDate').value) missing.push('the date (Section 1)');
+
   var latEntered = document.getElementById('latDeg').value.trim() !== '' || document.getElementById('latMin').value.trim() !== '';
   var lonEntered = document.getElementById('lonDeg').value.trim() !== '' || document.getElementById('lonMin').value.trim() !== '';
-  if (!latEntered || !lonEntered) {
-    setUsnoStatus('Enter your assumed position (Section 1) first.', 'error');
-    return;
-  }
+  if (!latEntered || !lonEntered) missing.push('your assumed position (Section 1)');
 
-  if (state.body.type === 'planet' && !state.body.name) {
-    setUsnoStatus('Select a planet first.', 'error');
-    return;
-  }
-  if (state.body.type === 'star' && !state.body.name) {
-    setUsnoStatus('Enter the star name first.', 'error');
-    return;
-  }
+  if (state.body.type === 'planet' && !state.body.name) missing.push('a planet selection (Section 2)');
+  if (state.body.type === 'star' && !state.body.name) missing.push('the star name (Section 2)');
 
   var rows = document.querySelectorAll('.sighting-item');
   var hasCompleteTime = rows.length > 0 && Array.prototype.every.call(rows, function (row) {
@@ -1059,15 +1067,19 @@ function onFetchUsno() {
            row.querySelector('.t-s').value.trim() !== '';
   });
   var avg = SightCalc.averageObservations(state.observations);
-  if (!avg || !hasCompleteTime) {
-    setUsnoStatus('Enter at least one complete sighting time (Section 2) first, so we know which hour to fetch.', 'error');
+  if (!avg || !hasCompleteTime) missing.push('a complete sighting time \u2014 Hours, Minutes, and Seconds (Section 2)');
+
+  if (document.querySelectorAll('.input-error').length > 0) missing.push('valid values for the field(s) currently outlined in red');
+
+  if (missing.length) {
+    setUsnoStatus('Can\u2019t fetch almanac data yet \u2014 still missing: ' + missing.join('; ') + '.', 'error');
     return;
   }
 
   var position = getAssumedPositionSigned();
   var avgUtcSec = SightCalc.utcSecondsFromLocal(avg.avgLocalSec, state.position.tzOffset);
   var dateInput = document.getElementById('sightDate').value;
-  var baseUtcDate = dateInput ? new Date(dateInput + 'T00:00:00Z') : new Date();
+  var baseUtcDate = new Date(dateInput + 'T00:00:00Z');
   baseUtcDate.setUTCSeconds(baseUtcDate.getUTCSeconds() + avgUtcSec);
   baseUtcDate.setUTCMinutes(0, 0, 0); // floor to the top of the bracketing hour
   var nextUtcDate = new Date(baseUtcDate.getTime() + 3600 * 1000);
