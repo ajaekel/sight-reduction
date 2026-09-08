@@ -77,10 +77,10 @@ function initApp() {
   var errSha = document.getElementById('errSha');
   var errDecStar = document.getElementById('errDecStar');
 
-  var validateGhaAriesBase = function () { validateDegMinPair(document.getElementById('ghaAriesBaseDeg'), document.getElementById('ghaAriesBaseMin'), 360, 'GHA Aries Base', errGhaAriesBase); refreshLiveCalculations(); };
-  var validateGhaAriesNext = function () { validateDegMinPair(document.getElementById('ghaAriesNextDeg'), document.getElementById('ghaAriesNextMin'), 360, 'GHA Aries Next', errGhaAriesNext); refreshLiveCalculations(); };
-  var validateSha = function () { validateDegMinPair(document.getElementById('shaDeg'), document.getElementById('shaMin'), 360, 'SHA', errSha); refreshLiveCalculations(); };
-  var validateDecStar = function () { validateDegMinPair(document.getElementById('decStarDeg'), document.getElementById('decStarMin'), 90, 'Star Declination', errDecStar); refreshLiveCalculations(); };
+  var validateGhaAriesBase = function () { validateDegMinPair(document.getElementById('ghaAriesBaseDeg'), document.getElementById('ghaAriesBaseMin'), 360, 'GHA Aries Base', errGhaAriesBase); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
+  var validateGhaAriesNext = function () { validateDegMinPair(document.getElementById('ghaAriesNextDeg'), document.getElementById('ghaAriesNextMin'), 360, 'GHA Aries Next', errGhaAriesNext); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
+  var validateSha = function () { validateDegMinPair(document.getElementById('shaDeg'), document.getElementById('shaMin'), 360, 'SHA', errSha); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
+  var validateDecStar = function () { validateDegMinPair(document.getElementById('decStarDeg'), document.getElementById('decStarMin'), 90, 'Star Declination', errDecStar); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
 
   document.getElementById('ghaAriesBaseDeg').addEventListener('input', validateGhaAriesBase);
   document.getElementById('ghaAriesBaseMin').addEventListener('input', validateGhaAriesBase);
@@ -90,7 +90,7 @@ function initApp() {
   document.getElementById('shaMin').addEventListener('input', validateSha);
   document.getElementById('decStarDeg').addEventListener('input', validateDecStar);
   document.getElementById('decStarMin').addEventListener('input', validateDecStar);
-  document.getElementById('decStarNS').addEventListener('change', refreshLiveCalculations);
+  document.getElementById('decStarNS').addEventListener('change', function () { markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); });
 
   // --- SECTION 3: NON-STAR ALMANAC VALIDATION ---
   var errGhaBase = document.getElementById('errGhaBase');
@@ -98,10 +98,10 @@ function initApp() {
   var errDecBase = document.getElementById('errDecBase');
   var errDecNext = document.getElementById('errDecNext');
 
-  var validateGhaBase = function () { validateDegMinPair(document.getElementById('ghaBaseDeg'), document.getElementById('ghaBaseMin'), 360, 'GHA Base', errGhaBase); refreshLiveCalculations(); };
-  var validateGhaNext = function () { validateDegMinPair(document.getElementById('ghaNextDeg'), document.getElementById('ghaNextMin'), 360, 'GHA Next', errGhaNext); refreshLiveCalculations(); };
-  var validateDecBase = function () { validateDegMinPair(document.getElementById('decBaseDeg'), document.getElementById('decBaseMin'), 90, 'Declination Base', errDecBase); refreshLiveCalculations(); };
-  var validateDecNext = function () { validateDegMinPair(document.getElementById('decNextDeg'), document.getElementById('decNextMin'), 90, 'Declination Next', errDecNext); refreshLiveCalculations(); };
+  var validateGhaBase = function () { validateDegMinPair(document.getElementById('ghaBaseDeg'), document.getElementById('ghaBaseMin'), 360, 'GHA Base', errGhaBase); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
+  var validateGhaNext = function () { validateDegMinPair(document.getElementById('ghaNextDeg'), document.getElementById('ghaNextMin'), 360, 'GHA Next', errGhaNext); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
+  var validateDecBase = function () { validateDegMinPair(document.getElementById('decBaseDeg'), document.getElementById('decBaseMin'), 90, 'Declination Base', errDecBase); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
+  var validateDecNext = function () { validateDegMinPair(document.getElementById('decNextDeg'), document.getElementById('decNextMin'), 90, 'Declination Next', errDecNext); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
 
   document.getElementById('ghaBaseDeg').addEventListener('input', validateGhaBase);
   document.getElementById('ghaBaseMin').addEventListener('input', validateGhaBase);
@@ -112,7 +112,7 @@ function initApp() {
   document.getElementById('decNextDeg').addEventListener('input', validateDecNext);
   document.getElementById('decNextMin').addEventListener('input', validateDecNext);
   ['decBaseNS', 'decNextNS'].forEach(function (id) {
-    document.getElementById(id).addEventListener('change', refreshLiveCalculations);
+    document.getElementById(id).addEventListener('change', function () { markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); });
   });
 
   addSightingLine(false);
@@ -540,6 +540,10 @@ function applyFormState(state) {
   });
 
   updateHeaders();
+  // The loaded record's almanac fields (if any) correspond to ITS OWN
+  // date/body/time, all of which we just set above -- so the current
+  // context is exactly what they should be valid for.
+  _almanacFieldsContext = currentAlmanacContextKey();
   refreshLiveCalculations(); // recalculates immediately if the loaded record is complete
 }
 
@@ -668,11 +672,38 @@ function getAlmanacFieldIds(bodyType) {
     : ['ghaBaseDeg', 'ghaBaseMin', 'ghaNextDeg', 'ghaNextMin', 'decBaseDeg', 'decBaseMin', 'decNextDeg', 'decNextMin'];
 }
 
-/** True if ANY of this body type's almanac fields is still blank -- i.e. there's something an auto-fill or Download could usefully add. */
-function almanacFieldsAnyBlank(bodyType) {
+/** True if ANY of this body type's almanac fields has something in it. */
+function almanacFieldsAnyFilled(bodyType) {
   return getAlmanacFieldIds(bodyType).some(function (id) {
-    return document.getElementById(id).value.trim() === '';
+    return document.getElementById(id).value.trim() !== '';
   });
+}
+
+/**
+ * A key representing "the date/body/hour Section 3's values should
+ * currently reflect" -- used to detect when previously-filled (or
+ * manually-edited) almanac fields have gone stale because the date, body,
+ * or average sighting time changed underneath them. Returns null if there
+ * isn't yet enough info to compute it.
+ */
+function currentAlmanacContextKey() {
+  var dateInput = document.getElementById('sightDate').value;
+  if (!dateInput) return null;
+
+  var bodyType = document.getElementById('bodyType').value;
+  var bodyName = bodyType === 'star' ? document.getElementById('bodyName').value.trim()
+    : bodyType === 'planet' ? document.getElementById('planetSelect').value.trim() : '';
+
+  var state = collectFormState();
+  var avg = SightCalc.averageObservations(state.observations);
+  if (!avg) return null;
+
+  var avgUtcSec = SightCalc.utcSecondsFromLocal(avg.avgLocalSec, state.position.tzOffset);
+  var baseUtcDate = new Date(dateInput + 'T00:00:00Z');
+  baseUtcDate.setUTCSeconds(baseUtcDate.getUTCSeconds() + avgUtcSec);
+  baseUtcDate.setUTCMinutes(0, 0, 0);
+
+  return bodyType + '|' + bodyName + '|' + baseUtcDate.toISOString();
 }
 
 function hasCompleteTimeAllRows() {
@@ -728,24 +759,36 @@ function resetInterpAndResultsDisplay() {
 }
 
 /**
- * Always checks the cache (read-only, never the network) as soon as we know
- * which hour/body to look up -- that's cheap and safe regardless of the
- * "Auto-fill with cached data" toggle, and it's what lets the Download
- * button's label accurately say whether it'll be instant (cached) or needs
- * the network. The toggle only controls whether a cache hit gets APPLIED
- * automatically or just reported:
+ * Keeps Section 3 in sync with the current date/body/average-time:
  *
- *   toggle on,  cached     -> auto-fill it, disable the button
- *   toggle on,  not cached -> red outline, button: "Download data"
- *   toggle off, cached     -> button: "Fill with cached data"
- *   toggle off, not cached -> button: "Download data and fill fields"
+ *   - Blank fields: cache-check-then-decide, same as before.
+ *   - Stale fields (something in Section 3 was filled/edited for a
+ *     different date, body, or time than now): checkbox on -> silently
+ *     re-fetch and overwrite; checkbox off -> red outline + a message
+ *     telling the user which button to tap to correct them.
+ *   - Valid fields (already correct for the current context): left alone,
+ *     button disabled.
+ *
+ * The cache is always CHECKED (read-only, never the network) regardless of
+ * the checkbox -- that's what lets the button's label say whether clicking
+ * it will be instant or needs the network. The checkbox only controls
+ * whether a cache hit gets APPLIED automatically. Whenever something does
+ * get applied -- automatically or via the button -- it OVERWRITES whatever
+ * was there, even a manually-typed value; that's the whole point of a
+ * deliberate trigger (checkbox on, or a button click).
  */
 var _autoFillLoopGuard = { signature: null, count: 0 };
+var _almanacFieldsContext = null; // see currentAlmanacContextKey()
 
 function setFetchButtonState(enabled, label) {
   var btn = document.getElementById('btnFetchUsno');
   btn.disabled = !enabled;
   btn.textContent = label;
+}
+
+/** Called by Section 3's own field listeners -- marks whatever's there now as deliberately valid for the current context. */
+function markAlmanacFieldsManuallyEdited() {
+  _almanacFieldsContext = currentAlmanacContextKey();
 }
 
 function tryAutoFillAlmanacFromCache() {
@@ -760,10 +803,23 @@ function tryAutoFillAlmanacFromCache() {
     return;
   }
 
-  if (!almanacFieldsAnyBlank(bodyType)) {
-    // Nothing left that a fill of any kind could add.
+  var currentContext = currentAlmanacContextKey();
+  var hasValue = almanacFieldsAnyFilled(bodyType);
+
+  if (hasValue && _almanacFieldsContext === null) {
+    // First time this session we're tracking context -- treat whatever's
+    // already there (e.g. a freshly-loaded sighting) as the established
+    // baseline rather than immediately flagging it stale.
+    _almanacFieldsContext = currentContext;
+  }
+
+  var isStale = hasValue && _almanacFieldsContext !== currentContext;
+
+  if (hasValue && !isStale) {
+    // Populated and still correct for the current date/body/time.
     setFetchButtonState(false, 'Fill with cached data');
     box.classList.remove('summary-box-error');
+    setUsnoStatus('', '');
     _autoFillLoopGuard = { signature: null, count: 0 };
     return;
   }
@@ -780,43 +836,47 @@ function tryAutoFillAlmanacFromCache() {
 
   SightUsno.getAlmanacFillFromCacheOnly(state.body, baseUtcDate, nextUtcDate)
     .then(function (result) {
-      // Readiness or the fields themselves may have changed while this
-      // lookup was in flight -- only act on it if we'd still want to.
-      if (!getAlmanacFetchReadiness(bodyType) || !almanacFieldsAnyBlank(bodyType)) return;
+      if (!getAlmanacFetchReadiness(bodyType)) return;
+
+      // Recompute fresh -- the context or the fields themselves may have
+      // moved on while this lookup was in flight.
+      var contextNow = currentAlmanacContextKey();
+      var hasValueNow = almanacFieldsAnyFilled(bodyType);
+      var isStaleNow = hasValueNow && _almanacFieldsContext !== contextNow;
+      if (hasValueNow && !isStaleNow) return; // already resolved in the meantime
 
       var cached = !!result;
       var autoFillOn = document.getElementById('toggleAutoFillCache').checked;
 
       if (!(autoFillOn && cached)) {
-        // Nothing gets written to the form in these three states -- just
-        // report what's known and let the button (or the checkbox) be the
-        // next move.
-        box.classList.toggle('summary-box-error', autoFillOn && !cached);
-        if (autoFillOn && !cached) {
-          setFetchButtonState(true, 'Download data');
+        box.classList.toggle('summary-box-error', (autoFillOn && !cached) || (isStaleNow && !autoFillOn));
+
+        var label = (autoFillOn && !cached) ? 'Download data'
+          : cached ? 'Fill with cached data'
+          : 'Download data and fill fields';
+        setFetchButtonState(true, label);
+
+        if (isStaleNow && !autoFillOn) {
+          setUsnoStatus('Section 3 no longer matches the current date, body, or time \u2014 tap "' + label + '" to update it.', 'error');
+        } else if (autoFillOn && !cached) {
           setUsnoStatus('Not cached for this hour \u2014 tap Download to fetch from USNO.', '');
-        } else if (cached) {
-          setFetchButtonState(true, 'Fill with cached data');
-          setUsnoStatus('', '');
         } else {
-          setFetchButtonState(true, 'Download data and fill fields');
           setUsnoStatus('', '');
         }
         _autoFillLoopGuard = { signature: null, count: 0 };
         return;
       }
 
-      // toggle on + cached -> auto-apply it.
+      // toggle on + cached -> auto-overwrite.
       //
       // Safety net: this reactive chain (applyUsnoFill -> refreshLiveCalculations
       // -> tryAutoFillAlmanacFromCache -> cache hit -> applyUsnoFill -> ...) is
-      // supposed to always converge, since each successful fill clears a blank
-      // field. If the exact same set of field VALUES ends up asking for another
-      // fill attempt several times in a row, something isn't actually resolving
-      // -- stop retrying automatically instead of spinning forever.
-      var signature = bodyType + '|' + getAlmanacFieldIds(bodyType).map(function (id) {
-        return document.getElementById(id).value;
-      }).join(',');
+      // supposed to always converge, since a successful fill marks the
+      // context valid and isStale becomes false on the next pass. If the
+      // exact same context ends up asking for another auto-overwrite several
+      // times in a row, something isn't actually resolving -- stop retrying
+      // automatically instead of spinning forever.
+      var signature = bodyType + '|' + contextNow;
       if (_autoFillLoopGuard.signature === signature) {
         _autoFillLoopGuard.count++;
       } else {
@@ -829,7 +889,7 @@ function tryAutoFillAlmanacFromCache() {
         return;
       }
 
-      applyUsnoFill(bodyType, result.fill); // also re-runs refreshLiveCalculations()
+      applyUsnoFill(bodyType, result.fill); // overwrites, marks context valid, re-runs refreshLiveCalculations()
       setFetchButtonState(false, 'Fill with cached data');
       box.classList.remove('summary-box-error');
       setUsnoStatus('Filled from cache.', 'ok');
@@ -959,6 +1019,8 @@ function clearAllData() {
   sightingCount = 0;
   addSightingLine(false);
   window._currentRecordId = null;
+  _almanacFieldsContext = null;
+  _autoFillLoopGuard = { signature: null, count: 0 };
   updateHeaders();
   refreshLiveCalculations();
 }
@@ -984,45 +1046,37 @@ function flashField(id) {
 
 /**
  * Fills one GHA/SHA (no sign) or Dec (with N/S sign) field-group from USNO
- * data. Degrees and minutes are treated as independently blank -- if only
- * one half of the pair is empty, only that half gets filled; if the user
- * (or an earlier fill) already put something in both, this touches nothing.
- * Never overwrites a piece that already has a value.
+ * data. Always overwrites, even if the field already has a value -- both an
+ * automatic cache-fill (checkbox on) and the explicit Download/Fill button
+ * are a deliberate "replace what's there" trigger, not a "top up the
+ * blanks" one.
  */
-function fillDegMinIfBlank(degId, minId, signId, decimalDeg, signValue) {
-  var degEl = document.getElementById(degId);
-  var minEl = document.getElementById(minId);
-  var degBlank = degEl.value.trim() === '';
-  var minBlank = minEl.value.trim() === '';
-  if (!degBlank && !minBlank) return false; // both already have values -- nothing to do here
-
+function fillDegMin(degId, minId, signId, decimalDeg, signValue) {
   var dm = SightCalc.decimalToDM(decimalDeg);
-  if (degBlank) { degEl.value = dm.deg; flashField(degId); }
-  if (minBlank) { minEl.value = dm.min.toFixed(1); flashField(minId); }
-  // The N/S or E/W sign only means something alongside an actual value --
-  // set it whenever we filled anything in this group.
+  document.getElementById(degId).value = dm.deg;
+  document.getElementById(minId).value = dm.min.toFixed(1);
+  flashField(degId);
+  flashField(minId);
   if (signId) document.getElementById(signId).value = signValue;
-  return true;
 }
 
-/** Fills whichever of this body type's almanac fields are still blank. Returns how many field-groups it filled. */
+/** Overwrites all of this body type's almanac fields with USNO data and marks Section 3 valid for the current context. */
 function applyUsnoFill(bodyType, fill) {
-  var filledGroups = 0;
-
   if (bodyType === 'star') {
-    if (fillDegMinIfBlank('ghaAriesBaseDeg', 'ghaAriesBaseMin', null, fill.ghaAriesBaseDeg)) filledGroups++;
-    if (fillDegMinIfBlank('ghaAriesNextDeg', 'ghaAriesNextMin', null, fill.ghaAriesNextDeg)) filledGroups++;
-    if (fillDegMinIfBlank('shaDeg', 'shaMin', null, fill.shaDeg)) filledGroups++;
-    if (fillDegMinIfBlank('decStarDeg', 'decStarMin', 'decStarNS', fill.decDeg, fill.decSign)) filledGroups++;
+    fillDegMin('ghaAriesBaseDeg', 'ghaAriesBaseMin', null, fill.ghaAriesBaseDeg);
+    fillDegMin('ghaAriesNextDeg', 'ghaAriesNextMin', null, fill.ghaAriesNextDeg);
+    fillDegMin('shaDeg', 'shaMin', null, fill.shaDeg);
+    fillDegMin('decStarDeg', 'decStarMin', 'decStarNS', fill.decDeg, fill.decSign);
   } else {
-    if (fillDegMinIfBlank('ghaBaseDeg', 'ghaBaseMin', null, fill.ghaBaseDeg)) filledGroups++;
-    if (fillDegMinIfBlank('ghaNextDeg', 'ghaNextMin', null, fill.ghaNextDeg)) filledGroups++;
-    if (fillDegMinIfBlank('decBaseDeg', 'decBaseMin', 'decBaseNS', fill.decBaseDeg, fill.decBaseSign)) filledGroups++;
-    if (fillDegMinIfBlank('decNextDeg', 'decNextMin', 'decNextNS', fill.decNextDeg, fill.decNextSign)) filledGroups++;
+    fillDegMin('ghaBaseDeg', 'ghaBaseMin', null, fill.ghaBaseDeg);
+    fillDegMin('ghaNextDeg', 'ghaNextMin', null, fill.ghaNextDeg);
+    fillDegMin('decBaseDeg', 'decBaseMin', 'decBaseNS', fill.decBaseDeg, fill.decBaseSign);
+    fillDegMin('decNextDeg', 'decNextMin', 'decNextNS', fill.decNextDeg, fill.decNextSign);
   }
 
+  _almanacFieldsContext = currentAlmanacContextKey();
   refreshLiveCalculations(); // refreshes hour labels/Ho AND runs the reduction now that almanac data is in
-  return filledGroups;
+  return getAlmanacFieldIds(bodyType).length / 2; // always overwrites every field-group for this body type
 }
 
 /**
@@ -1093,18 +1147,13 @@ function onFetchUsno() {
   SightUsno.getAlmanacFillWithCache(state.body, baseUtcDate, nextUtcDate, position.lat, position.lon)
     .then(function (result) {
       var filledGroups = applyUsnoFill(state.body.type, result.fill);
-      var msg;
-      if (filledGroups === 0) {
-        msg = 'Nothing to fill \u2014 every almanac field already had a value.';
-      } else {
-        msg = 'Filled ' + filledGroups + ' field' + (filledGroups === 1 ? '' : 's') + ' ' +
-          (result.fromCache ? 'from cache' : 'from USNO') + ' for ' + formatBodyLabel(state.body) + ', hour ' +
-          String(baseUtcDate.getUTCHours()).padStart(2, '0') + '\u2013' +
-          String(nextUtcDate.getUTCHours()).padStart(2, '0') + 'z on ' +
-          baseUtcDate.toISOString().split('T')[0] + '.';
-      }
+      var msg = 'Filled ' + filledGroups + ' field' + (filledGroups === 1 ? '' : 's') + ' ' +
+        (result.fromCache ? 'from cache' : 'from USNO') + ' for ' + formatBodyLabel(state.body) + ', hour ' +
+        String(baseUtcDate.getUTCHours()).padStart(2, '0') + '\u2013' +
+        String(nextUtcDate.getUTCHours()).padStart(2, '0') + 'z on ' +
+        baseUtcDate.toISOString().split('T')[0] + '.';
       setUsnoStatus(msg, 'ok');
-      if (filledGroups > 0) showToast('Almanac data filled' + (result.fromCache ? ' (from cache).' : '.'));
+      showToast('Almanac data filled' + (result.fromCache ? ' (from cache).' : '.'));
       refreshCacheSummary();
     })
     .catch(function (err) {
