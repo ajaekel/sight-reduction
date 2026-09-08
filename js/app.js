@@ -804,19 +804,21 @@ function tryAutoFillAlmanacFromCache() {
   }
 
   var currentContext = currentAlmanacContextKey();
-  var hasValue = almanacFieldsAnyFilled(bodyType);
+  var almanacIds = getAlmanacFieldIds(bodyType);
+  var isComplete = allFilled(almanacIds);      // every field has something
+  var hasAnyValue = almanacFieldsAnyFilled(bodyType); // at least one does -- used only for context tracking
 
-  if (hasValue && _almanacFieldsContext === null) {
+  if (hasAnyValue && _almanacFieldsContext === null) {
     // First time this session we're tracking context -- treat whatever's
     // already there (e.g. a freshly-loaded sighting) as the established
     // baseline rather than immediately flagging it stale.
     _almanacFieldsContext = currentContext;
   }
 
-  var isStale = hasValue && _almanacFieldsContext !== currentContext;
+  var isStale = hasAnyValue && _almanacFieldsContext !== currentContext;
 
-  if (hasValue && !isStale) {
-    // Populated and still correct for the current date/body/time.
+  if (isComplete && !isStale) {
+    // Every field is filled AND still correct for the current date/body/time.
     setFetchButtonState(false, 'Fill with cached data');
     box.classList.remove('summary-box-error');
     setUsnoStatus('', '');
@@ -841,9 +843,10 @@ function tryAutoFillAlmanacFromCache() {
       // Recompute fresh -- the context or the fields themselves may have
       // moved on while this lookup was in flight.
       var contextNow = currentAlmanacContextKey();
-      var hasValueNow = almanacFieldsAnyFilled(bodyType);
-      var isStaleNow = hasValueNow && _almanacFieldsContext !== contextNow;
-      if (hasValueNow && !isStaleNow) return; // already resolved in the meantime
+      var isCompleteNow = allFilled(almanacIds);
+      var hasAnyValueNow = almanacFieldsAnyFilled(bodyType);
+      var isStaleNow = hasAnyValueNow && _almanacFieldsContext !== contextNow;
+      if (isCompleteNow && !isStaleNow) return; // already resolved in the meantime
 
       var cached = !!result;
       var autoFillOn = document.getElementById('toggleAutoFillCache').checked;
@@ -1163,9 +1166,14 @@ function onFetchUsno() {
         msg += ' You appear to be offline and this hour isn\u2019t cached yet \u2014 download it in advance with the Offline Almanac Cache section below, or enter the data manually.';
       }
       setUsnoStatus(msg, 'error');
-    })
-    .finally(function () {
-      tryAutoFillAlmanacFromCache(); // re-derives the correct disabled/red-outline state either way
+      // applyUsnoFill (which re-derives button/outline state on its own)
+      // never ran on this path, so the button's still stuck disabled from
+      // the start of this function -- re-derive it here. (On success this
+      // isn't needed -- and used to double-run here via .finally(), which
+      // was clobbering the "Filled N fields..." message right after it was
+      // set, since a fresh check immediately finds everything valid again
+      // and clears the status text.)
+      tryAutoFillAlmanacFromCache();
     });
 }
 
