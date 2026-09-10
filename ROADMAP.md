@@ -1,5 +1,11 @@
 # Roadmap
 
+## Add a page for managing data
+
+* [ ] User can see how many MBs per data type (Almanac Data, sightings, fixes, other?)
+* [ ] User can selectively delete cached data
+
+
 ## Add autofill
 
 * [X] Add button to retrieve data with USNO API call
@@ -19,10 +25,12 @@
 ## Support multiple sightings
 
 * [X] Support multiple sightings in a session
-* [ ] Add bisectors / multi-LOP fix
+* [X] Add bisectors / multi-LOP fix
 * [ ] Add running fix; accept inputs for SOG and bearing
 
 ## Miscellaneous
+
+* [ ] Add a clock error correction
 
 * [ ] Calculate sunset for the AP
 
