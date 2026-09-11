@@ -48,6 +48,9 @@ function initApp() {
 
   document.getElementById('sightDate').addEventListener('change', refreshLiveCalculations);
   document.getElementById('toggleAutoFillCache').addEventListener('change', refreshLiveCalculations);
+  document.getElementById('clockErrorSec').addEventListener('input', refreshLiveCalculations);
+  document.getElementById('clockErrorFast').addEventListener('click', function () { setClockErrorDirection('fast'); });
+  document.getElementById('clockErrorSlow').addEventListener('click', function () { setClockErrorDirection('slow'); });
 
   ['tzOffset', 'ieMin', 'dipMin', 'altCorrMin', 'addAltCorrMin'].forEach(function (id) {
     document.getElementById(id).addEventListener('input', refreshLiveCalculations);
@@ -464,7 +467,8 @@ function collectFormState() {
       ieMin: num('ieMin'), ieSign: g('ieSign').value,
       dipMin: num('dipMin'),
       altCorrMin: num('altCorrMin'), altCorrSign: g('altCorrSign').value,
-      addAltCorrMin: num('addAltCorrMin'), addAltCorrSign: g('addAltCorrSign').value
+      addAltCorrMin: num('addAltCorrMin'), addAltCorrSign: g('addAltCorrSign').value,
+      clockErrorSec: num('clockErrorSec'), clockErrorDirection: _clockErrorDirection
     },
     almanac: {
       star: {
@@ -509,6 +513,8 @@ function applyFormState(state) {
   setVal('dipMin', c.dipMin);
   setVal('altCorrMin', c.altCorrMin); setVal('altCorrSign', c.altCorrSign || '+');
   setVal('addAltCorrMin', c.addAltCorrMin); setVal('addAltCorrSign', c.addAltCorrSign || '+');
+  setVal('clockErrorSec', c.clockErrorSec || 0);
+  setClockErrorDirection(c.clockErrorDirection === 'slow' ? 'slow' : 'fast'); // older saved records have neither field -- default matches a fresh page
 
   var a = state.almanac || {};
   var st = a.star || {};
@@ -571,6 +577,28 @@ function updateAlmanacHourLabels(baseUtcDate) {
   document.querySelectorAll('.lblNextDate').forEach(function (el) { el.innerText = nextDateStr; });
 }
 
+var _clockErrorDirection = 'fast'; // 'fast' or 'slow' -- see getClockErrorCorrectedLocalSec
+
+function setClockErrorDirection(direction) {
+  _clockErrorDirection = direction;
+  document.getElementById('clockErrorFast').setAttribute('aria-pressed', direction === 'fast' ? 'true' : 'false');
+  document.getElementById('clockErrorSlow').setAttribute('aria-pressed', direction === 'slow' ? 'true' : 'false');
+  refreshLiveCalculations();
+}
+
+/**
+ * Applies the Clock Error correction to an averaged local-time-of-day (in
+ * seconds), using the standard chronometer convention: a watch that's FAST
+ * reads ahead of the true time, so the error is SUBTRACTED to get the true
+ * time; a watch that's SLOW reads behind, so the error is ADDED.
+ */
+function getClockErrorCorrectedLocalSec(avgLocalSec) {
+  var clockErrorSec = parseFloat(document.getElementById('clockErrorSec').value) || 0;
+  var sign = (_clockErrorDirection === 'fast') ? -1 : 1;
+  var corrected = avgLocalSec + sign * clockErrorSec;
+  return ((corrected % 86400) + 86400) % 86400; // wrap into [0, 86400)
+}
+
 /** Recomputes the running averages/Ho display as the user types (uses calc.js). */
 function updateAverages() {
   var observations = collectObservations();
@@ -590,9 +618,11 @@ function updateAverages() {
   var ho = SightCalc.computeHo(avg.avgHsDeg, corrections);
 
   var tzOffset = parseFloat(document.getElementById('tzOffset').value) || 0;
-  var avgUtcSec = SightCalc.utcSecondsFromLocal(avg.avgLocalSec, tzOffset);
+  var correctedLocalSec = getClockErrorCorrectedLocalSec(avg.avgLocalSec);
+  var avgUtcSec = SightCalc.utcSecondsFromLocal(correctedLocalSec, tzOffset);
 
   document.getElementById('avgLocalTime').innerText = SightCalc.secondsToTimeString(avg.avgLocalSec);
+  document.getElementById('avgLocalTimeCorrected').innerText = SightCalc.secondsToTimeString(correctedLocalSec);
   document.getElementById('avgUtcTime').innerText = SightCalc.secondsToTimeString(avgUtcSec) + ' UTC';
   document.getElementById('avgHs').innerText = SightCalc.formatDegMin(avg.avgHsDeg);
   document.getElementById('computedHa').innerText = SightCalc.formatDegMin(ha);
@@ -698,7 +728,7 @@ function currentAlmanacContextKey() {
   var avg = SightCalc.averageObservations(state.observations);
   if (!avg) return null;
 
-  var avgUtcSec = SightCalc.utcSecondsFromLocal(avg.avgLocalSec, state.position.tzOffset);
+  var avgUtcSec = SightCalc.utcSecondsFromLocal(getClockErrorCorrectedLocalSec(avg.avgLocalSec), state.position.tzOffset);
   var baseUtcDate = new Date(dateInput + 'T00:00:00Z');
   baseUtcDate.setUTCSeconds(baseUtcDate.getUTCSeconds() + avgUtcSec);
   baseUtcDate.setUTCMinutes(0, 0, 0);
@@ -829,7 +859,7 @@ function tryAutoFillAlmanacFromCache() {
   var state = collectFormState();
   var position = getAssumedPositionSigned();
   var avg = SightCalc.averageObservations(state.observations);
-  var avgUtcSec = SightCalc.utcSecondsFromLocal(avg.avgLocalSec, state.position.tzOffset);
+  var avgUtcSec = SightCalc.utcSecondsFromLocal(getClockErrorCorrectedLocalSec(avg.avgLocalSec), state.position.tzOffset);
   var dateInput = document.getElementById('sightDate').value;
   var baseUtcDate = new Date(dateInput + 'T00:00:00Z');
   baseUtcDate.setUTCSeconds(baseUtcDate.getUTCSeconds() + avgUtcSec);
@@ -924,7 +954,7 @@ function tryAutoCalculateReduction() {
   if (!avg) { resetInterpAndResultsDisplay(); return; }
 
   var ho = SightCalc.computeHo(avg.avgHsDeg, state.corrections);
-  var avgUtcSec = SightCalc.utcSecondsFromLocal(avg.avgLocalSec, state.position.tzOffset);
+  var avgUtcSec = SightCalc.utcSecondsFromLocal(getClockErrorCorrectedLocalSec(avg.avgLocalSec), state.position.tzOffset);
 
   var built = buildCalcInput(state, avg, ho, avgUtcSec);
   var result = SightCalc.reduceSight(built.input);
@@ -1017,6 +1047,7 @@ function clearAllData() {
   document.getElementById('dipMin').value = '0.0';
   document.getElementById('altCorrMin').value = '0.0';
   document.getElementById('addAltCorrMin').value = '0.0';
+  document.getElementById('clockErrorSec').value = '0';
   document.getElementById('tzOffset').value = '-4';
   document.getElementById('sightingsContainer').innerHTML = '';
   sightingCount = 0;
@@ -1024,6 +1055,7 @@ function clearAllData() {
   window._currentRecordId = null;
   _almanacFieldsContext = null;
   _autoFillLoopGuard = { signature: null, count: 0 };
+  setClockErrorDirection('fast');
   updateHeaders();
   refreshLiveCalculations();
 }
@@ -1134,7 +1166,7 @@ function onFetchUsno() {
   }
 
   var position = getAssumedPositionSigned();
-  var avgUtcSec = SightCalc.utcSecondsFromLocal(avg.avgLocalSec, state.position.tzOffset);
+  var avgUtcSec = SightCalc.utcSecondsFromLocal(getClockErrorCorrectedLocalSec(avg.avgLocalSec), state.position.tzOffset);
   var dateInput = document.getElementById('sightDate').value;
   var baseUtcDate = new Date(dateInput + 'T00:00:00Z');
   baseUtcDate.setUTCSeconds(baseUtcDate.getUTCSeconds() + avgUtcSec);
