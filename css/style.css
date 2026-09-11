@@ -646,6 +646,7 @@ details:not([open]) > summary.cache-summary-toggle {
 }
 .method-picker {
   display: inline-flex;
+  flex-shrink: 0;
   border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;

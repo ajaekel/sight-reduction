@@ -125,9 +125,22 @@
     <div id="sightingsContainer"></div>
     <button class="btn-add" id="btnAddSight">+ Add Another Sight</button>
 
+    <div class="form-group">
+      <label>Clock Error (seconds)</label>
+      <div class="input-row">
+        <input type="text" inputmode="decimal" id="clockErrorSec" placeholder="0" value="0" onfocus="this.select()">
+        <div class="method-picker" role="group" aria-label="Clock error direction">
+          <button type="button" class="method-btn" id="clockErrorFast" aria-pressed="true">Fast</button>
+          <button type="button" class="method-btn" id="clockErrorSlow" aria-pressed="false">Slow</button>
+        </div>
+      </div>
+      <label style="font-size: 0.75rem; margin-top: 2px;">Fast: watch reads ahead of actual time (subtract). Slow: watch reads behind (add).</label>
+    </div>
+
     <div class="summary-box">
       <div style="font-size: 0.75rem; font-weight: bold; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Average of Sightings</div>
       <div><strong>Local Time:</strong> <span id="avgLocalTime">--:--:--</span></div>
+      <div><strong>Local Time corrected:</strong> <span id="avgLocalTimeCorrected">--:--:--</span></div>
       <div><strong>UTC Time:</strong> <span id="avgUtcTime">--:--:-- UTC</span></div>
       <div><strong>Hs (Sextant Height):</strong> <span id="avgHs">--&deg; --.-'</span></div>
     </div>
