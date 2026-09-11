@@ -9,6 +9,8 @@
   --chart-az: #00bcd4;
   --chart-lop: #ffca28;
   --chart-grid: #3a3a3a;
+  --chart-fix: #ffffff;
+  --chart-bisector: #bdbdbd;
 }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -26,13 +28,26 @@ body {
 .header-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 12px;
   margin-bottom: 16px;
 }
 h1 {
   font-size: 1.3rem;
   color: var(--accent);
   margin: 0;
+}
+.header-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .btn-clear-all {
   background: transparent;
@@ -43,6 +58,64 @@ h1 {
   font-size: 0.8rem;
   cursor: pointer;
   font-weight: bold;
+}
+
+/* --- Hamburger menu --- */
+.nav-menu-wrap {
+  position: relative;
+}
+.btn-hamburger {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.btn-hamburger span {
+  display: block;
+  width: 16px;
+  height: 2px;
+  background: var(--text);
+  border-radius: 1px;
+}
+.nav-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  background: #2a2a2a;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  z-index: 30;
+  overflow: hidden;
+}
+.nav-menu.open {
+  display: block;
+}
+.nav-menu-item {
+  display: block;
+  padding: 11px 14px;
+  font-size: 0.9rem;
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid #383838;
+}
+.nav-menu-item:last-child {
+  border-bottom: none;
+}
+.nav-menu-item:hover,
+.nav-menu-item:active {
+  background: var(--accent);
+  color: #000;
 }
 .card {
   background: var(--card);
@@ -227,6 +300,17 @@ input, select {
   box-sizing: border-box;
   -webkit-appearance: none;
 }
+input[type="checkbox"] {
+  width: auto;
+  height: auto;
+  -webkit-appearance: checkbox;
+  appearance: checkbox;
+  background: transparent;
+  border: none;
+  padding: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button {
   -webkit-appearance: none;
@@ -298,27 +382,34 @@ select {
   font-size: 0.9rem;
   line-height: 1.4;
 }
+.summary-box-error {
+  border: 1px solid var(--danger);
+  border-left: 3px solid var(--danger);
+}
 .results {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
   margin-top: 8px;
 }
 .res-box {
   background: #252525;
-  padding: 12px;
+  padding: 10px 6px;
   border-radius: 6px;
   border-left: 3px solid var(--accent);
+  text-align: center;
+  min-width: 0;
 }
 .res-label {
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   color: #888;
   text-transform: uppercase;
 }
 .res-value {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: bold;
   margin-top: 4px;
+  word-break: break-word;
 }
 .input-error {
   border: 2px solid var(--danger) !important;
@@ -388,6 +479,48 @@ select {
 .btn-danger-outline {
   border-color: var(--danger);
   color: var(--danger);
+}
+.btn-back {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 8px 0 0;
+  vertical-align: middle;
+}
+
+/* --- Fixes list page --- */
+.fix-list-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.btn-new-fix {
+  background: var(--accent);
+  color: #000;
+  font-weight: bold;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.sighting-color-dot {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  margin-right: 10px;
+  vertical-align: middle;
+}
+.saved-item-info-row {
+  display: flex;
+  align-items: center;
 }
 
 /* --- <details>/<summary> collapsible section (Offline Almanac Cache) --- */
@@ -466,12 +599,15 @@ details:not([open]) > summary.cache-summary-toggle {
 }
 .chart-svg {
   width: 100%;
-  max-width: 340px;
   height: auto;
+  max-width: 100%;
 }
-.chart-compass-label {
-  font-size: 11px;
-  fill: #888;
+.chart-axis-label {
+  font-size: 10px;
+  fill: #999;
+  stroke: var(--card);
+  stroke-width: 3px;
+  paint-order: stroke fill;
 }
 .chart-point-label {
   font-size: 12px;
@@ -482,6 +618,58 @@ details:not([open]) > summary.cache-summary-toggle {
   font-size: 11px;
   fill: var(--chart-az);
   font-weight: bold;
+}
+.chart-badge-label {
+  font-size: 10px;
+  font-weight: bold;
+  fill: #000;
+}
+.plot-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.inline-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text);
+  cursor: pointer;
+}
+.inline-checkbox input {
+  width: 16px;
+  height: 16px;
+}
+.method-picker {
+  display: inline-flex;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.method-btn {
+  background: transparent;
+  color: var(--text);
+  border: none;
+  padding: 7px 12px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.method-btn + .method-btn {
+  border-left: 1px solid var(--border);
+}
+.method-btn[aria-pressed="true"] {
+  background: var(--accent);
+  color: #000;
+  font-weight: bold;
+}
+.method-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 .chart-legend {
   display: flex;
@@ -510,6 +698,20 @@ details:not([open]) > summary.cache-summary-toggle {
 }
 .chart-swatch.lop {
   border-top-color: var(--chart-lop);
+}
+.chart-legend-item.fix-legend-item {
+  font-weight: bold;
+  color: var(--text);
+}
+.chart-legend-toggle {
+  cursor: pointer;
+}
+.chart-legend-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+}
+.fix-icon {
+  flex-shrink: 0;
 }
 .chart-caption {
   text-align: center;

@@ -181,23 +181,23 @@
 
     // --- USNO assembleFill: pure parsing/matching against mock payloads ---
     (function testUsnoAssembleFill() {
-      function mkData(entries) {
-        return entries.map(function (e) {
+      function mkMap(entries) {
+        return SightUsno.normalizeUsnoData(entries.map(function (e) {
           return {
             object: e.name, nav_star_number: e.num || null,
             almanac_data: { dec: e.dec, gha: e.gha, hc: 0, zn: 0 },
             altitude_corrections: { isCorrected: true, pa: 0, refr: 0, sd: 0, sum: 0 }
           };
-        });
+        }));
       }
 
-      var baseStar = mkData([{ name: 'Aries', dec: 0, gha: 50.0 }, { name: 'Aldebaran', num: 10, dec: 16.5, gha: 190.0 }]);
-      var nextStar = mkData([{ name: 'Aries', dec: 0, gha: 65.0 }, { name: 'Aldebaran', num: 10, dec: 16.5, gha: 205.0 }]);
+      var baseStar = mkMap([{ name: 'Aries', dec: 0, gha: 50.0 }, { name: 'Aldebaran', num: 10, dec: 16.5, gha: 190.0 }]);
+      var nextStar = mkMap([{ name: 'Aries', dec: 0, gha: 65.0 }, { name: 'Aldebaran', num: 10, dec: 16.5, gha: 205.0 }]);
       var fillStar = SightUsno.assembleFill({ type: 'star', name: 'Aldebaran' }, baseStar, nextStar);
       assertClose('USNO star SHA', fillStar.shaDeg, 140.0, 0.001);
 
-      var baseNoAries = mkData([{ name: 'Vega', dec: 38.8, gha: 300.0 }]);
-      var nextNoAries = mkData([{ name: 'Vega', dec: 38.8, gha: 315.0 }]);
+      var baseNoAries = mkMap([{ name: 'Vega', dec: 38.8, gha: 300.0 }]);
+      var nextNoAries = mkMap([{ name: 'Vega', dec: 38.8, gha: 315.0 }]);
       var fillFallback = SightUsno.assembleFill({ type: 'star', name: 'Vega' }, baseNoAries, nextNoAries);
       if (fillFallback.shaDeg === 0 && fillFallback.ghaAriesBaseDeg === 300.0) {
         pass++; console.log('PASS: USNO star fallback (no Aries entry) produces SHA=0');
@@ -205,8 +205,8 @@
         fail++; console.error('FAIL: USNO star fallback incorrect: ' + JSON.stringify(fillFallback));
       }
 
-      var basePlanet = mkData([{ name: 'Jupiter', dec: 22.1, gha: 44.5 }]);
-      var nextPlanet = mkData([{ name: 'Jupiter', dec: 22.1, gha: 59.5 }]);
+      var basePlanet = mkMap([{ name: 'Jupiter', dec: 22.1, gha: 44.5 }]);
+      var nextPlanet = mkMap([{ name: 'Jupiter', dec: 22.1, gha: 59.5 }]);
       var fillPlanet = SightUsno.assembleFill({ type: 'planet', name: 'Jupiter' }, basePlanet, nextPlanet);
       assertClose('USNO planet GHA base', fillPlanet.ghaBaseDeg, 44.5, 0.001);
 
@@ -215,6 +215,106 @@
       catch (e) { threw = true; }
       if (threw) { pass++; console.log('PASS: USNO missing-body throws a descriptive error'); }
       else { fail++; console.error('FAIL: USNO missing-body should have thrown'); }
+    })();
+
+    // --- computeMultiLopGeometry: identical APs reduce to single-sight geometry ---
+    (function testMultiLopGeometry() {
+      var sameAP = [
+        { lat: 40.5, lon: -74.0, zn: 90, interceptNM: 5 },
+        { lat: 40.5, lon: -74.0, zn: 200, interceptNM: -3 }
+      ];
+      var multi = SightCalc.computeMultiLopGeometry(sameAP);
+      assertClose('multi-LOP: centroid lat with identical APs', multi.originLat, 40.5, 0.0001);
+      assertClose('multi-LOP: sighting apPoint.x ~0 when APs identical', multi.sightings[0].apPoint.x, 0, 1e-6);
+      var single = SightCalc.computeLopGeometry(90, 5);
+      assertClose('multi-LOP: intercept matches single-sight geometry', multi.sightings[0].interceptPoint.x, single.interceptPoint.x, 1e-6);
+
+      var diffAP = [
+        { lat: 40.0, lon: -74.0, zn: 0, interceptNM: 10 },
+        { lat: 41.0, lon: -74.0, zn: 90, interceptNM: 10 }
+      ];
+      var multiDiff = SightCalc.computeMultiLopGeometry(diffAP);
+      assertClose('multi-LOP: differing-AP offset (nm)', multiDiff.sightings[0].apPoint.y, -30, 0.01);
+    })();
+
+    // --- signedPositionFromRecord ---
+    (function testSignedPositionFromRecord() {
+      var pos = SightCalc.signedPositionFromRecord({ latDeg: 40, latMin: 32.2, latNS: 'N', lonDeg: 73, lonMin: 56.3, lonEW: 'W' });
+      assertClose('signedPositionFromRecord lat', pos.lat, 40.536667, 0.0001);
+      assertClose('signedPositionFromRecord lon (W negative)', pos.lon, -73.938333, 0.0001);
+    })();
+
+    // --- resolveMultiLopFix: 2-LOP fix reduces to the exact intersection ---
+    (function testResolveMultiLopFixTwoLops() {
+      var geoA = SightCalc.computeLopGeometry(0, 10);
+      var geoB = SightCalc.computeLopGeometry(90, 5);
+      var fix = SightCalc.resolveMultiLopFix([geoA, geoB]);
+      assertClose('2-LOP fix is solvable', fix.solvable ? 1 : 0, 1, 0);
+      assertClose('2-LOP fix x (exact intersection)', fix.leastSquaresPoint.x, 5, 0.001);
+      assertClose('2-LOP fix y (exact intersection)', fix.leastSquaresPoint.y, 10, 0.001);
+      assertClose('2-LOP fix has no bisector', fix.bisector ? 1 : 0, 0, 0);
+    })();
+
+    // --- resolveMultiLopFix: parallel LOPs are correctly reported unsolvable ---
+    (function testResolveMultiLopFixParallel() {
+      var geoA = SightCalc.computeLopGeometry(45, 10);
+      var geoB = SightCalc.computeLopGeometry(45, 5);
+      var fix = SightCalc.resolveMultiLopFix([geoA, geoB]);
+      assertClose('parallel LOPs unsolvable', fix.solvable ? 1 : 0, 0, 0);
+    })();
+
+    // --- resolveMultiLopFix: 3 LOPs built to pass exactly through a known
+    // point should resolve both methods back to that point, with ~0 spread ---
+    (function testResolveMultiLopFixThreeLopsConcurrent() {
+      var truePoint = { x: 3, y: 4 };
+      function sightingThrough(zn) {
+        var geo = SightCalc.computeLopGeometry(zn, 0);
+        var interceptNM = geo.azimuthUnit.x * truePoint.x + geo.azimuthUnit.y * truePoint.y;
+        return SightCalc.computeLopGeometry(zn, interceptNM);
+      }
+      var sightings = [10, 130, 250].map(sightingThrough);
+      var fix = SightCalc.resolveMultiLopFix(sightings);
+      assertClose('3-LOP concurrent: least-squares x', fix.leastSquaresPoint.x, 3, 0.001);
+      assertClose('3-LOP concurrent: least-squares y', fix.leastSquaresPoint.y, 4, 0.001);
+      // Exact concurrency is a degenerate (zero-area) triangle -- the incenter
+      // formula divides by the perimeter, so `bisector` is correctly omitted
+      // rather than returning a meaningless 0/0 result.
+      assertClose('3-LOP exact concurrency has no bisector (degenerate triangle)', fix.bisector ? 1 : 0, 0, 0);
+    })();
+
+    // --- resolveMultiLopFix: 3 LOPs with one deliberately off should produce
+    // a real (non-degenerate) cocked hat, and least-squares vs. bisector
+    // should genuinely differ for an asymmetric error ---
+    (function testResolveMultiLopFixCockedHat() {
+      var truePoint = { x: 3, y: 4 };
+      function sightingThrough(zn, extraNM) {
+        var geo0 = SightCalc.computeLopGeometry(zn, 0);
+        var interceptNM = geo0.azimuthUnit.x * truePoint.x + geo0.azimuthUnit.y * truePoint.y + (extraNM || 0);
+        return SightCalc.computeLopGeometry(zn, interceptNM);
+      }
+      var sightings = [
+        sightingThrough(15, 1),
+        sightingThrough(60, -0.4),
+        sightingThrough(260, 0.3)
+      ];
+      var fix = SightCalc.resolveMultiLopFix(sightings);
+      assertClose('cocked hat produced (non-degenerate)', fix.bisector ? 1 : 0, 1, 0);
+      assertClose('cocked hat maxSideNM is positive', fix.bisector.maxSideNM > 0 ? 1 : 0, 1, 0);
+      var distApart = Math.hypot(
+        fix.leastSquaresPoint.x - fix.bisector.incenter.x,
+        fix.leastSquaresPoint.y - fix.bisector.incenter.y
+      );
+      assertClose('least-squares and incenter genuinely differ for an asymmetric cocked hat', distApart > 0.01 ? 1 : 0, 1, 0);
+    })();
+
+    // --- selectWidestAzimuthSpreadTriple: avoids pairing two close azimuths ---
+    (function testSelectWidestAzimuthSpreadTriple() {
+      var sightings = [0, 5, 130, 250].map(function (zn) { return SightCalc.computeLopGeometry(zn, 10); });
+      var triple = SightCalc.selectWidestAzimuthSpreadTriple(sightings);
+      assertClose('widest-spread triple excludes index 0 (too close to index 1)', triple.indexOf(0), -1, 0);
+      assertClose('widest-spread triple includes index 1', triple.indexOf(1) !== -1 ? 1 : 0, 1, 0);
+      assertClose('widest-spread triple includes index 2', triple.indexOf(2) !== -1 ? 1 : 0, 1, 0);
+      assertClose('widest-spread triple includes index 3', triple.indexOf(3) !== -1 ? 1 : 0, 1, 0);
     })();
 
     console.log('--- ' + pass + ' passed, ' + fail + ' failed ---');

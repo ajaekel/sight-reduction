@@ -1,7 +1,6 @@
-  /**
+/**
  * app.js
- *
- *  UI layer only: DOM reads/writes, event wiring, validation feedback.
+ * UI layer only: DOM reads/writes, event wiring, validation feedback.
  * All actual math lives in calc.js (window.SightCalc).
  * All persistence lives in storage.js (window.SightStorage).
  *
@@ -11,7 +10,6 @@
  * never on the DOM directly.
  */
 
-var APP_VERSION = 'v1.8';
 var sightingCount = 0;
 
 document.addEventListener('DOMContentLoaded', initApp);
@@ -25,18 +23,21 @@ function initApp() {
     document.getElementById('sightDate').value = new Date().toISOString().split('T')[0];
   } catch (e) {}
 
-  document.getElementById('bodyType').addEventListener('change', handleBodyTypeChange);
+  document.getElementById('bodyType').addEventListener('change', function () {
+    handleBodyTypeChange();
+    refreshLiveCalculations();
+  });
   initStarCombo();
+  initNavMenu();
   document.getElementById('planetSelect').addEventListener('change', function () {
-    updateAverages();
     updateHeaders();
+    refreshLiveCalculations();
   });
 
   document.getElementById('btnAddSight').addEventListener('click', function () {
     addSightingLine(true);
   });
   document.getElementById('btnClearAll').addEventListener('click', clearAllData);
-  document.getElementById('btnCalc').addEventListener('click', calculateSight);
 
   document.getElementById('btnSaveSight').addEventListener('click', onSaveSight);
   document.getElementById('btnExportJson').addEventListener('click', onExportJson);
@@ -45,24 +46,33 @@ function initApp() {
   document.getElementById('btnCacheRange').addEventListener('click', onCacheRange);
   document.getElementById('btnClearCache').addEventListener('click', onClearCache);
 
+  document.getElementById('sightDate').addEventListener('change', refreshLiveCalculations);
+  document.getElementById('toggleAutoFillCache').addEventListener('change', refreshLiveCalculations);
+  document.getElementById('clockErrorSec').addEventListener('input', refreshLiveCalculations);
+  document.getElementById('clockErrorFast').addEventListener('click', function () { setClockErrorDirection('fast'); });
+  document.getElementById('clockErrorSlow').addEventListener('click', function () { setClockErrorDirection('slow'); });
+
   ['tzOffset', 'ieMin', 'dipMin', 'altCorrMin', 'addAltCorrMin'].forEach(function (id) {
-    document.getElementById(id).addEventListener('input', updateAverages);
+    document.getElementById(id).addEventListener('input', refreshLiveCalculations);
   });
   ['ieSign', 'altCorrSign', 'addAltCorrSign'].forEach(function (id) {
-    document.getElementById(id).addEventListener('change', updateAverages);
+    document.getElementById(id).addEventListener('change', refreshLiveCalculations);
   });
 
   // --- SECTION 1: AP POSITION VALIDATION ---
   var errLat = document.getElementById('errLat');
   var errLon = document.getElementById('errLon');
 
-  var validateLat = function () { validateDegMinPair(document.getElementById('latDeg'), document.getElementById('latMin'), 90, 'Latitude', errLat); };
-  var validateLon = function () { validateDegMinPair(document.getElementById('lonDeg'), document.getElementById('lonMin'), 180, 'Longitude', errLon); };
+  var validateLat = function () { validateDegMinPair(document.getElementById('latDeg'), document.getElementById('latMin'), 90, 'Latitude', errLat); refreshLiveCalculations(); };
+  var validateLon = function () { validateDegMinPair(document.getElementById('lonDeg'), document.getElementById('lonMin'), 180, 'Longitude', errLon); refreshLiveCalculations(); };
 
   document.getElementById('latDeg').addEventListener('input', validateLat);
   document.getElementById('latMin').addEventListener('input', validateLat);
   document.getElementById('lonDeg').addEventListener('input', validateLon);
   document.getElementById('lonMin').addEventListener('input', validateLon);
+  ['latNS', 'lonEW'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', refreshLiveCalculations);
+  });
 
   // --- SECTION 3: STAR ALMANAC VALIDATION ---
   var errGhaAriesBase = document.getElementById('errGhaAriesBase');
@@ -70,10 +80,10 @@ function initApp() {
   var errSha = document.getElementById('errSha');
   var errDecStar = document.getElementById('errDecStar');
 
-  var validateGhaAriesBase = function () { validateDegMinPair(document.getElementById('ghaAriesBaseDeg'), document.getElementById('ghaAriesBaseMin'), 360, 'GHA Aries Base', errGhaAriesBase); };
-  var validateGhaAriesNext = function () { validateDegMinPair(document.getElementById('ghaAriesNextDeg'), document.getElementById('ghaAriesNextMin'), 360, 'GHA Aries Next', errGhaAriesNext); };
-  var validateSha = function () { validateDegMinPair(document.getElementById('shaDeg'), document.getElementById('shaMin'), 360, 'SHA', errSha); };
-  var validateDecStar = function () { validateDegMinPair(document.getElementById('decStarDeg'), document.getElementById('decStarMin'), 90, 'Star Declination', errDecStar); };
+  var validateGhaAriesBase = function () { validateDegMinPair(document.getElementById('ghaAriesBaseDeg'), document.getElementById('ghaAriesBaseMin'), 360, 'GHA Aries Base', errGhaAriesBase); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
+  var validateGhaAriesNext = function () { validateDegMinPair(document.getElementById('ghaAriesNextDeg'), document.getElementById('ghaAriesNextMin'), 360, 'GHA Aries Next', errGhaAriesNext); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
+  var validateSha = function () { validateDegMinPair(document.getElementById('shaDeg'), document.getElementById('shaMin'), 360, 'SHA', errSha); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
+  var validateDecStar = function () { validateDegMinPair(document.getElementById('decStarDeg'), document.getElementById('decStarMin'), 90, 'Star Declination', errDecStar); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
 
   document.getElementById('ghaAriesBaseDeg').addEventListener('input', validateGhaAriesBase);
   document.getElementById('ghaAriesBaseMin').addEventListener('input', validateGhaAriesBase);
@@ -83,6 +93,7 @@ function initApp() {
   document.getElementById('shaMin').addEventListener('input', validateSha);
   document.getElementById('decStarDeg').addEventListener('input', validateDecStar);
   document.getElementById('decStarMin').addEventListener('input', validateDecStar);
+  document.getElementById('decStarNS').addEventListener('change', function () { markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); });
 
   // --- SECTION 3: NON-STAR ALMANAC VALIDATION ---
   var errGhaBase = document.getElementById('errGhaBase');
@@ -90,10 +101,10 @@ function initApp() {
   var errDecBase = document.getElementById('errDecBase');
   var errDecNext = document.getElementById('errDecNext');
 
-  var validateGhaBase = function () { validateDegMinPair(document.getElementById('ghaBaseDeg'), document.getElementById('ghaBaseMin'), 360, 'GHA Base', errGhaBase); };
-  var validateGhaNext = function () { validateDegMinPair(document.getElementById('ghaNextDeg'), document.getElementById('ghaNextMin'), 360, 'GHA Next', errGhaNext); };
-  var validateDecBase = function () { validateDegMinPair(document.getElementById('decBaseDeg'), document.getElementById('decBaseMin'), 90, 'Declination Base', errDecBase); };
-  var validateDecNext = function () { validateDegMinPair(document.getElementById('decNextDeg'), document.getElementById('decNextMin'), 90, 'Declination Next', errDecNext); };
+  var validateGhaBase = function () { validateDegMinPair(document.getElementById('ghaBaseDeg'), document.getElementById('ghaBaseMin'), 360, 'GHA Base', errGhaBase); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
+  var validateGhaNext = function () { validateDegMinPair(document.getElementById('ghaNextDeg'), document.getElementById('ghaNextMin'), 360, 'GHA Next', errGhaNext); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
+  var validateDecBase = function () { validateDegMinPair(document.getElementById('decBaseDeg'), document.getElementById('decBaseMin'), 90, 'Declination Base', errDecBase); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
+  var validateDecNext = function () { validateDegMinPair(document.getElementById('decNextDeg'), document.getElementById('decNextMin'), 90, 'Declination Next', errDecNext); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
 
   document.getElementById('ghaBaseDeg').addEventListener('input', validateGhaBase);
   document.getElementById('ghaBaseMin').addEventListener('input', validateGhaBase);
@@ -103,9 +114,13 @@ function initApp() {
   document.getElementById('decBaseMin').addEventListener('input', validateDecBase);
   document.getElementById('decNextDeg').addEventListener('input', validateDecNext);
   document.getElementById('decNextMin').addEventListener('input', validateDecNext);
+  ['decBaseNS', 'decNextNS'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', function () { markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); });
+  });
 
   addSightingLine(false);
   handleBodyTypeChange();
+  refreshLiveCalculations();
   refreshSavedList();
   refreshCacheSummary();
 
@@ -233,6 +248,7 @@ function initStarCombo() {
         input.value = name;
         list.style.display = 'none';
         updateHeaders();
+        refreshLiveCalculations();
       });
       list.appendChild(item);
     });
@@ -243,6 +259,7 @@ function initStarCombo() {
   input.addEventListener('input', function () {
     renderSuggestions(input.value);
     updateHeaders();
+    refreshLiveCalculations();
   });
 
   input.addEventListener('focus', function () {
@@ -307,12 +324,12 @@ function addSightingLine(autoFocus) {
 
   sd.addEventListener('input', function () {
     validateField(this, 0, 90, 'Degrees', errBox, false);
-    updateAverages();
+    refreshLiveCalculations();
   });
 
   sm.addEventListener('input', function () {
     validateField(this, 0, 60, 'Height Minutes', errBox, true);
-    updateAverages();
+    refreshLiveCalculations();
   });
 
   [th, tm, ts, sd, sm].forEach(function (input) {
@@ -323,11 +340,11 @@ function addSightingLine(autoFocus) {
     var delBtn = div.querySelector('.btn-del');
     delBtn.addEventListener('click', function () {
       div.remove();
-      updateAverages();
+      refreshLiveCalculations();
     });
   }
 
-  updateAverages();
+  refreshLiveCalculations();
 
   if (autoFocus) {
     th.focus();
@@ -398,7 +415,7 @@ function autoFocusNext(el, maxChars, nextEl) {
       nextEl.select();
     }
   }
-  updateAverages();
+  refreshLiveCalculations();
 }
 
 // ---------------------------------------------------------------------
@@ -450,7 +467,8 @@ function collectFormState() {
       ieMin: num('ieMin'), ieSign: g('ieSign').value,
       dipMin: num('dipMin'),
       altCorrMin: num('altCorrMin'), altCorrSign: g('altCorrSign').value,
-      addAltCorrMin: num('addAltCorrMin'), addAltCorrSign: g('addAltCorrSign').value
+      addAltCorrMin: num('addAltCorrMin'), addAltCorrSign: g('addAltCorrSign').value,
+      clockErrorSec: num('clockErrorSec'), clockErrorDirection: _clockErrorDirection
     },
     almanac: {
       star: {
@@ -495,6 +513,8 @@ function applyFormState(state) {
   setVal('dipMin', c.dipMin);
   setVal('altCorrMin', c.altCorrMin); setVal('altCorrSign', c.altCorrSign || '+');
   setVal('addAltCorrMin', c.addAltCorrMin); setVal('addAltCorrSign', c.addAltCorrSign || '+');
+  setVal('clockErrorSec', c.clockErrorSec || 0);
+  setClockErrorDirection(c.clockErrorDirection === 'slow' ? 'slow' : 'fast'); // older saved records have neither field -- default matches a fresh page
 
   var a = state.almanac || {};
   var st = a.star || {};
@@ -526,9 +546,11 @@ function applyFormState(state) {
   });
 
   updateHeaders();
-  updateAverages();
-  document.getElementById('outputCard').style.display = 'none';
-  document.getElementById('chartCard').style.display = 'none';
+  // The loaded record's almanac fields (if any) correspond to ITS OWN
+  // date/body/time, all of which we just set above -- so the current
+  // context is exactly what they should be valid for.
+  _almanacFieldsContext = currentAlmanacContextKey();
+  refreshLiveCalculations(); // recalculates immediately if the loaded record is complete
 }
 
 function getLineSeconds(row) {
@@ -555,6 +577,28 @@ function updateAlmanacHourLabels(baseUtcDate) {
   document.querySelectorAll('.lblNextDate').forEach(function (el) { el.innerText = nextDateStr; });
 }
 
+var _clockErrorDirection = 'fast'; // 'fast' or 'slow' -- see getClockErrorCorrectedLocalSec
+
+function setClockErrorDirection(direction) {
+  _clockErrorDirection = direction;
+  document.getElementById('clockErrorFast').setAttribute('aria-pressed', direction === 'fast' ? 'true' : 'false');
+  document.getElementById('clockErrorSlow').setAttribute('aria-pressed', direction === 'slow' ? 'true' : 'false');
+  refreshLiveCalculations();
+}
+
+/**
+ * Applies the Clock Error correction to an averaged local-time-of-day (in
+ * seconds), using the standard chronometer convention: a watch that's FAST
+ * reads ahead of the true time, so the error is SUBTRACTED to get the true
+ * time; a watch that's SLOW reads behind, so the error is ADDED.
+ */
+function getClockErrorCorrectedLocalSec(avgLocalSec) {
+  var clockErrorSec = parseFloat(document.getElementById('clockErrorSec').value) || 0;
+  var sign = (_clockErrorDirection === 'fast') ? -1 : 1;
+  var corrected = avgLocalSec + sign * clockErrorSec;
+  return ((corrected % 86400) + 86400) % 86400; // wrap into [0, 86400)
+}
+
 /** Recomputes the running averages/Ho display as the user types (uses calc.js). */
 function updateAverages() {
   var observations = collectObservations();
@@ -574,9 +618,11 @@ function updateAverages() {
   var ho = SightCalc.computeHo(avg.avgHsDeg, corrections);
 
   var tzOffset = parseFloat(document.getElementById('tzOffset').value) || 0;
-  var avgUtcSec = SightCalc.utcSecondsFromLocal(avg.avgLocalSec, tzOffset);
+  var correctedLocalSec = getClockErrorCorrectedLocalSec(avg.avgLocalSec);
+  var avgUtcSec = SightCalc.utcSecondsFromLocal(correctedLocalSec, tzOffset);
 
   document.getElementById('avgLocalTime').innerText = SightCalc.secondsToTimeString(avg.avgLocalSec);
+  document.getElementById('avgLocalTimeCorrected').innerText = SightCalc.secondsToTimeString(correctedLocalSec);
   document.getElementById('avgUtcTime').innerText = SightCalc.secondsToTimeString(avgUtcSec) + ' UTC';
   document.getElementById('avgHs').innerText = SightCalc.formatDegMin(avg.avgHsDeg);
   document.getElementById('computedHa').innerText = SightCalc.formatDegMin(ha);
@@ -634,36 +680,281 @@ function buildCalcInput(state, avg, ho, avgUtcSec) {
   return { input: input, lat: lat, latAbs: latTotal, lonTotal: lonTotal };
 }
 
-function calculateSight() {
-  if (document.querySelectorAll('.input-error').length > 0) {
-    alert('Please fix the highlighted invalid entries before calculating.');
+// ---------------------------------------------------------------------
+// LIVE / REACTIVE CALCULATION -- replaces the old "Calculate Reduction" /
+// "Plot This Fix" button model. refreshLiveCalculations() is the single
+// entry point every relevant input listener calls; it fans out to the
+// almanac cache auto-fill (network-free) and the full reduction
+// calculation, each independently gated on whether it has what it needs.
+// ---------------------------------------------------------------------
+
+/** True if every field id in `ids` has a non-blank value. Blank, not 0-vs-empty -- unlike collectFormState()'s num() helper, this can tell "never typed" from "typed 0". */
+function allFilled(ids) {
+  return ids.every(function (id) {
+    var el = document.getElementById(id);
+    return !!el && el.value.trim() !== '';
+  });
+}
+
+function getAlmanacFieldIds(bodyType) {
+  return bodyType === 'star'
+    ? ['ghaAriesBaseDeg', 'ghaAriesBaseMin', 'ghaAriesNextDeg', 'ghaAriesNextMin', 'shaDeg', 'shaMin', 'decStarDeg', 'decStarMin']
+    : ['ghaBaseDeg', 'ghaBaseMin', 'ghaNextDeg', 'ghaNextMin', 'decBaseDeg', 'decBaseMin', 'decNextDeg', 'decNextMin'];
+}
+
+/** True if ANY of this body type's almanac fields has something in it. */
+function almanacFieldsAnyFilled(bodyType) {
+  return getAlmanacFieldIds(bodyType).some(function (id) {
+    return document.getElementById(id).value.trim() !== '';
+  });
+}
+
+/**
+ * A key representing "the date/body/hour Section 3's values should
+ * currently reflect" -- used to detect when previously-filled (or
+ * manually-edited) almanac fields have gone stale because the date, body,
+ * or average sighting time changed underneath them. Returns null if there
+ * isn't yet enough info to compute it.
+ */
+function currentAlmanacContextKey() {
+  var dateInput = document.getElementById('sightDate').value;
+  if (!dateInput) return null;
+
+  var bodyType = document.getElementById('bodyType').value;
+  var bodyName = bodyType === 'star' ? document.getElementById('bodyName').value.trim()
+    : bodyType === 'planet' ? document.getElementById('planetSelect').value.trim() : '';
+
+  var state = collectFormState();
+  var avg = SightCalc.averageObservations(state.observations);
+  if (!avg) return null;
+
+  var avgUtcSec = SightCalc.utcSecondsFromLocal(getClockErrorCorrectedLocalSec(avg.avgLocalSec), state.position.tzOffset);
+  var baseUtcDate = new Date(dateInput + 'T00:00:00Z');
+  baseUtcDate.setUTCSeconds(baseUtcDate.getUTCSeconds() + avgUtcSec);
+  baseUtcDate.setUTCMinutes(0, 0, 0);
+
+  return bodyType + '|' + bodyName + '|' + baseUtcDate.toISOString();
+}
+
+function hasCompleteTimeAllRows() {
+  var rows = document.querySelectorAll('.sighting-item');
+  return rows.length > 0 && Array.prototype.every.call(rows, function (row) {
+    return row.querySelector('.t-h').value.trim() !== '' &&
+           row.querySelector('.t-m').value.trim() !== '' &&
+           row.querySelector('.t-s').value.trim() !== '';
+  });
+}
+
+function hasApEntered() {
+  var latEntered = document.getElementById('latDeg').value.trim() !== '' || document.getElementById('latMin').value.trim() !== '';
+  var lonEntered = document.getElementById('lonDeg').value.trim() !== '' || document.getElementById('lonMin').value.trim() !== '';
+  return latEntered && lonEntered;
+}
+
+function hasValidBodyName(bodyType) {
+  if (bodyType === 'star') return document.getElementById('bodyName').value.trim() !== '';
+  if (bodyType === 'planet') return document.getElementById('planetSelect').value.trim() !== '';
+  return true; // sun/moon need no name
+}
+
+/**
+ * Everything needed to attempt a cache-only almanac lookup: enough to know
+ * WHICH hour/body to look up, but deliberately not requiring the almanac
+ * fields themselves (filling those in is the point).
+ */
+function getAlmanacFetchReadiness(bodyType) {
+  return !!document.getElementById('sightDate').value &&
+         hasValidBodyName(bodyType) &&
+         hasCompleteTimeAllRows() &&
+         hasApEntered() &&
+         document.querySelectorAll('.input-error').length === 0;
+}
+
+/** Everything needed to run a full sight reduction. */
+function getCalcReadiness(bodyType) {
+  return getAlmanacFetchReadiness(bodyType) &&
+         allFilled(getAlmanacFieldIds(bodyType)) &&
+         document.querySelectorAll('.input-error').length === 0;
+}
+
+function resetInterpAndResultsDisplay() {
+  document.getElementById('resGHA').innerText = "--\u00B0 --.-'";
+  document.getElementById('resDec').innerText = "--\u00B0 --.-'";
+  document.getElementById('resLHA').innerText = "--\u00B0 --.-'";
+  document.getElementById('almanacInterpBox').classList.remove('summary-box-error');
+  document.getElementById('outputCard').style.display = 'none';
+  document.getElementById('chartCard').style.display = 'none';
+  window._lastResult = null;
+  window._lastResultDisplay = null;
+}
+
+/**
+ * Keeps Section 3 in sync with the current date/body/average-time:
+ *
+ *   - Blank fields: cache-check-then-decide, same as before.
+ *   - Stale fields (something in Section 3 was filled/edited for a
+ *     different date, body, or time than now): checkbox on -> silently
+ *     re-fetch and overwrite; checkbox off -> red outline + a message
+ *     telling the user which button to tap to correct them.
+ *   - Valid fields (already correct for the current context): left alone,
+ *     button disabled.
+ *
+ * The cache is always CHECKED (read-only, never the network) regardless of
+ * the checkbox -- that's what lets the button's label say whether clicking
+ * it will be instant or needs the network. The checkbox only controls
+ * whether a cache hit gets APPLIED automatically. Whenever something does
+ * get applied -- automatically or via the button -- it OVERWRITES whatever
+ * was there, even a manually-typed value; that's the whole point of a
+ * deliberate trigger (checkbox on, or a button click).
+ */
+var _autoFillLoopGuard = { signature: null, count: 0 };
+var _almanacFieldsContext = null; // see currentAlmanacContextKey()
+
+function setFetchButtonState(enabled, label) {
+  var btn = document.getElementById('btnFetchUsno');
+  btn.disabled = !enabled;
+  btn.textContent = label;
+}
+
+/** Called by Section 3's own field listeners -- marks whatever's there now as deliberately valid for the current context. */
+function markAlmanacFieldsManuallyEdited() {
+  _almanacFieldsContext = currentAlmanacContextKey();
+}
+
+function tryAutoFillAlmanacFromCache() {
+  var box = document.getElementById('almanacInterpBox');
+  var bodyType = document.getElementById('bodyType').value;
+
+  if (!getAlmanacFetchReadiness(bodyType)) {
+    setFetchButtonState(false, 'Download data');
+    box.classList.remove('summary-box-error');
+    setUsnoStatus('', '');
+    _autoFillLoopGuard = { signature: null, count: 0 };
     return;
   }
 
-  var rows = document.querySelectorAll('.sighting-item');
-  for (var i = 0; i < rows.length; i++) {
-    var row = rows[i];
-    var hVal = row.querySelector('.t-h').value.trim();
-    var mVal = row.querySelector('.t-m').value.trim();
-    var sVal = row.querySelector('.t-s').value.trim();
-    if (hVal === '' || mVal === '' || sVal === '') {
-      alert('Please enter a complete time (Hours, Minutes, and Seconds) for all sightings.');
-      return;
-    }
+  var currentContext = currentAlmanacContextKey();
+  var almanacIds = getAlmanacFieldIds(bodyType);
+  var isComplete = allFilled(almanacIds);      // every field has something
+  var hasAnyValue = almanacFieldsAnyFilled(bodyType); // at least one does -- used only for context tracking
+
+  if (hasAnyValue && _almanacFieldsContext === null) {
+    // First time this session we're tracking context -- treat whatever's
+    // already there (e.g. a freshly-loaded sighting) as the established
+    // baseline rather than immediately flagging it stale.
+    _almanacFieldsContext = currentContext;
+  }
+
+  var isStale = hasAnyValue && _almanacFieldsContext !== currentContext;
+
+  if (isComplete && !isStale) {
+    // Every field is filled AND still correct for the current date/body/time.
+    setFetchButtonState(false, 'Fill with cached data');
+    box.classList.remove('summary-box-error');
+    setUsnoStatus('', '');
+    _autoFillLoopGuard = { signature: null, count: 0 };
+    return;
   }
 
   var state = collectFormState();
+  var position = getAssumedPositionSigned();
+  var avg = SightCalc.averageObservations(state.observations);
+  var avgUtcSec = SightCalc.utcSecondsFromLocal(getClockErrorCorrectedLocalSec(avg.avgLocalSec), state.position.tzOffset);
+  var dateInput = document.getElementById('sightDate').value;
+  var baseUtcDate = new Date(dateInput + 'T00:00:00Z');
+  baseUtcDate.setUTCSeconds(baseUtcDate.getUTCSeconds() + avgUtcSec);
+  baseUtcDate.setUTCMinutes(0, 0, 0); // floor to the top of the bracketing hour
+  var nextUtcDate = new Date(baseUtcDate.getTime() + 3600 * 1000);
 
-  if (state.body.type === 'planet' && !state.body.name) {
-    alert('Please select a planet from the dropdown.');
+  SightUsno.getAlmanacFillFromCacheOnly(state.body, baseUtcDate, nextUtcDate)
+    .then(function (result) {
+      if (!getAlmanacFetchReadiness(bodyType)) return;
+
+      // Recompute fresh -- the context or the fields themselves may have
+      // moved on while this lookup was in flight.
+      var contextNow = currentAlmanacContextKey();
+      var isCompleteNow = allFilled(almanacIds);
+      var hasAnyValueNow = almanacFieldsAnyFilled(bodyType);
+      var isStaleNow = hasAnyValueNow && _almanacFieldsContext !== contextNow;
+      if (isCompleteNow && !isStaleNow) return; // already resolved in the meantime
+
+      var cached = !!result;
+      var autoFillOn = document.getElementById('toggleAutoFillCache').checked;
+
+      if (!(autoFillOn && cached)) {
+        box.classList.toggle('summary-box-error', (autoFillOn && !cached) || (isStaleNow && !autoFillOn));
+
+        var label = (autoFillOn && !cached) ? 'Download data'
+          : cached ? 'Fill with cached data'
+          : 'Download data and fill fields';
+        setFetchButtonState(true, label);
+
+        if (isStaleNow && !autoFillOn) {
+          setUsnoStatus('Section 3 no longer matches the current date, body, or time \u2014 tap "' + label + '" to update it.', 'error');
+        } else if (autoFillOn && !cached) {
+          setUsnoStatus('Not cached for this hour \u2014 tap Download to fetch from USNO.', '');
+        } else {
+          setUsnoStatus('', '');
+        }
+        _autoFillLoopGuard = { signature: null, count: 0 };
+        return;
+      }
+
+      // toggle on + cached -> auto-overwrite.
+      //
+      // Safety net: this reactive chain (applyUsnoFill -> refreshLiveCalculations
+      // -> tryAutoFillAlmanacFromCache -> cache hit -> applyUsnoFill -> ...) is
+      // supposed to always converge, since a successful fill marks the
+      // context valid and isStale becomes false on the next pass. If the
+      // exact same context ends up asking for another auto-overwrite several
+      // times in a row, something isn't actually resolving -- stop retrying
+      // automatically instead of spinning forever.
+      var signature = bodyType + '|' + contextNow;
+      if (_autoFillLoopGuard.signature === signature) {
+        _autoFillLoopGuard.count++;
+      } else {
+        _autoFillLoopGuard = { signature: signature, count: 1 };
+      }
+      if (_autoFillLoopGuard.count > 3) {
+        setFetchButtonState(true, 'Download data');
+        box.classList.add('summary-box-error');
+        setUsnoStatus('Auto-fill isn\u2019t able to complete this automatically \u2014 tap Download, or check the almanac fields manually.', 'error');
+        return;
+      }
+
+      applyUsnoFill(bodyType, result.fill); // overwrites, marks context valid, re-runs refreshLiveCalculations()
+      setFetchButtonState(false, 'Fill with cached data');
+      box.classList.remove('summary-box-error');
+      setUsnoStatus('Filled from cache.', 'ok');
+    })
+    .catch(function (err) {
+      console.error(err);
+      setFetchButtonState(true, 'Download data');
+      box.classList.add('summary-box-error');
+    });
+}
+
+/**
+ * Stage B: runs the full reduction the moment all the inputs it needs are
+ * present and valid, and populates both the Section 3 interpolation box and
+ * the Sight Reduction Results card. Resets both to their placeholder state
+ * (rather than erroring) when something's still missing -- there's no
+ * button click to gate on anymore, so a mid-typing form is a normal state,
+ * not an error.
+ */
+function tryAutoCalculateReduction() {
+  var state = collectFormState();
+
+  if (!getCalcReadiness(state.body.type)) {
+    resetInterpAndResultsDisplay();
     return;
   }
 
   var avg = SightCalc.averageObservations(state.observations);
-  if (!avg) return;
+  if (!avg) { resetInterpAndResultsDisplay(); return; }
 
   var ho = SightCalc.computeHo(avg.avgHsDeg, state.corrections);
-  var avgUtcSec = SightCalc.utcSecondsFromLocal(avg.avgLocalSec, state.position.tzOffset);
+  var avgUtcSec = SightCalc.utcSecondsFromLocal(getClockErrorCorrectedLocalSec(avg.avgLocalSec), state.position.tzOffset);
 
   var built = buildCalcInput(state, avg, ho, avgUtcSec);
   var result = SightCalc.reduceSight(built.input);
@@ -681,14 +972,15 @@ function calculateSight() {
   document.getElementById('resGHA').innerText = SightCalc.formatDegMin(result.interpolatedGha);
   document.getElementById('resDec').innerText = decFormatted;
   document.getElementById('resLHA').innerText = SightCalc.formatDegMin(result.lha);
+  document.getElementById('almanacInterpBox').classList.remove('summary-box-error');
+
   document.getElementById('resHc').innerText = SightCalc.formatDegMin(result.hc);
-  document.getElementById('resAP').innerText = apString;
   document.getElementById('resIntercept').innerText = interceptText;
   document.getElementById('resZn').innerText = Math.round(result.zn).toString().padStart(3, '0') + '\u00B0';
 
   document.getElementById('outputCard').style.display = 'block';
 
-  renderChart(state, result, apString);
+  renderChart(state, result, apString, built);
 
   // The exact UTC instant the averaged sighting corresponds to (same
   // construction used elsewhere to bracket the almanac hour).
@@ -713,28 +1005,34 @@ function calculateSight() {
   };
 }
 
-function formatBodyLabel(body) {
-  if (!body) return 'Body';
-  if (body.type === 'star' || body.type === 'planet') {
-    return body.name ? (body.type.charAt(0).toUpperCase() + body.type.slice(1) + ' ' + body.name) : body.type;
-  }
-  return body.type.charAt(0).toUpperCase() + body.type.slice(1);
+/** The single entry point every relevant input listener calls. */
+function refreshLiveCalculations() {
+  updateAverages();
+  tryAutoFillAlmanacFromCache();
+  tryAutoCalculateReduction();
 }
 
-function renderChart(state, result, apString) {
+function formatBodyLabel(body) {
+  return SightCalc.formatBodyLabel(body);
+}
+
+function renderChart(state, result, apString, built) {
   var container = document.getElementById('chartContainer');
   var bodyLabel = formatBodyLabel(state.body);
+  var lonSigned = (state.position.lonEW === 'W') ? -built.lonTotal : built.lonTotal;
 
   var chartInfo = SightChart.renderSightChart(container, {
     zn: result.zn,
     interceptNM: result.interceptNM,
+    apLat: built.lat,
+    apLon: lonSigned,
     apLabel: apString,
     bodyLabel: bodyLabel
   });
 
   document.getElementById('chartCaption').innerText =
     'AP ' + apString + '  \u00B7  Zn ' + chartInfo.znLabel + '  \u00B7  Intercept ' + chartInfo.interceptText +
-    '  \u00B7  Range ring = ' + chartInfo.scaleNM + ' nm';
+    '  \u00B7  Grid edge = ' + chartInfo.scaleNM + ' nm';
 
   document.getElementById('chartCard').style.display = 'block';
 }
@@ -749,17 +1047,17 @@ function clearAllData() {
   document.getElementById('dipMin').value = '0.0';
   document.getElementById('altCorrMin').value = '0.0';
   document.getElementById('addAltCorrMin').value = '0.0';
+  document.getElementById('clockErrorSec').value = '0';
   document.getElementById('tzOffset').value = '-4';
   document.getElementById('sightingsContainer').innerHTML = '';
   sightingCount = 0;
   addSightingLine(false);
-  document.getElementById('outputCard').style.display = 'none';
-  document.getElementById('chartCard').style.display = 'none';
-  window._lastResult = null;
-  window._lastResultDisplay = null;
   window._currentRecordId = null;
-  updateAverages();
+  _almanacFieldsContext = null;
+  _autoFillLoopGuard = { signature: null, count: 0 };
+  setClockErrorDirection('fast');
   updateHeaders();
+  refreshLiveCalculations();
 }
 
 // ---------------------------------------------------------------------
@@ -781,33 +1079,39 @@ function flashField(id) {
   el.classList.add('autofilled-flash');
 }
 
-function applyUsnoFill(bodyType, fill) {
-  var setDM = function (degId, minId, decimalDeg) {
-    var dm = SightCalc.decimalToDM(decimalDeg);
-    document.getElementById(degId).value = dm.deg;
-    document.getElementById(minId).value = dm.min.toFixed(1);
-  };
+/**
+ * Fills one GHA/SHA (no sign) or Dec (with N/S sign) field-group from USNO
+ * data. Always overwrites, even if the field already has a value -- both an
+ * automatic cache-fill (checkbox on) and the explicit Download/Fill button
+ * are a deliberate "replace what's there" trigger, not a "top up the
+ * blanks" one.
+ */
+function fillDegMin(degId, minId, signId, decimalDeg, signValue) {
+  var dm = SightCalc.decimalToDM(decimalDeg);
+  document.getElementById(degId).value = dm.deg;
+  document.getElementById(minId).value = dm.min.toFixed(1);
+  flashField(degId);
+  flashField(minId);
+  if (signId) document.getElementById(signId).value = signValue;
+}
 
+/** Overwrites all of this body type's almanac fields with USNO data and marks Section 3 valid for the current context. */
+function applyUsnoFill(bodyType, fill) {
   if (bodyType === 'star') {
-    setDM('ghaAriesBaseDeg', 'ghaAriesBaseMin', fill.ghaAriesBaseDeg);
-    setDM('ghaAriesNextDeg', 'ghaAriesNextMin', fill.ghaAriesNextDeg);
-    setDM('shaDeg', 'shaMin', fill.shaDeg);
-    setDM('decStarDeg', 'decStarMin', fill.decDeg);
-    document.getElementById('decStarNS').value = fill.decSign;
-    ['ghaAriesBaseDeg', 'ghaAriesBaseMin', 'ghaAriesNextDeg', 'ghaAriesNextMin',
-     'shaDeg', 'shaMin', 'decStarDeg', 'decStarMin'].forEach(flashField);
+    fillDegMin('ghaAriesBaseDeg', 'ghaAriesBaseMin', null, fill.ghaAriesBaseDeg);
+    fillDegMin('ghaAriesNextDeg', 'ghaAriesNextMin', null, fill.ghaAriesNextDeg);
+    fillDegMin('shaDeg', 'shaMin', null, fill.shaDeg);
+    fillDegMin('decStarDeg', 'decStarMin', 'decStarNS', fill.decDeg, fill.decSign);
   } else {
-    setDM('ghaBaseDeg', 'ghaBaseMin', fill.ghaBaseDeg);
-    setDM('ghaNextDeg', 'ghaNextMin', fill.ghaNextDeg);
-    setDM('decBaseDeg', 'decBaseMin', fill.decBaseDeg);
-    document.getElementById('decBaseNS').value = fill.decBaseSign;
-    setDM('decNextDeg', 'decNextMin', fill.decNextDeg);
-    document.getElementById('decNextNS').value = fill.decNextSign;
-    ['ghaBaseDeg', 'ghaBaseMin', 'ghaNextDeg', 'ghaNextMin',
-     'decBaseDeg', 'decBaseMin', 'decNextDeg', 'decNextMin'].forEach(flashField);
+    fillDegMin('ghaBaseDeg', 'ghaBaseMin', null, fill.ghaBaseDeg);
+    fillDegMin('ghaNextDeg', 'ghaNextMin', null, fill.ghaNextDeg);
+    fillDegMin('decBaseDeg', 'decBaseMin', 'decBaseNS', fill.decBaseDeg, fill.decBaseSign);
+    fillDegMin('decNextDeg', 'decNextMin', 'decNextNS', fill.decNextDeg, fill.decNextSign);
   }
 
-  updateAverages(); // refreshes the "Xh UTC" hour labels and Ho display
+  _almanacFieldsContext = currentAlmanacContextKey();
+  refreshLiveCalculations(); // refreshes hour labels/Ho AND runs the reduction now that almanac data is in
+  return getAlmanacFieldIds(bodyType).length / 2; // always overwrites every field-group for this body type
 }
 
 /**
@@ -835,21 +1139,15 @@ function onFetchUsno() {
   var btn = document.getElementById('btnFetchUsno');
   var state = collectFormState();
 
+  var missing = [];
+  if (!document.getElementById('sightDate').value) missing.push('the date (Section 1)');
+
   var latEntered = document.getElementById('latDeg').value.trim() !== '' || document.getElementById('latMin').value.trim() !== '';
   var lonEntered = document.getElementById('lonDeg').value.trim() !== '' || document.getElementById('lonMin').value.trim() !== '';
-  if (!latEntered || !lonEntered) {
-    setUsnoStatus('Enter your assumed position (Section 1) first.', 'error');
-    return;
-  }
+  if (!latEntered || !lonEntered) missing.push('your assumed position (Section 1)');
 
-  if (state.body.type === 'planet' && !state.body.name) {
-    setUsnoStatus('Select a planet first.', 'error');
-    return;
-  }
-  if (state.body.type === 'star' && !state.body.name) {
-    setUsnoStatus('Enter the star name first.', 'error');
-    return;
-  }
+  if (state.body.type === 'planet' && !state.body.name) missing.push('a planet selection (Section 2)');
+  if (state.body.type === 'star' && !state.body.name) missing.push('the star name (Section 2)');
 
   var rows = document.querySelectorAll('.sighting-item');
   var hasCompleteTime = rows.length > 0 && Array.prototype.every.call(rows, function (row) {
@@ -858,15 +1156,19 @@ function onFetchUsno() {
            row.querySelector('.t-s').value.trim() !== '';
   });
   var avg = SightCalc.averageObservations(state.observations);
-  if (!avg || !hasCompleteTime) {
-    setUsnoStatus('Enter at least one complete sighting time (Section 2) first, so we know which hour to fetch.', 'error');
+  if (!avg || !hasCompleteTime) missing.push('a complete sighting time \u2014 Hours, Minutes, and Seconds (Section 2)');
+
+  if (document.querySelectorAll('.input-error').length > 0) missing.push('valid values for the field(s) currently outlined in red');
+
+  if (missing.length) {
+    setUsnoStatus('Can\u2019t fetch almanac data yet \u2014 still missing: ' + missing.join('; ') + '.', 'error');
     return;
   }
 
   var position = getAssumedPositionSigned();
-  var avgUtcSec = SightCalc.utcSecondsFromLocal(avg.avgLocalSec, state.position.tzOffset);
+  var avgUtcSec = SightCalc.utcSecondsFromLocal(getClockErrorCorrectedLocalSec(avg.avgLocalSec), state.position.tzOffset);
   var dateInput = document.getElementById('sightDate').value;
-  var baseUtcDate = dateInput ? new Date(dateInput + 'T00:00:00Z') : new Date();
+  var baseUtcDate = new Date(dateInput + 'T00:00:00Z');
   baseUtcDate.setUTCSeconds(baseUtcDate.getUTCSeconds() + avgUtcSec);
   baseUtcDate.setUTCMinutes(0, 0, 0); // floor to the top of the bracketing hour
   var nextUtcDate = new Date(baseUtcDate.getTime() + 3600 * 1000);
@@ -879,14 +1181,13 @@ function onFetchUsno() {
   // (and backfills the cache) only for whatever isn't already cached.
   SightUsno.getAlmanacFillWithCache(state.body, baseUtcDate, nextUtcDate, position.lat, position.lon)
     .then(function (result) {
-      applyUsnoFill(state.body.type, result.fill);
-      setUsnoStatus(
-        'Filled ' + (result.fromCache ? 'from cache' : 'from USNO') + ' for ' + formatBodyLabel(state.body) + ', hour ' +
+      var filledGroups = applyUsnoFill(state.body.type, result.fill);
+      var msg = 'Filled ' + filledGroups + ' field' + (filledGroups === 1 ? '' : 's') + ' ' +
+        (result.fromCache ? 'from cache' : 'from USNO') + ' for ' + formatBodyLabel(state.body) + ', hour ' +
         String(baseUtcDate.getUTCHours()).padStart(2, '0') + '\u2013' +
         String(nextUtcDate.getUTCHours()).padStart(2, '0') + 'z on ' +
-        baseUtcDate.toISOString().split('T')[0] + '.',
-        'ok'
-      );
+        baseUtcDate.toISOString().split('T')[0] + '.';
+      setUsnoStatus(msg, 'ok');
       showToast('Almanac data filled' + (result.fromCache ? ' (from cache).' : '.'));
       refreshCacheSummary();
     })
@@ -897,9 +1198,14 @@ function onFetchUsno() {
         msg += ' You appear to be offline and this hour isn\u2019t cached yet \u2014 download it in advance with the Offline Almanac Cache section below, or enter the data manually.';
       }
       setUsnoStatus(msg, 'error');
-    })
-    .finally(function () {
-      btn.disabled = false;
+      // applyUsnoFill (which re-derives button/outline state on its own)
+      // never ran on this path, so the button's still stuck disabled from
+      // the start of this function -- re-derive it here. (On success this
+      // isn't needed -- and used to double-run here via .finally(), which
+      // was clobbering the "Filled N fields..." message right after it was
+      // set, since a fresh check immediately finds everything valid again
+      // and clears the status text.)
+      tryAutoFillAlmanacFromCache();
     });
 }
 

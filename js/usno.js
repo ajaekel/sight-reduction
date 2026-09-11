@@ -12,8 +12,12 @@
  * different quantity. Mixing the two would quietly corrupt the intercept
  * math, so that step stays manual.
  *
- * This module never runs unless the user explicitly clicks a fetch/cache
- * button; the rest of the app works fully offline without it.
+ * This module's live-fetch paths (fetchAlmanacFill, getAlmanacFillWithCache's
+ * network fallback, fetchAndCacheRange) only ever run from an explicit user
+ * action -- clicking "Auto-fill" or "Download & Cache Range". The cache-only
+ * path (getAlmanacFillFromCacheOnly) is safe to call reactively/automatically
+ * since it never reaches the network; the rest of the app works fully
+ * offline without any of this.
  *
  * Data shape used throughout (both freshly-fetched and cached):
  *   normalized map = { [lowercaseName]: { name, gha, dec } }
@@ -30,6 +34,8 @@
  *   - fetchAndCacheRange()   -- orchestrates a batch fetch into AlmanacCache
  *   - getAlmanacFillWithCache() -- single-sight entry point: cache first,
  *                                   live fetch as fallback (and backfills cache)
+ *   - getAlmanacFillFromCacheOnly() -- same lookup, but never touches the
+ *                                       network; used for automatic/reactive fill
  */
 (function (global) {
   'use strict';
@@ -233,6 +239,25 @@
   }
 
   /**
+   * Cache-only lookup: same result shape as getAlmanacFillWithCache, but
+   * NEVER touches the network -- not even on a miss. Used by the automatic/
+   * reactive fill path so that typing in the form can't silently trigger a
+   * live fetch; only the explicit "Auto-fill" button does that. Resolves
+   * null (not a rejected promise) when either bracketing hour isn't cached.
+   */
+  function getAlmanacFillFromCacheOnly(body, baseHourUtcDate, nextHourUtcDate) {
+    return Promise.all([
+      global.AlmanacCache.getHour(baseHourUtcDate),
+      global.AlmanacCache.getHour(nextHourUtcDate)
+    ]).then(function (cached) {
+      var baseCached = cached[0];
+      var nextCached = cached[1];
+      if (!baseCached || !nextCached) return null;
+      return { fill: assembleFill(body, baseCached, nextCached), fromCache: true };
+    });
+  }
+
+  /**
    * Fetches one UTC hour at a time across the range and stores each into
    * AlmanacCache, sequentially (polite to USNO's free service, and makes
    * progress reporting straightforward). Individual hour failures are
@@ -288,6 +313,7 @@
   global.SightUsno = {
     fetchAlmanacFill: fetchAlmanacFill,
     getAlmanacFillWithCache: getAlmanacFillWithCache,
+    getAlmanacFillFromCacheOnly: getAlmanacFillFromCacheOnly,
     fetchAndCacheRange: fetchAndCacheRange,
     assembleFill: assembleFill,             // exported for unit testing
     normalizeUsnoData: normalizeUsnoData,   // exported for unit testing
