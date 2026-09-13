@@ -19,6 +19,14 @@
  * since it never reaches the network; the rest of the app works fully
  * offline without any of this.
  *
+ * USNO's API docs don't publish a rate limit for this endpoint, and there's
+ * no bulk/date-range query for it (unlike some of their other services) --
+ * so fetchAndCacheRange makes one request per hour, paced with a short delay
+ * between requests, with backoff-and-retry for transient failures and
+ * specific handling for HTTP 429 (pause and honor Retry-After if given,
+ * rather than plowing through the rest of the batch). See its own comment
+ * for the exact policy.
+ *
  * Data shape used throughout (both freshly-fetched and cached):
  *   normalized map = { [lowercaseName]: { name, gha, dec } }
  * GHA/Dec are geocentric almanac values, the same for every observer on
@@ -156,7 +164,22 @@
     return fetch(url, controller ? { signal: controller.signal } : undefined)
       .then(function (resp) {
         if (timeoutId) clearTimeout(timeoutId);
-        if (!resp.ok) throw new Error('USNO server returned HTTP ' + resp.status + '.');
+        if (!resp.ok) {
+          var httpErr = new Error('USNO server returned HTTP ' + resp.status + '.');
+          httpErr.httpStatus = resp.status;
+          // 5xx is the server's own problem, worth a couple of quiet retries;
+          // 4xx (aside from 429) means our request itself is wrong and
+          // retrying it verbatim would just repeat the same failure.
+          httpErr.retryable = resp.status >= 500;
+          if (resp.status === 429) {
+            httpErr.isRateLimited = true;
+            httpErr.retryable = true;
+            var retryAfter = resp.headers && resp.headers.get && resp.headers.get('Retry-After');
+            var retrySec = retryAfter ? parseInt(retryAfter, 10) : NaN;
+            if (!isNaN(retrySec)) httpErr.retryAfterMs = retrySec * 1000;
+          }
+          throw httpErr;
+        }
         return resp.json();
       })
       .then(function (json) {
@@ -168,7 +191,14 @@
       .catch(function (err) {
         if (timeoutId) clearTimeout(timeoutId);
         if (err && err.name === 'AbortError') {
-          throw new Error('Request to USNO timed out. Check your connection and try again.');
+          var timeoutErr = new Error('Request to USNO timed out. Check your connection and try again.');
+          timeoutErr.retryable = true; // transient -- a slow/dropped connection, not a bad request
+          throw timeoutErr;
+        }
+        // A raw network failure (offline, DNS, CORS, connection reset) surfaces
+        // as a TypeError from fetch() itself, with none of our flags set yet.
+        if (err instanceof TypeError && err.retryable === undefined) {
+          err.retryable = true;
         }
         throw err;
       });
@@ -257,12 +287,32 @@
     });
   }
 
+  var REQUEST_DELAY_MS = 200;          // polite pacing between consecutive requests in a batch
+  var MAX_RETRIES_PER_HOUR = 2;        // for transient (5xx/timeout/network) failures
+  var RETRY_BACKOFF_MS = 1000;
+  var MAX_RATE_LIMIT_BACKOFFS = 3;     // cap on how many times we'll wait-and-retry a single hour after a 429
+  var RATE_LIMIT_BASE_BACKOFF_MS = 3000;
+
+  function sleep(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+
   /**
    * Fetches one UTC hour at a time across the range and stores each into
-   * AlmanacCache, sequentially (polite to USNO's free service, and makes
-   * progress reporting straightforward). Individual hour failures are
-   * logged and skipped rather than aborting the whole batch -- rerunning
-   * the same range afterward safely fills any gaps (setHour overwrites).
+   * AlmanacCache, sequentially with a short pause between requests (polite
+   * to USNO's free service, and makes progress reporting straightforward).
+   *
+   * Transient failures (timeouts, network errors, 5xx) get a couple of
+   * quiet retries with backoff; a 4xx (other than 429) is treated as
+   * permanent, since retrying the identical request would just repeat it.
+   * A 429 (rate limited) pauses and retries that hour specifically --
+   * honoring a Retry-After header if the server sent one -- with its own
+   * capped backoff so a server that keeps saying "slow down" doesn't turn
+   * into an unbounded wait loop.
+   *
+   * Individual hour failures (after retries are exhausted) are logged and
+   * skipped rather than aborting the whole batch -- rerunning the same
+   * range afterward safely fills any gaps (setHour overwrites).
    *
    * onProgress(doneCount, total, failedCount) is called after every hour.
    * Returns a Promise resolving to { total, succeeded, failed }.
@@ -285,15 +335,33 @@
     var succeeded = 0;
     var failed = 0;
 
+    function attemptHour(utcDate, retriesLeft, rateLimitBackoffsLeft) {
+      return fetchCelnavAt(utcDate, latDecimal, lonDecimal)
+        .then(function (raw) {
+          return global.AlmanacCache.setHour(utcDate, normalizeUsnoData(raw));
+        })
+        .catch(function (err) {
+          if (err && err.isRateLimited && rateLimitBackoffsLeft > 0) {
+            var waitMs = err.retryAfterMs || (RATE_LIMIT_BASE_BACKOFF_MS * (MAX_RATE_LIMIT_BACKOFFS - rateLimitBackoffsLeft + 1));
+            return sleep(waitMs).then(function () {
+              return attemptHour(utcDate, retriesLeft, rateLimitBackoffsLeft - 1);
+            });
+          }
+          if (err && err.retryable && !err.isRateLimited && retriesLeft > 0) {
+            return sleep(RETRY_BACKOFF_MS).then(function () {
+              return attemptHour(utcDate, retriesLeft - 1, rateLimitBackoffsLeft);
+            });
+          }
+          throw err; // permanent failure, or every retry/backoff budget is spent
+        });
+    }
+
     function step(i) {
       if (i >= hours.length) {
         return Promise.resolve({ total: total, succeeded: succeeded, failed: failed });
       }
       var utcDate = hours[i];
-      return fetchCelnavAt(utcDate, latDecimal, lonDecimal)
-        .then(function (raw) {
-          return global.AlmanacCache.setHour(utcDate, normalizeUsnoData(raw));
-        })
+      return attemptHour(utcDate, MAX_RETRIES_PER_HOUR, MAX_RATE_LIMIT_BACKOFFS)
         .then(function () {
           succeeded++;
         })
@@ -303,7 +371,7 @@
         })
         .then(function () {
           if (onProgress) onProgress(i + 1, total, failed);
-          return step(i + 1);
+          return sleep(REQUEST_DELAY_MS).then(function () { return step(i + 1); });
         });
     }
 

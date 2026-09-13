@@ -1,11 +1,5 @@
 # Roadmap
 
-## Add a page for managing data
-
-* [ ] User can see how many MBs per data type (Almanac Data, sightings, fixes, other?)
-* [ ] User can selectively delete cached data
-
-
 ## Add autofill
 
 * [X] Add button to retrieve data with USNO API call
@@ -30,7 +24,7 @@
 
 ## Miscellaneous
 
-* [ ] Add a clock error correction
+* [X] Add a clock error correction
 
 * [ ] Calculate sunset for the AP
 
