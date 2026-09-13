@@ -1263,6 +1263,26 @@ function onCacheRange() {
     return;
   }
 
+  // Surfaces the real cost of a large range before committing to it --
+  // USNO's celnav endpoint has no bulk/date-range query, so this is
+  // genuinely one HTTP request per hour. Small ranges (a day or so) just
+  // proceed; anything bigger asks first.
+  var hourCount;
+  try {
+    hourCount = SightUsno.eachUtcHourInRange(from, to).length;
+  } catch (e) {
+    hourCount = null;
+  }
+  if (hourCount && hourCount > 24) {
+    var days = Math.round(hourCount / 24);
+    if (!confirm(
+      'This will make about ' + hourCount + ' requests to the USNO server (roughly one per hour across ~' + days + ' days). ' +
+      'It\u2019ll take a little while and is paced to be polite to their free service. Continue?'
+    )) {
+      return;
+    }
+  }
+
   var position = getAssumedPositionSigned();
 
   btn.disabled = true;
