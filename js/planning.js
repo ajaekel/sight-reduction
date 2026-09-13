@@ -24,7 +24,8 @@ document.addEventListener('DOMContentLoaded', function () {
     'planDate', 'planTzOffset', 'planLatDeg', 'planLatMin', 'planLatNS', 'planLonDeg', 'planLonMin', 'planLonEW',
     'refLatBelow', 'refLatAbove',
     'sunriseTimeBelow', 'sunriseTimeAbove', 'sunsetTimeBelow', 'sunsetTimeAbove', 'sunTransitTime',
-    'moonriseTimeBelow', 'moonriseTimeAbove', 'moonsetTimeBelow', 'moonsetTimeAbove', 'moonTransitTime'
+    'moonriseTimeBelow', 'moonriseTimeAbove', 'moonsetTimeBelow', 'moonsetTimeAbove', 'moonTransitTime',
+    'moonriseTimeBelowAdj', 'moonriseTimeAboveAdj', 'moonsetTimeBelowAdj', 'moonsetTimeAboveAdj', 'moonTransitTimeAdj'
   ];
   reactiveIds.forEach(function (id) {
     var el = document.getElementById(id);
@@ -105,17 +106,40 @@ function setPlanningMode(mode) {
 // Manual mode -- fully reactive, no network involved at all.
 // ---------------------------------------------------------------------
 
-function computeManualRiseSet(belowId, aboveId, refBelow, refAbove, apLat, lon, tz) {
+/**
+ * adjBelowId/adjAboveId are optional -- when both are filled in, they're
+ * treated as the adjacent Greenwich date's tabulated times (following date
+ * if the AP is in west longitude, preceding date if east -- see
+ * applyMoonLongitudeCorrection's comment) and used to correct for the body's
+ * day-to-day drift. Pass them for Moon events; omit for the Sun, whose drift
+ * is negligible.
+ */
+function computeManualRiseSet(belowId, aboveId, refBelow, refAbove, apLat, lon, tz, adjBelowId, adjAboveId) {
   var tBelow = parseTimeField(belowId);
   var tAbove = parseTimeField(aboveId);
   if (tBelow === null || tAbove === null || isNaN(refBelow) || isNaN(refAbove)) return null;
   var lmt = SightCalc.interpolateByLatitude(refBelow, tBelow, refAbove, tAbove, apLat);
+
+  if (adjBelowId && adjAboveId) {
+    var adjBelow = parseTimeField(adjBelowId);
+    var adjAbove = parseTimeField(adjAboveId);
+    if (adjBelow !== null && adjAbove !== null) {
+      var adjLmt = SightCalc.interpolateByLatitude(refBelow, adjBelow, refAbove, adjAbove, apLat);
+      lmt = SightCalc.applyMoonLongitudeCorrection(lon, lmt, adjLmt);
+    }
+  }
+
   return SightCalc.manualEventToZoneTime(lmt, lon, tz);
 }
 
-function computeManualTransit(fieldId, lon, tz) {
+/** adjFieldId is optional -- see computeManualRiseSet's note on adjacent-day fields. */
+function computeManualTransit(fieldId, lon, tz, adjFieldId) {
   var t = parseTimeField(fieldId);
   if (t === null) return null;
+  if (adjFieldId) {
+    var adj = parseTimeField(adjFieldId);
+    if (adj !== null) t = SightCalc.applyMoonLongitudeCorrection(lon, t, adj);
+  }
   return SightCalc.manualEventToZoneTime(t, lon, tz);
 }
 
@@ -130,9 +154,9 @@ function refreshManualResults() {
   setResult('resSunrise', computeManualRiseSet('sunriseTimeBelow', 'sunriseTimeAbove', refBelow, refAbove, pos.lat, pos.lon, tz));
   setResult('resSunset', computeManualRiseSet('sunsetTimeBelow', 'sunsetTimeAbove', refBelow, refAbove, pos.lat, pos.lon, tz));
   setResult('resSunTransit', computeManualTransit('sunTransitTime', pos.lon, tz));
-  setResult('resMoonrise', computeManualRiseSet('moonriseTimeBelow', 'moonriseTimeAbove', refBelow, refAbove, pos.lat, pos.lon, tz));
-  setResult('resMoonset', computeManualRiseSet('moonsetTimeBelow', 'moonsetTimeAbove', refBelow, refAbove, pos.lat, pos.lon, tz));
-  setResult('resMoonTransit', computeManualTransit('moonTransitTime', pos.lon, tz));
+  setResult('resMoonrise', computeManualRiseSet('moonriseTimeBelow', 'moonriseTimeAbove', refBelow, refAbove, pos.lat, pos.lon, tz, 'moonriseTimeBelowAdj', 'moonriseTimeAboveAdj'));
+  setResult('resMoonset', computeManualRiseSet('moonsetTimeBelow', 'moonsetTimeAbove', refBelow, refAbove, pos.lat, pos.lon, tz, 'moonsetTimeBelowAdj', 'moonsetTimeAboveAdj'));
+  setResult('resMoonTransit', computeManualTransit('moonTransitTime', pos.lon, tz, 'moonTransitTimeAdj'));
 }
 
 // ---------------------------------------------------------------------

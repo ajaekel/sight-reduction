@@ -161,6 +161,41 @@
   }
 
   /**
+   * Nautical Almanac "Table II" longitude correction for Moonrise, Moonset,
+   * and Moon Meridian Passage. Unlike the Sun (which drifts under a minute a
+   * day and is fine to ignore), the Moon's rise/set/transit LMT drifts by an
+   * average of ~50 minutes a day, so an observer far from Greenwich needs to
+   * interpolate between the tabulated LMT for their own date and the LMT for
+   * the adjacent Greenwich date -- the FOLLOWING date if in west longitude,
+   * or the PRECEDING date if in east longitude (see Bowditch/American
+   * Practical Navigator Vol. 1, Ch. 19, "Longitude Correction", and the
+   * Nautical Almanac's own "Tables for Interpolating Sunrise, Moonrise,
+   * etc.", Table II). This function is agnostic to which calendar day
+   * adjacentLmtSec actually represents -- the caller must supply the correct
+   * one for the observer's hemisphere; only the sign of lonSignedDecimal
+   * determines whether the correction is added (west) or subtracted (east),
+   * matching the almanac's own sign convention.
+   *
+   * todayLmtSec should already be latitude-interpolated for rise/set (via
+   * interpolateByLatitude), or the transit LMT directly (no latitude
+   * dependence there); adjacentLmtSec is the equivalent quantity for the
+   * adjacent date. Returns todayLmtSec unchanged if adjacentLmtSec is not
+   * supplied, so the correction is opt-in.
+   */
+  function applyMoonLongitudeCorrection(lonSignedDecimal, todayLmtSec, adjacentLmtSec) {
+    if (adjacentLmtSec === null || adjacentLmtSec === undefined || isNaN(adjacentLmtSec)) return todayLmtSec;
+    var diff = adjacentLmtSec - todayLmtSec;
+    // The daily drift is well under an hour, so a raw difference bigger than
+    // half a day means the two tabulated times straddle midnight (e.g. today
+    // at 23:52, adjacent day at 00:41) rather than a real ~24h jump.
+    if (diff > 12 * 3600) diff -= 24 * 3600;
+    if (diff < -12 * 3600) diff += 24 * 3600;
+    var fraction = Math.abs(lonSignedDecimal) / 360;
+    var corr = fraction * diff;
+    return todayLmtSec + (lonSignedDecimal < 0 ? corr : -corr);
+  }
+
+  /**
    * Interpolate a GHA-like value (0-360, wraps at the hour boundary) across the
    * fraction of the hour that has elapsed.
    */
@@ -599,6 +634,7 @@
     interpolateByLatitude: interpolateByLatitude,
     utcFromLmtSeconds: utcFromLmtSeconds,
     manualEventToZoneTime: manualEventToZoneTime,
+    applyMoonLongitudeCorrection: applyMoonLongitudeCorrection,
     interpolateGha: interpolateGha,
     interpolateLinear: interpolateLinear,
     reduceSight: reduceSight,

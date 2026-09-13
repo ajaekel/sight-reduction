@@ -151,6 +151,35 @@
         <input type="time" id="moonTransitTime">
       </div>
     </div>
+
+    <p class="cache-blurb" style="margin-top:16px;">
+      <strong>Moon longitude correction (optional).</strong> Unlike the Sun, the Moon's tabulated
+      rise/set/transit time drifts by up to ~1 hour a day, which matters once you're any real
+      distance from Greenwich. To correct for it, also enter the Moon's tabulated time for the
+      <em>adjacent</em> Greenwich date -- the <strong>following</strong> date if your AP is in West
+      longitude, or the <strong>preceding</strong> date if East. Leave these blank to skip the
+      correction (matches the old behavior).
+    </p>
+    <div class="planning-manual-grid">
+      <div class="form-group">
+        <label>Moonrise LMT, adjacent date (below / above)</label>
+        <div class="input-row">
+          <input type="time" id="moonriseTimeBelowAdj">
+          <input type="time" id="moonriseTimeAboveAdj">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Moonset LMT, adjacent date (below / above)</label>
+        <div class="input-row">
+          <input type="time" id="moonsetTimeBelowAdj">
+          <input type="time" id="moonsetTimeAboveAdj">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Moon Meridian Passage LMT, adjacent date</label>
+        <input type="time" id="moonTransitTimeAdj">
+      </div>
+    </div>
   </div>
 
   <!-- AUTO-FILL -->
