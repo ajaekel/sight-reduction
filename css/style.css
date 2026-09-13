@@ -117,6 +117,18 @@ h1 {
   background: var(--accent);
   color: #000;
 }
+.nav-menu-header {
+  display: block;
+  padding: 9px 14px 3px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #888;
+}
+.nav-menu-item.nav-menu-sub {
+  padding-left: 26px;
+}
 .card {
   background: var(--card);
   border: 1px solid var(--border);

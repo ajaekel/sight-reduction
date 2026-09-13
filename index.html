@@ -23,7 +23,9 @@
             <span></span><span></span><span></span>
           </button>
           <div class="nav-menu" id="navMenu">
-            <a href="#savedSightingsSection" class="nav-menu-item" id="navMenuSightings">Sightings</a>
+            <div class="nav-menu-header">Sightings</div>
+            <a href="sightings.html" class="nav-menu-item nav-menu-sub">Sightings</a>
+            <a href="index.html" class="nav-menu-item">New sighting</a>
             <a href="fixes.html" class="nav-menu-item">Fixes</a>
             <a href="planning.html" class="nav-menu-item">Planning</a>
           </div>
@@ -415,7 +417,7 @@
   </div>
 
   <!-- SECTION 4: SAVE & EXPORT -->
-  <div class="card" id="savedSightingsSection">
+  <div class="card" id="saveExportSection">
     <div class="section-title">4. Save &amp; Export</div>
 
     <button class="btn-secondary" id="btnSaveSight">Save Sight to Device</button>
@@ -425,9 +427,10 @@
       <input type="file" id="fileImportJson" accept="application/json,.json">
     </label>
 
-    <div class="sub-title" style="margin-top: 18px;">Saved Sightings (this device)</div>
-    <div class="saved-list" id="savedList"></div>
-    <div class="empty-note" id="savedListEmpty">No sightings saved on this device yet.</div>
+    <p class="cache-blurb" style="margin-top: 18px; margin-bottom: 0;">
+      To view, load, or delete previously saved sightings, see the
+      <a href="sightings.html" style="color: var(--accent);">Sightings</a> page.
+    </p>
   </div>
 </div>
 
