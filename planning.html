@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#121212">
+  <title>Planning - Offline Sight Reduction</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app-container">
+  <div class="header-row">
+    <h1 style="margin-bottom: 2px;">Planning</h1>
+    <div class="header-controls">
+      <div id="swVersion" style="font-size: 0.75rem; color: var(--accent, #888); font-family: monospace;">
+        Version: loading...
+      </div>
+      <div class="header-buttons">
+        <a href="index.html" class="btn-clear-all" style="text-decoration: none; display: inline-block; border-color: var(--accent); color: var(--accent);">Sight Reduction</a>
+        <div class="nav-menu-wrap">
+          <button class="btn-hamburger" id="btnNavMenu" aria-label="Menu" aria-haspopup="true" aria-expanded="false" type="button">
+            <span></span><span></span><span></span>
+          </button>
+          <div class="nav-menu" id="navMenu">
+            <a href="index.html#savedSightingsSection" class="nav-menu-item">Sightings</a>
+            <a href="fixes.html" class="nav-menu-item">Fixes</a>
+            <a href="planning.html" class="nav-menu-item">Planning</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="cache-blurb">
+    Sunrise/sunset, moonrise/moonset, and meridian passage for a date and position --
+    useful for timing star, sun, or moon sights. Auto-fill makes one request to USNO;
+    Manual interpolates straight from a printed Nautical Almanac, fully offline.
+  </p>
+
+  <!-- DATE / TZ / AP -->
+  <div class="card">
+    <div class="section-title">Date, Time Zone &amp; Assumed Position</div>
+
+    <div class="form-group">
+      <div class="body-inline-row">
+        <div class="body-inline-col" style="flex: 1;">
+          <label>Date (local)</label>
+          <input type="date" id="planDate">
+        </div>
+        <div class="body-inline-col" style="flex: 1;">
+          <label>Time Zone (hours from UTC)</label>
+          <input type="text" inputmode="decimal" id="planTzOffset" placeholder="-4" onfocus="this.select()">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <div class="input-row">
+        <div style="width: 140px; flex-shrink: 0; font-size: 0.85rem; color: #aaa;">
+          Latitude<br><span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span>
+        </div>
+        <input type="text" inputmode="decimal" id="planLatDeg" placeholder="40" onfocus="this.select()">
+        <input type="text" inputmode="decimal" id="planLatMin" placeholder="32.2" onfocus="this.select()">
+        <select id="planLatNS">
+          <option value="N">N</option>
+          <option value="S">S</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <div class="input-row">
+        <div style="width: 140px; flex-shrink: 0; font-size: 0.85rem; color: #aaa;">
+          Longitude<br><span style="font-size:0.75rem; color:#888;">(Deg / Min / E-W)</span>
+        </div>
+        <input type="text" inputmode="decimal" id="planLonDeg" placeholder="073" onfocus="this.select()">
+        <input type="text" inputmode="decimal" id="planLonMin" placeholder="56.3" onfocus="this.select()">
+        <select id="planLonEW">
+          <option value="W">W</option>
+          <option value="E">E</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="btn-secondary" id="btnStartSight" type="button" disabled>Start a Sight with this AP</button>
+  </div>
+
+  <!-- MODE -->
+  <div class="card">
+    <div class="section-title">Mode</div>
+    <div class="method-picker" role="group" aria-label="Planning data source">
+      <button type="button" class="method-btn" id="modeManual" aria-pressed="true">Manual</button>
+      <button type="button" class="method-btn" id="modeAutoFill" aria-pressed="false">Auto-fill</button>
+    </div>
+  </div>
+
+  <!-- MANUAL INPUTS -->
+  <div class="card" id="manualCard">
+    <div class="section-title">Manual Entry (from a printed Nautical Almanac)</div>
+    <p class="cache-blurb" style="margin-top:0;">
+      Enter the tabulated latitude band above and below your AP once -- it's reused for all four
+      rise/set events, the way a real almanac page is laid out. Meridian passage doesn't depend
+      on latitude, so just enter it directly. Times are Local Mean Time (LMT), as tabulated.
+    </p>
+
+    <div class="form-group">
+      <div class="input-row">
+        <div style="width: 150px; flex-shrink: 0; font-size: 0.85rem; color: #aaa;">Reference latitudes</div>
+        <input type="text" inputmode="decimal" id="refLatBelow" placeholder="Below, e.g. 35" onfocus="this.select()">
+        <input type="text" inputmode="decimal" id="refLatAbove" placeholder="Above, e.g. 40" onfocus="this.select()">
+      </div>
+      <div style="font-size:0.75rem; color:#888; margin-top:2px;">Signed decimal degrees (N positive, S negative)</div>
+    </div>
+
+    <div class="planning-manual-grid">
+      <div class="form-group">
+        <label>Sunrise LMT (below / above)</label>
+        <div class="input-row">
+          <input type="time" id="sunriseTimeBelow">
+          <input type="time" id="sunriseTimeAbove">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Sunset LMT (below / above)</label>
+        <div class="input-row">
+          <input type="time" id="sunsetTimeBelow">
+          <input type="time" id="sunsetTimeAbove">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Sun Meridian Passage LMT</label>
+        <input type="time" id="sunTransitTime">
+      </div>
+      <div class="form-group">
+        <label>Moonrise LMT (below / above)</label>
+        <div class="input-row">
+          <input type="time" id="moonriseTimeBelow">
+          <input type="time" id="moonriseTimeAbove">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Moonset LMT (below / above)</label>
+        <div class="input-row">
+          <input type="time" id="moonsetTimeBelow">
+          <input type="time" id="moonsetTimeAbove">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Moon Meridian Passage LMT</label>
+        <input type="time" id="moonTransitTime">
+      </div>
+    </div>
+  </div>
+
+  <!-- AUTO-FILL -->
+  <div class="card" id="autoFillCard" style="display: none;">
+    <div class="section-title">Auto-fill from USNO</div>
+    <button class="btn-secondary" id="btnFetchRstt" type="button" disabled>Fetch from USNO</button>
+    <div class="usno-status" id="rsttStatus"></div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="summary-box" id="planningResults" style="margin-top: 16px;">
+    <div style="font-size: 0.75rem; font-weight: bold; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Results (local time)</div>
+    <div><strong>Sunrise:</strong> <span id="resSunrise">--:--</span></div>
+    <div><strong>Sunset:</strong> <span id="resSunset">--:--</span></div>
+    <div><strong>Sun Meridian Passage:</strong> <span id="resSunTransit">--:--</span></div>
+    <div><strong>Moonrise:</strong> <span id="resMoonrise">--:--</span></div>
+    <div><strong>Moonset:</strong> <span id="resMoonset">--:--</span></div>
+    <div><strong>Moon Meridian Passage:</strong> <span id="resMoonTransit">--:--</span></div>
+  </div>
+</div>
+
+<script src="js/calc.js"></script>
+<script src="js/usno.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/version.js"></script>
+<script src="js/planning.js"></script>
+</body>
+</html>

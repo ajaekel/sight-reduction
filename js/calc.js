@@ -107,6 +107,60 @@
   }
 
   /**
+   * UTC seconds-of-day -> local (zone) seconds-of-day. Also returns how many
+   * calendar days the conversion crossed (-1, 0, or +1) relative to the UTC
+   * date, since a local time can land on the day before or after.
+   */
+  function localFromUtcSeconds(utcSec, tzOffsetHours) {
+    var raw = utcSec + (tzOffsetHours || 0) * 3600;
+    return { sec: ((raw % 86400) + 86400) % 86400, dayOffset: Math.floor(raw / 86400) };
+  }
+
+  /**
+   * Interpolates a rise/set/transit time between two latitude bands, the way
+   * a Nautical Almanac's tables are read: given the tabulated time at a
+   * latitude below the AP and one above it (signed decimal degrees, either
+   * order), linearly interpolate for the AP's actual latitude. Times are
+   * seconds-of-day (LMT, as tabulated); the result is not wrapped, since
+   * that's handled consistently later by utcFromLmtSeconds/localFromUtcSeconds.
+   */
+  function interpolateByLatitude(latBelow, timeBelowSec, latAbove, timeAboveSec, apLat) {
+    if (latAbove === latBelow) return timeBelowSec; // degenerate: nothing to interpolate
+    var fraction = (apLat - latBelow) / (latAbove - latBelow);
+    return timeBelowSec + fraction * (timeAboveSec - timeBelowSec);
+  }
+
+  /**
+   * Converts a Local Mean Time (as tabulated in a Nautical Almanac -- local
+   * to the observer's OWN meridian) to UTC, via the standard longitude/15
+   * conversion (East longitude positive). This is a distinct step from
+   * converting UTC to the observer's zone/clock time: LMT tracks true
+   * longitude continuously, while zone time is a discrete administrative
+   * offset (tzOffset) that may not exactly match it. Deliberately does not
+   * apply the day-to-day-drift refinement some almanacs' explanatory notes
+   * describe -- for rise/set/transit timing this is normally well under a
+   * minute of additional error.
+   */
+  function utcFromLmtSeconds(lmtSec, lonSignedDecimal) {
+    var raw = lmtSec - (lonSignedDecimal / 15) * 3600;
+    return { sec: ((raw % 86400) + 86400) % 86400, dayOffset: Math.floor(raw / 86400) };
+  }
+
+  /**
+   * Full manual-mode pipeline for one rise/set/transit event: LMT (already
+   * latitude-interpolated, or read directly off the almanac for transit,
+   * which doesn't depend on latitude) -> UTC -> the observer's zone time.
+   * dayOffset is the zone-time date's offset (in days) from the nominal
+   * date the LMT was tabulated for -- e.g. a moonrise just after midnight
+   * zone time, tabulated for the evening before.
+   */
+  function manualEventToZoneTime(lmtSec, lonSignedDecimal, tzOffsetHours) {
+    var utc = utcFromLmtSeconds(lmtSec, lonSignedDecimal);
+    var zone = localFromUtcSeconds(utc.sec, tzOffsetHours);
+    return { zoneSec: zone.sec, dayOffset: utc.dayOffset + zone.dayOffset };
+  }
+
+  /**
    * Interpolate a GHA-like value (0-360, wraps at the hour boundary) across the
    * fraction of the hour that has elapsed.
    */
@@ -541,6 +595,10 @@
     computeHa: computeHa,
     computeHo: computeHo,
     utcSecondsFromLocal: utcSecondsFromLocal,
+    localFromUtcSeconds: localFromUtcSeconds,
+    interpolateByLatitude: interpolateByLatitude,
+    utcFromLmtSeconds: utcFromLmtSeconds,
+    manualEventToZoneTime: manualEventToZoneTime,
     interpolateGha: interpolateGha,
     interpolateLinear: interpolateLinear,
     reduceSight: reduceSight,

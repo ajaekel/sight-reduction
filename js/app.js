@@ -18,10 +18,48 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('swVersion').textContent = APP_VERSION;
 });
 
+/**
+ * Consumes a one-time Date/TZ/AP handoff from planning.html's
+ * "Start a Sight with this AP" (see sessionStorage key 'ocsrApHandoff' in
+ * js/planning.js). Only this direction -- planning -> index -- exists
+ * today; nothing currently reads FROM index.html's live fields.
+ */
+function applyPendingHandoff() {
+  var raw;
+  try {
+    raw = sessionStorage.getItem('ocsrApHandoff');
+  } catch (e) {
+    return false;
+  }
+  if (!raw) return false;
+  sessionStorage.removeItem('ocsrApHandoff'); // one-time consume, even if parsing fails below
+
+  var h;
+  try {
+    h = JSON.parse(raw);
+  } catch (e) {
+    return false;
+  }
+
+  if (h.date) document.getElementById('sightDate').value = h.date;
+  if (h.tzOffset !== undefined) document.getElementById('tzOffset').value = h.tzOffset;
+  if (h.latDeg !== undefined) document.getElementById('latDeg').value = h.latDeg;
+  if (h.latMin !== undefined) document.getElementById('latMin').value = h.latMin;
+  if (h.latNS) document.getElementById('latNS').value = h.latNS;
+  if (h.lonDeg !== undefined) document.getElementById('lonDeg').value = h.lonDeg;
+  if (h.lonMin !== undefined) document.getElementById('lonMin').value = h.lonMin;
+  if (h.lonEW) document.getElementById('lonEW').value = h.lonEW;
+
+  showToast('Date, time zone, and AP filled in from Planning.');
+  return true;
+}
+
 function initApp() {
   try {
     document.getElementById('sightDate').value = new Date().toISOString().split('T')[0];
   } catch (e) {}
+
+  applyPendingHandoff(); // overrides the date above if Planning just sent one
 
   document.getElementById('bodyType').addEventListener('change', function () {
     handleBodyTypeChange();

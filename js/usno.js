@@ -378,10 +378,84 @@
     return step(0);
   }
 
+  var RSTT_URL = 'https://aa.usno.navy.mil/api/rstt/oneday';
+
+  /** "YYYY-MM-DD" (from an <input type="date">) -> "YYYY-M-D", matching the non-padded format the celnav endpoint above is confirmed to accept. */
+  function reformatDateForUsno(dateStr) {
+    var p = dateStr.split('-');
+    return parseInt(p[0], 10) + '-' + parseInt(p[1], 10) + '-' + parseInt(p[2], 10);
+  }
+
+  /** { phen, time }[] -> the "HH:MM" time string for that phenomenon, or null if it doesn't occur that day (e.g. no moonrise). */
+  function phenTime(list, phen) {
+    if (!Array.isArray(list)) return null;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].phen === phen) return list[i].time;
+    }
+    return null;
+  }
+
+  /**
+   * Impure: fetches sunrise/sunset/upper-transit and moonrise/moonset/upper-
+   * transit for one date at one location, in the requested zone offset --
+   * USNO converts server-side when `tz` is supplied, so what comes back is
+   * already the observer's local clock time, not UTC. Returns a plain map
+   * of "HH:MM" strings (or null for an event that doesn't occur that day).
+   */
+  function fetchRiseSetTransit(dateStr, latDecimal, lonDecimal, tzOffsetHours) {
+    var coords = latDecimal.toFixed(6) + ',' + lonDecimal.toFixed(6);
+    var url = RSTT_URL + '?date=' + encodeURIComponent(reformatDateForUsno(dateStr)) +
+              '&coords=' + encodeURIComponent(coords) +
+              '&tz=' + encodeURIComponent(tzOffsetHours) +
+              '&dst=false' + // we supply our own numeric offset; don't let USNO adjust it further
+              '&ID=' + API_ID;
+
+    var controller = ('AbortController' in global) ? new AbortController() : null;
+    var timeoutId = controller ? setTimeout(function () { controller.abort(); }, TIMEOUT_MS) : null;
+
+    return fetch(url, controller ? { signal: controller.signal } : undefined)
+      .then(function (resp) {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (!resp.ok) {
+          var err = new Error('USNO server returned HTTP ' + resp.status + '.');
+          err.httpStatus = resp.status;
+          err.retryable = resp.status >= 500;
+          if (resp.status === 429) { err.isRateLimited = true; err.retryable = true; }
+          throw err;
+        }
+        return resp.json();
+      })
+      .then(function (json) {
+        var data = json && json.properties && json.properties.data;
+        if (!data || !data.sundata || !data.moondata) {
+          throw new Error('Unexpected response shape from the USNO API.');
+        }
+        return {
+          sunrise: phenTime(data.sundata, 'Rise'),
+          sunset: phenTime(data.sundata, 'Set'),
+          sunTransit: phenTime(data.sundata, 'Upper Transit'),
+          moonrise: phenTime(data.moondata, 'Rise'),
+          moonset: phenTime(data.moondata, 'Set'),
+          moonTransit: phenTime(data.moondata, 'Upper Transit')
+        };
+      })
+      .catch(function (err) {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (err && err.name === 'AbortError') {
+          var timeoutErr = new Error('Request to USNO timed out. Check your connection and try again.');
+          timeoutErr.retryable = true;
+          throw timeoutErr;
+        }
+        if (err instanceof TypeError && err.retryable === undefined) err.retryable = true;
+        throw err;
+      });
+  }
+
   global.SightUsno = {
     fetchAlmanacFill: fetchAlmanacFill,
     getAlmanacFillWithCache: getAlmanacFillWithCache,
     getAlmanacFillFromCacheOnly: getAlmanacFillFromCacheOnly,
+    fetchRiseSetTransit: fetchRiseSetTransit,
     fetchAndCacheRange: fetchAndCacheRange,
     assembleFill: assembleFill,             // exported for unit testing
     normalizeUsnoData: normalizeUsnoData,   // exported for unit testing
