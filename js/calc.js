@@ -195,6 +195,103 @@
     return todayLmtSec + (lonSignedDecimal < 0 ? corr : -corr);
   }
 
+  /** Standard altitudes (decimal degrees) that define each event, center of body. */
+  var STANDARD_ALTITUDE_DEG = {
+    sunRiseSet: -50 / 60,     // -0.8333 deg: -34' refraction, -16' semidiameter
+    civilTwilight: -6,
+    nauticalTwilight: -12
+  };
+
+  /**
+   * Derives the Sun's declination (signed decimal degrees) implied by a known
+   * Sunrise or Sunset time relative to Meridian Passage, at a known latitude
+   * -- by inverting the standard altitude formula
+   *   sin(h) = sin(lat)*sin(dec) + cos(lat)*cos(dec)*cos(H)
+   * for h = the standard rise/set altitude and H = the hour angle implied by
+   * the time gap from transit. transitSec and riseOrSetSec must be on the
+   * same time base (both LMT, or both zone time, or both UTC -- doesn't
+   * matter which, since only their difference is used), and can cross
+   * midnight (the gap is normalized to under 12h either way).
+   *
+   * This lets twilight be computed directly from data already on screen
+   * (Sunrise/Sunset/Meridian Passage) instead of requiring a separate
+   * almanac lookup. Returns null if the geometry doesn't resolve to a real
+   * declination (shouldn't happen for real sun data, but guards against
+   * bad/inconsistent input).
+   */
+  function deriveSunDeclination(apLatDeg, transitSec, riseOrSetSec) {
+    var gap = riseOrSetSec - transitSec;
+    if (gap > 12 * 3600) gap -= 24 * 3600;
+    if (gap < -12 * 3600) gap += 24 * 3600;
+    if (gap === 0) return null;
+
+    var H = rad(Math.abs(gap) / 3600 * 15);
+    var lat = rad(apLatDeg);
+    var h0 = rad(STANDARD_ALTITUDE_DEG.sunRiseSet);
+
+    var P = Math.sin(lat);
+    var Q = Math.cos(lat) * Math.cos(H);
+    var R = Math.sqrt(P * P + Q * Q);
+    if (R === 0) return null;
+    var ratio = Math.sin(h0) / R;
+    if (ratio < -1 || ratio > 1) return null;
+    var phi = Math.atan2(Q, P);
+    return deg(Math.asin(ratio) - phi);
+  }
+
+  /**
+   * Hour angle (seconds, always non-negative) at which the Sun reaches the
+   * given altitude, for a known latitude/declination. Returns null if the
+   * Sun never reaches that altitude that day (continuous daylight/twilight/
+   * darkness, which happens at high latitude depending on season).
+   */
+  function sunHourAngleForAltitude(apLatDeg, decDeg, altitudeDeg) {
+    var lat = rad(apLatDeg);
+    var dec = rad(decDeg);
+    var h = rad(altitudeDeg);
+    var cosH = (Math.sin(h) - Math.sin(lat) * Math.sin(dec)) / (Math.cos(lat) * Math.cos(dec));
+    if (cosH < -1 || cosH > 1) return null;
+    return Math.acos(cosH) * (180 / Math.PI) / 15 * 3600;
+  }
+
+  /**
+   * Computes Civil and Nautical Twilight (begin/end) from the Sun's already-
+   * known Meridian Passage time plus at least one of Sunrise/Sunset -- no
+   * separate twilight almanac entry needed. transitSec/sunriseSec/sunsetSec
+   * must all be on the same time base (see deriveSunDeclination); the
+   * returned civil/nautical values are on that same base, ready to run
+   * through whatever conversion the caller already applies to transit.
+   *
+   * If both sunrise and sunset are supplied, their implied declinations are
+   * averaged for a little extra robustness against rounding in the source
+   * data. Pass null for whichever of sunriseSec/sunsetSec isn't available.
+   * Returns null only if neither is available; individual civil/nautical
+   * fields are null if the Sun doesn't reach that altitude that day.
+   */
+  function computeTwilightTimes(apLatDeg, transitSec, sunriseSec, sunsetSec) {
+    var decs = [];
+    if (sunriseSec !== null && sunriseSec !== undefined) {
+      var d1 = deriveSunDeclination(apLatDeg, transitSec, sunriseSec);
+      if (d1 !== null) decs.push(d1);
+    }
+    if (sunsetSec !== null && sunsetSec !== undefined) {
+      var d2 = deriveSunDeclination(apLatDeg, transitSec, sunsetSec);
+      if (d2 !== null) decs.push(d2);
+    }
+    if (decs.length === 0) return null;
+    var dec = decs.reduce(function (a, b) { return a + b; }, 0) / decs.length;
+
+    var civilH = sunHourAngleForAltitude(apLatDeg, dec, STANDARD_ALTITUDE_DEG.civilTwilight);
+    var nauticalH = sunHourAngleForAltitude(apLatDeg, dec, STANDARD_ALTITUDE_DEG.nauticalTwilight);
+
+    return {
+      civilAM: civilH === null ? null : transitSec - civilH,
+      civilPM: civilH === null ? null : transitSec + civilH,
+      nauticalAM: nauticalH === null ? null : transitSec - nauticalH,
+      nauticalPM: nauticalH === null ? null : transitSec + nauticalH
+    };
+  }
+
   /**
    * Interpolate a GHA-like value (0-360, wraps at the hour boundary) across the
    * fraction of the hour that has elapsed.
@@ -635,6 +732,9 @@
     utcFromLmtSeconds: utcFromLmtSeconds,
     manualEventToZoneTime: manualEventToZoneTime,
     applyMoonLongitudeCorrection: applyMoonLongitudeCorrection,
+    deriveSunDeclination: deriveSunDeclination,
+    sunHourAngleForAltitude: sunHourAngleForAltitude,
+    computeTwilightTimes: computeTwilightTimes,
     interpolateGha: interpolateGha,
     interpolateLinear: interpolateLinear,
     reduceSight: reduceSight,

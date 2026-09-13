@@ -24,8 +24,6 @@ document.addEventListener('DOMContentLoaded', function () {
     'planDate', 'planTzOffset', 'planLatDeg', 'planLatMin', 'planLatNS', 'planLonDeg', 'planLonMin', 'planLonEW',
     'refLatBelow', 'refLatAbove',
     'sunriseTimeBelow', 'sunriseTimeAbove', 'sunsetTimeBelow', 'sunsetTimeAbove', 'sunTransitTime',
-    'civilTwilightAMBelow', 'civilTwilightAMAbove', 'civilTwilightPMBelow', 'civilTwilightPMAbove',
-    'nauticalTwilightAMBelow', 'nauticalTwilightAMAbove', 'nauticalTwilightPMBelow', 'nauticalTwilightPMAbove',
     'moonriseTimeBelow', 'moonriseTimeAbove', 'moonsetTimeBelow', 'moonsetTimeAbove', 'moonTransitTime',
     'moonriseTimeBelowAdj', 'moonriseTimeAboveAdj', 'moonsetTimeBelowAdj', 'moonsetTimeAboveAdj', 'moonTransitTimeAdj'
   ];
@@ -58,12 +56,25 @@ function getPlanningPosition() {
   });
 }
 
-/** "HH:MM" (from <input type="time">) -> seconds-of-day, or null if blank. */
-function parseTimeField(id) {
-  var v = document.getElementById(id).value;
+/** "HH:MM" (from <input type="time">, or a plain string like a USNO result) -> seconds-of-day, or null if blank/invalid. */
+function parseHHMM(v) {
   if (!v) return null;
   var p = v.split(':');
+  if (p.length < 2) return null;
   return parseInt(p[0], 10) * 3600 + parseInt(p[1], 10) * 60;
+}
+
+/** "HH:MM" (from <input type="time">) -> seconds-of-day, or null if blank. */
+function parseTimeField(id) {
+  return parseHHMM(document.getElementById(id).value);
+}
+
+/** Below/above LMT fields -> latitude-interpolated LMT (seconds-of-day), or null if either input/ref is missing. */
+function interpolatedLmt(belowId, aboveId, refBelow, refAbove, apLat) {
+  var tBelow = parseTimeField(belowId);
+  var tAbove = parseTimeField(aboveId);
+  if (tBelow === null || tAbove === null || isNaN(refBelow) || isNaN(refAbove)) return null;
+  return SightCalc.interpolateByLatitude(refBelow, tBelow, refAbove, tAbove, apLat);
 }
 
 /** { zoneSec, dayOffset } -> "HH:MM" with a "(+1 day)"-style suffix if the conversion crossed a calendar day. */
@@ -121,18 +132,12 @@ function setPlanningMode(mode) {
  * is negligible.
  */
 function computeManualRiseSet(belowId, aboveId, refBelow, refAbove, apLat, lon, tz, adjBelowId, adjAboveId) {
-  var tBelow = parseTimeField(belowId);
-  var tAbove = parseTimeField(aboveId);
-  if (tBelow === null || tAbove === null || isNaN(refBelow) || isNaN(refAbove)) return null;
-  var lmt = SightCalc.interpolateByLatitude(refBelow, tBelow, refAbove, tAbove, apLat);
+  var lmt = interpolatedLmt(belowId, aboveId, refBelow, refAbove, apLat);
+  if (lmt === null) return null;
 
   if (adjBelowId && adjAboveId) {
-    var adjBelow = parseTimeField(adjBelowId);
-    var adjAbove = parseTimeField(adjAboveId);
-    if (adjBelow !== null && adjAbove !== null) {
-      var adjLmt = SightCalc.interpolateByLatitude(refBelow, adjBelow, refAbove, adjAbove, apLat);
-      lmt = SightCalc.applyMoonLongitudeCorrection(lon, lmt, adjLmt);
-    }
+    var adjLmt = interpolatedLmt(adjBelowId, adjAboveId, refBelow, refAbove, apLat);
+    if (adjLmt !== null) lmt = SightCalc.applyMoonLongitudeCorrection(lon, lmt, adjLmt);
   }
 
   return SightCalc.manualEventToZoneTime(lmt, lon, tz);
@@ -157,13 +162,23 @@ function refreshManualResults() {
   var refBelow = parseFloat(document.getElementById('refLatBelow').value);
   var refAbove = parseFloat(document.getElementById('refLatAbove').value);
 
-  setResult('resSunrise', computeManualRiseSet('sunriseTimeBelow', 'sunriseTimeAbove', refBelow, refAbove, pos.lat, pos.lon, tz));
-  setResult('resSunset', computeManualRiseSet('sunsetTimeBelow', 'sunsetTimeAbove', refBelow, refAbove, pos.lat, pos.lon, tz));
-  setResult('resCivilTwilightAM', computeManualRiseSet('civilTwilightAMBelow', 'civilTwilightAMAbove', refBelow, refAbove, pos.lat, pos.lon, tz));
-  setResult('resCivilTwilightPM', computeManualRiseSet('civilTwilightPMBelow', 'civilTwilightPMAbove', refBelow, refAbove, pos.lat, pos.lon, tz));
-  setResult('resNauticalTwilightAM', computeManualRiseSet('nauticalTwilightAMBelow', 'nauticalTwilightAMAbove', refBelow, refAbove, pos.lat, pos.lon, tz));
-  setResult('resNauticalTwilightPM', computeManualRiseSet('nauticalTwilightPMBelow', 'nauticalTwilightPMAbove', refBelow, refAbove, pos.lat, pos.lon, tz));
-  setResult('resSunTransit', computeManualTransit('sunTransitTime', pos.lon, tz));
+  var sunriseLmt = interpolatedLmt('sunriseTimeBelow', 'sunriseTimeAbove', refBelow, refAbove, pos.lat);
+  var sunsetLmt = interpolatedLmt('sunsetTimeBelow', 'sunsetTimeAbove', refBelow, refAbove, pos.lat);
+  var transitLmt = parseTimeField('sunTransitTime');
+
+  setResult('resSunrise', sunriseLmt === null ? null : SightCalc.manualEventToZoneTime(sunriseLmt, pos.lon, tz));
+  setResult('resSunset', sunsetLmt === null ? null : SightCalc.manualEventToZoneTime(sunsetLmt, pos.lon, tz));
+  setResult('resSunTransit', transitLmt === null ? null : SightCalc.manualEventToZoneTime(transitLmt, pos.lon, tz));
+
+  // Civil/Nautical Twilight are derived from the Sun data already entered above
+  // (see calc.js's computeTwilightTimes) -- no separate almanac lookup needed.
+  var twilight = transitLmt === null ? null : SightCalc.computeTwilightTimes(pos.lat, transitLmt, sunriseLmt, sunsetLmt);
+  var toZone = function (sec) { return sec === null || sec === undefined ? null : SightCalc.manualEventToZoneTime(sec, pos.lon, tz); };
+  setResult('resCivilTwilightAM', twilight ? toZone(twilight.civilAM) : null);
+  setResult('resCivilTwilightPM', twilight ? toZone(twilight.civilPM) : null);
+  setResult('resNauticalTwilightAM', twilight ? toZone(twilight.nauticalAM) : null);
+  setResult('resNauticalTwilightPM', twilight ? toZone(twilight.nauticalPM) : null);
+
   setResult('resMoonrise', computeManualRiseSet('moonriseTimeBelow', 'moonriseTimeAbove', refBelow, refAbove, pos.lat, pos.lon, tz, 'moonriseTimeBelowAdj', 'moonriseTimeAboveAdj'));
   setResult('resMoonset', computeManualRiseSet('moonsetTimeBelow', 'moonsetTimeAbove', refBelow, refAbove, pos.lat, pos.lon, tz, 'moonsetTimeBelowAdj', 'moonsetTimeAboveAdj'));
   setResult('resMoonTransit', computeManualTransit('moonTransitTime', pos.lon, tz, 'moonTransitTimeAdj'));
@@ -193,14 +208,19 @@ function onFetchRstt() {
       document.getElementById('resSunset').textContent = result.sunset || 'Does not occur';
       document.getElementById('resCivilTwilightAM').textContent = result.civilTwilightAM || 'Does not occur';
       document.getElementById('resCivilTwilightPM').textContent = result.civilTwilightPM || 'Does not occur';
-      // USNO's rstt/oneday service only reports Civil Twilight for the Sun -- Nautical
-      // Twilight isn't part of that data service at all, so there's nothing to show here.
-      document.getElementById('resNauticalTwilightAM').textContent = 'Not available';
-      document.getElementById('resNauticalTwilightPM').textContent = 'Not available';
       document.getElementById('resSunTransit').textContent = result.sunTransit || 'Does not occur';
       document.getElementById('resMoonrise').textContent = result.moonrise || 'Does not occur';
       document.getElementById('resMoonset').textContent = result.moonset || 'Does not occur';
       document.getElementById('resMoonTransit').textContent = result.moonTransit || 'Does not occur';
+
+      // USNO's rstt/oneday service doesn't report Nautical Twilight at all, so it's
+      // derived from the Sun data it DOES report (same approach as manual mode).
+      var transitSec = parseHHMM(result.sunTransit);
+      var twilight = transitSec === null ? null : SightCalc.computeTwilightTimes(pos.lat, transitSec, parseHHMM(result.sunrise), parseHHMM(result.sunset));
+      var fmt = function (sec) { return (sec === null || sec === undefined) ? null : SightCalc.secondsToTimeString(sec).slice(0, 5); };
+      document.getElementById('resNauticalTwilightAM').textContent = (twilight && fmt(twilight.nauticalAM)) || 'Does not occur';
+      document.getElementById('resNauticalTwilightPM').textContent = (twilight && fmt(twilight.nauticalPM)) || 'Does not occur';
+
       setRsttStatus('Fetched from USNO.', 'ok');
     })
     .catch(function (err) {

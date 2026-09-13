@@ -102,6 +102,8 @@
       Enter the tabulated latitude band above and below your AP once -- it's reused for all four
       rise/set events, the way a real almanac page is laid out. Meridian passage doesn't depend
       on latitude, so just enter it directly. Times are Local Mean Time (LMT), as tabulated.
+      Civil and Nautical Twilight are calculated automatically from Sunrise, Sunset, and Meridian
+      Passage above -- no separate entry needed.
     </p>
 
     <div class="form-group">
@@ -126,34 +128,6 @@
         <div class="input-row">
           <input type="time" id="sunsetTimeBelow">
           <input type="time" id="sunsetTimeAbove">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Civil Twilight LMT, begins (below / above)</label>
-        <div class="input-row">
-          <input type="time" id="civilTwilightAMBelow">
-          <input type="time" id="civilTwilightAMAbove">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Civil Twilight LMT, ends (below / above)</label>
-        <div class="input-row">
-          <input type="time" id="civilTwilightPMBelow">
-          <input type="time" id="civilTwilightPMAbove">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Nautical Twilight LMT, begins (below / above)</label>
-        <div class="input-row">
-          <input type="time" id="nauticalTwilightAMBelow">
-          <input type="time" id="nauticalTwilightAMAbove">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Nautical Twilight LMT, ends (below / above)</label>
-        <div class="input-row">
-          <input type="time" id="nauticalTwilightPMBelow">
-          <input type="time" id="nauticalTwilightPMAbove">
         </div>
       </div>
       <div class="form-group">
@@ -214,8 +188,8 @@
   <div class="card" id="autoFillCard" style="display: none;">
     <div class="section-title">Auto-fill from USNO</div>
     <p class="cache-blurb" style="margin-top:0;">
-      USNO's one-day rise/set/transit service reports Civil Twilight but not Nautical
-      Twilight -- that row will show "Not available" after fetching.
+      USNO reports Civil Twilight directly; Nautical Twilight isn't part of this data service, so
+      it's calculated from the fetched Sunrise/Sunset/Meridian Passage instead.
     </p>
     <button class="btn-secondary" id="btnFetchRstt" type="button" disabled>Fetch from USNO</button>
     <div class="usno-status" id="rsttStatus"></div>
