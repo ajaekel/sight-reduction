@@ -24,6 +24,8 @@ document.addEventListener('DOMContentLoaded', function () {
     'planDate', 'planTzOffset', 'planLatDeg', 'planLatMin', 'planLatNS', 'planLonDeg', 'planLonMin', 'planLonEW',
     'refLatBelow', 'refLatAbove',
     'sunriseTimeBelow', 'sunriseTimeAbove', 'sunsetTimeBelow', 'sunsetTimeAbove', 'sunTransitTime',
+    'civilTwilightAMBelow', 'civilTwilightAMAbove', 'civilTwilightPMBelow', 'civilTwilightPMAbove',
+    'nauticalTwilightAMBelow', 'nauticalTwilightAMAbove', 'nauticalTwilightPMBelow', 'nauticalTwilightPMAbove',
     'moonriseTimeBelow', 'moonriseTimeAbove', 'moonsetTimeBelow', 'moonsetTimeAbove', 'moonTransitTime',
     'moonriseTimeBelowAdj', 'moonriseTimeAboveAdj', 'moonsetTimeBelowAdj', 'moonsetTimeAboveAdj', 'moonTransitTimeAdj'
   ];
@@ -76,7 +78,11 @@ function setResult(elId, result) {
 }
 
 function clearResults() {
-  ['resSunrise', 'resSunset', 'resSunTransit', 'resMoonrise', 'resMoonset', 'resMoonTransit'].forEach(function (id) {
+  [
+    'resSunrise', 'resSunset', 'resSunTransit',
+    'resCivilTwilightAM', 'resCivilTwilightPM', 'resNauticalTwilightAM', 'resNauticalTwilightPM',
+    'resMoonrise', 'resMoonset', 'resMoonTransit'
+  ].forEach(function (id) {
     document.getElementById(id).textContent = '--:--';
   });
 }
@@ -153,6 +159,10 @@ function refreshManualResults() {
 
   setResult('resSunrise', computeManualRiseSet('sunriseTimeBelow', 'sunriseTimeAbove', refBelow, refAbove, pos.lat, pos.lon, tz));
   setResult('resSunset', computeManualRiseSet('sunsetTimeBelow', 'sunsetTimeAbove', refBelow, refAbove, pos.lat, pos.lon, tz));
+  setResult('resCivilTwilightAM', computeManualRiseSet('civilTwilightAMBelow', 'civilTwilightAMAbove', refBelow, refAbove, pos.lat, pos.lon, tz));
+  setResult('resCivilTwilightPM', computeManualRiseSet('civilTwilightPMBelow', 'civilTwilightPMAbove', refBelow, refAbove, pos.lat, pos.lon, tz));
+  setResult('resNauticalTwilightAM', computeManualRiseSet('nauticalTwilightAMBelow', 'nauticalTwilightAMAbove', refBelow, refAbove, pos.lat, pos.lon, tz));
+  setResult('resNauticalTwilightPM', computeManualRiseSet('nauticalTwilightPMBelow', 'nauticalTwilightPMAbove', refBelow, refAbove, pos.lat, pos.lon, tz));
   setResult('resSunTransit', computeManualTransit('sunTransitTime', pos.lon, tz));
   setResult('resMoonrise', computeManualRiseSet('moonriseTimeBelow', 'moonriseTimeAbove', refBelow, refAbove, pos.lat, pos.lon, tz, 'moonriseTimeBelowAdj', 'moonriseTimeAboveAdj'));
   setResult('resMoonset', computeManualRiseSet('moonsetTimeBelow', 'moonsetTimeAbove', refBelow, refAbove, pos.lat, pos.lon, tz, 'moonsetTimeBelowAdj', 'moonsetTimeAboveAdj'));
@@ -181,6 +191,12 @@ function onFetchRstt() {
     .then(function (result) {
       document.getElementById('resSunrise').textContent = result.sunrise || 'Does not occur';
       document.getElementById('resSunset').textContent = result.sunset || 'Does not occur';
+      document.getElementById('resCivilTwilightAM').textContent = result.civilTwilightAM || 'Does not occur';
+      document.getElementById('resCivilTwilightPM').textContent = result.civilTwilightPM || 'Does not occur';
+      // USNO's rstt/oneday service only reports Civil Twilight for the Sun -- Nautical
+      // Twilight isn't part of that data service at all, so there's nothing to show here.
+      document.getElementById('resNauticalTwilightAM').textContent = 'Not available';
+      document.getElementById('resNauticalTwilightPM').textContent = 'Not available';
       document.getElementById('resSunTransit').textContent = result.sunTransit || 'Does not occur';
       document.getElementById('resMoonrise').textContent = result.moonrise || 'Does not occur';
       document.getElementById('resMoonset').textContent = result.moonset || 'Does not occur';

@@ -129,6 +129,34 @@
         </div>
       </div>
       <div class="form-group">
+        <label>Civil Twilight LMT, begins (below / above)</label>
+        <div class="input-row">
+          <input type="time" id="civilTwilightAMBelow">
+          <input type="time" id="civilTwilightAMAbove">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Civil Twilight LMT, ends (below / above)</label>
+        <div class="input-row">
+          <input type="time" id="civilTwilightPMBelow">
+          <input type="time" id="civilTwilightPMAbove">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Nautical Twilight LMT, begins (below / above)</label>
+        <div class="input-row">
+          <input type="time" id="nauticalTwilightAMBelow">
+          <input type="time" id="nauticalTwilightAMAbove">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Nautical Twilight LMT, ends (below / above)</label>
+        <div class="input-row">
+          <input type="time" id="nauticalTwilightPMBelow">
+          <input type="time" id="nauticalTwilightPMAbove">
+        </div>
+      </div>
+      <div class="form-group">
         <label>Sun Meridian Passage LMT</label>
         <input type="time" id="sunTransitTime">
       </div>
@@ -185,6 +213,10 @@
   <!-- AUTO-FILL -->
   <div class="card" id="autoFillCard" style="display: none;">
     <div class="section-title">Auto-fill from USNO</div>
+    <p class="cache-blurb" style="margin-top:0;">
+      USNO's one-day rise/set/transit service reports Civil Twilight but not Nautical
+      Twilight -- that row will show "Not available" after fetching.
+    </p>
     <button class="btn-secondary" id="btnFetchRstt" type="button" disabled>Fetch from USNO</button>
     <div class="usno-status" id="rsttStatus"></div>
   </div>
@@ -192,8 +224,12 @@
   <!-- RESULTS -->
   <div class="summary-box" id="planningResults" style="margin-top: 16px;">
     <div style="font-size: 0.75rem; font-weight: bold; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Results (local time)</div>
+    <div><strong>Nautical Twilight begins:</strong> <span id="resNauticalTwilightAM">--:--</span></div>
+    <div><strong>Civil Twilight begins:</strong> <span id="resCivilTwilightAM">--:--</span></div>
     <div><strong>Sunrise:</strong> <span id="resSunrise">--:--</span></div>
     <div><strong>Sunset:</strong> <span id="resSunset">--:--</span></div>
+    <div><strong>Civil Twilight ends:</strong> <span id="resCivilTwilightPM">--:--</span></div>
+    <div><strong>Nautical Twilight ends:</strong> <span id="resNauticalTwilightPM">--:--</span></div>
     <div><strong>Sun Meridian Passage:</strong> <span id="resSunTransit">--:--</span></div>
     <div><strong>Moonrise:</strong> <span id="resMoonrise">--:--</span></div>
     <div><strong>Moonset:</strong> <span id="resMoonset">--:--</span></div>

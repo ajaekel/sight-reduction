@@ -434,6 +434,10 @@
           sunrise: phenTime(data.sundata, 'Rise'),
           sunset: phenTime(data.sundata, 'Set'),
           sunTransit: phenTime(data.sundata, 'Upper Transit'),
+          // USNO's rstt/oneday service computes Civil Twilight for the Sun, but not
+          // Nautical or Astronomical Twilight -- those simply aren't in this response.
+          civilTwilightAM: phenTime(data.sundata, 'Begin Civil Twilight'),
+          civilTwilightPM: phenTime(data.sundata, 'End Civil Twilight'),
           moonrise: phenTime(data.moondata, 'Rise'),
           moonset: phenTime(data.moondata, 'Set'),
           moonTransit: phenTime(data.moondata, 'Upper Transit')
