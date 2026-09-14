@@ -401,6 +401,53 @@ function onDeleteLeg(id) {
   });
 }
 
+/**
+ * Consumes a one-time start-position handoff via sessionStorage key
+ * 'ocsrDrLegStartHandoff' -- currently sent only by fixes.html's "Send to DR
+ * Leg" (see onFixToDrLeg in js/fixes.js), carrying the same
+ * { position: {time,lat,lon,type}, tzOffset } shape as the New Sighting
+ * handoff. Fills the START fields (not the result) and marks the start
+ * position's provenance as whatever the sender's Position.type says --
+ * 'FIX' from a Fix, matching the DR Leg's own POSITION_TYPES.
+ */
+function applyPendingDrLegStartHandoff() {
+  var raw;
+  try {
+    raw = sessionStorage.getItem('ocsrDrLegStartHandoff');
+  } catch (e) {
+    return false;
+  }
+  if (!raw) return false;
+  sessionStorage.removeItem('ocsrDrLegStartHandoff'); // one-time consume, even if parsing fails below
+
+  var h;
+  try {
+    h = JSON.parse(raw);
+  } catch (e) {
+    return false;
+  }
+  if (!h.position) return false;
+
+  var local = SightCalc.utcMsToLocalDateTime(new Date(h.position.time).getTime(), h.tzOffset);
+  var dm = positionToDegMinFields(h.position);
+  var pad2 = function (n) { return String(n).padStart(2, '0'); };
+
+  document.getElementById('drStartDate').value = local.dateStr;
+  setFieldValue('drStartTime', pad2(Math.floor(local.secOfDay / 3600)) + ':' + pad2(Math.floor((local.secOfDay % 3600) / 60)));
+  document.getElementById('drTzOffset').value = h.tzOffset;
+  document.getElementById('drLatDeg').value = dm.latDeg;
+  document.getElementById('drLatMin').value = dm.latMin;
+  document.getElementById('drLatNS').value = dm.latNS;
+  document.getElementById('drLonDeg').value = dm.lonDeg;
+  document.getElementById('drLonMin').value = dm.lonMin;
+  document.getElementById('drLonEW').value = dm.lonEW;
+
+  _drStartPositionType = h.position.type || 'KNOWN';
+
+  showToast('Start position filled in from Fix.');
+  return true;
+}
+
 function refreshSavedLegsList() {
   DrLegStorage.list().then(function (entries) {
     var listEl = document.getElementById('savedLegsList');
@@ -492,7 +539,8 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   var restored = restoreForm();
-  if (!restored) {
+  var handoffApplied = applyPendingDrLegStartHandoff(); // overrides the restored/default start position above if Fix just sent one
+  if (!restored && !handoffApplied) {
     var now = new Date();
     document.getElementById('drStartDate').valueAsDate = now;
     var pad2 = function (n) { return String(n).padStart(2, '0'); };
@@ -505,6 +553,6 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('endTimeCard').style.display = _drMode === 'endtime' ? 'block' : 'none';
 
   recompute();
-  if (!restored) saveForm();
+  if (!restored || handoffApplied) saveForm();
   refreshSavedLegsList();
 });

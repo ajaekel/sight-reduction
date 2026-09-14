@@ -156,7 +156,9 @@ function initApp() {
   document.getElementById('btnAddSight').addEventListener('click', function () {
     addSightingLine(true);
   });
-  document.getElementById('btnClearAll').addEventListener('click', clearAllData);
+  ['btnClearAll', 'btnClearAllBottom'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', clearAllData);
+  });
 
   ['btnSaveSightTop', 'btnSaveSightBottom'].forEach(function (id) {
     document.getElementById(id).addEventListener('click', onSaveSight);
@@ -170,6 +172,12 @@ function initApp() {
     });
   });
   document.getElementById('fileImportJson').addEventListener('change', onImportJson);
+  ['btnAddToFixTop', 'btnAddToFixBottom'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', openAddToFixPanel);
+  });
+  document.getElementById('addToFixSelect').addEventListener('change', updateAddToFixPanel);
+  document.getElementById('btnConfirmAddToFix').addEventListener('click', onConfirmAddToFix);
+  document.getElementById('btnCancelAddToFix').addEventListener('click', closeAddToFixPanel);
   document.getElementById('btnFetchUsno').addEventListener('click', onFetchUsno);
   document.getElementById('btnCacheRange').addEventListener('click', onCacheRange);
   document.getElementById('btnClearCache').addEventListener('click', onClearCache);
@@ -1721,6 +1729,76 @@ function onImportJson(evt) {
     evt.target.value = '';
   };
   reader.readAsText(file);
+}
+
+/**
+ * "Add to a Fix" opens a small inline panel (not a blocking prompt) to pick
+ * an existing Fix or name a new one. Operates on the sight this page
+ * currently has open -- it must already be saved (Fix references sightings
+ * by id, so there has to be one) -- and reuses the exact same
+ * "push sighting id, save" mutation fixes.js's own add-sighting flow uses.
+ */
+function openAddToFixPanel() {
+  if (!window._currentRecordId) {
+    showToast('Save this sight first, then add it to a Fix.', true);
+    return;
+  }
+
+  var select = document.getElementById('addToFixSelect');
+  select.innerHTML = '<option value="__new__">+ Create a new fix</option>';
+
+  FixStorage.list().then(function (entries) {
+    entries.forEach(function (entry) {
+      var opt = document.createElement('option');
+      opt.value = entry.id;
+      opt.textContent = entry.name || 'Untitled Fix';
+      select.appendChild(opt);
+    });
+    var panel = document.getElementById('addToFixPanel');
+    panel.style.display = 'block';
+    updateAddToFixPanel();
+    if (panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
+
+function updateAddToFixPanel() {
+  var isNew = document.getElementById('addToFixSelect').value === '__new__';
+  document.getElementById('newFixNameGroup').style.display = isNew ? 'block' : 'none';
+  if (isNew && !document.getElementById('newFixNameInput').value) {
+    var d = new Date();
+    document.getElementById('newFixNameInput').value = 'Fix - ' + (d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0') + '/' + d.getFullYear();
+  }
+}
+
+function closeAddToFixPanel() {
+  document.getElementById('addToFixPanel').style.display = 'none';
+}
+
+function onConfirmAddToFix() {
+  var select = document.getElementById('addToFixSelect');
+  var sightId = window._currentRecordId;
+  if (!sightId) { closeAddToFixPanel(); return; }
+
+  var fixPromise;
+  if (select.value === '__new__') {
+    var name = document.getElementById('newFixNameInput').value.trim() || 'Untitled Fix';
+    fixPromise = FixStorage.save({ name: name, sightingIds: [] });
+  } else {
+    fixPromise = FixStorage.get(select.value);
+  }
+
+  fixPromise.then(function (fix) {
+    if (!fix) throw new Error('Fix not found');
+    if (fix.sightingIds.indexOf(sightId) === -1) fix.sightingIds.push(sightId);
+    if (fix.activeSightingIds && fix.activeSightingIds.indexOf(sightId) === -1) fix.activeSightingIds.push(sightId);
+    return FixStorage.save(fix);
+  }).then(function (fix) {
+    showToast('Added to "' + fix.name + '".');
+    closeAddToFixPanel();
+  }).catch(function (err) {
+    console.error(err);
+    showToast('Could not add to that fix.', true);
+  });
 }
 
 

@@ -24,6 +24,9 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('toggleShowAzimuth').addEventListener('change', renderCurrentPlot);
   document.getElementById('methodLeastSquares').addEventListener('click', function () { setFixMethod(false); });
   document.getElementById('methodBisectors').addEventListener('click', function () { setFixMethod(true); });
+  document.getElementById('btnSaveFixPosition').addEventListener('click', onSaveFixPosition);
+  document.getElementById('btnFixToSighting').addEventListener('click', onFixToSighting);
+  document.getElementById('btnFixToDrLeg').addEventListener('click', onFixToDrLeg);
 
   window.addEventListener('hashchange', routeFromHash);
   routeFromHash();
@@ -161,6 +164,12 @@ function openFix(id) {
     document.getElementById('fixChartCard').style.display = 'none';
     document.getElementById('fixPlotStatus').textContent = '';
     lastChartInput = null;
+    // Reflect whatever was last saved (if anything) immediately, before the
+    // plot even loads -- renderCurrentPlot() below will refresh this to the
+    // live-computed value once sightings are fetched, which may differ if
+    // anything's changed since the last Save.
+    document.getElementById('fixPositionCard').style.display = fix.sightingIds.length ? 'block' : 'none';
+    updateFixPositionButtons();
     setFixMethodState(false); // fresh fix: always start on least-squares
 
     renderFixSightings(myToken);
@@ -370,6 +379,7 @@ function autoPlotFix() {
           zn: record.results.zn,
           interceptNM: record.results.interceptNM,
           observationTime: record.results.observationTime, // ISO UTC -- used to timestamp the Fix's cached resolvedPosition
+          tzOffset: record.position.tzOffset, // carried alongside, for handoffs built from the resolved position (see onFixToSighting/onFixToDrLeg)
           label: labels.title,
           color: SightCalc.paletteColor(i),
           badgeNumber: i + 1
@@ -419,23 +429,68 @@ function formatInterceptBadge(interceptNM) {
  * storage when the cached value actually changed, so toggling
  * azimuth/bisector display doesn't spam localStorage on every re-render.
  */
+/**
+ * Tracks the Fix's resolved position IN MEMORY on every render (so it's
+ * always available to the "Use This Fix" actions below), but deliberately
+ * does NOT persist it automatically -- see onSaveFixPosition(). Toggling
+ * between least-squares and bisectors to compare them shouldn't silently
+ * change what's saved; saving is a deliberate choice of which method's
+ * answer to commit to. tzOffset is tracked alongside (not part of the
+ * Position type itself, which is intentionally tz-agnostic) so the
+ * handoffs below can reconstruct a local date/time.
+ */
 function cacheResolvedPosition(fixResult, activeSightings) {
-  if (!fixResult.solvable || typeof fixResult.lat !== 'number' || typeof fixResult.lon !== 'number') return;
+  document.getElementById('fixPositionCard').style.display = activeSightings.length ? 'block' : 'none';
 
-  var latestTime = null;
+  if (!fixResult.solvable || typeof fixResult.lat !== 'number' || typeof fixResult.lon !== 'number') {
+    currentFix.resolvedPosition = null;
+    updateFixPositionButtons();
+    return;
+  }
+
+  var latest = null;
   activeSightings.forEach(function (s) {
-    if (s.observationTime && (!latestTime || s.observationTime > latestTime)) latestTime = s.observationTime;
+    if (s.observationTime && (!latest || s.observationTime > latest.observationTime)) latest = s;
   });
-  if (!latestTime) return; // shouldn't happen if fixResult resolved, but guard anyway
+  if (!latest) { currentFix.resolvedPosition = null; updateFixPositionButtons(); return; }
 
-  var next = SightCalc.makePosition(latestTime, fixResult.lat, fixResult.lon, SightCalc.POSITION_TYPES.FIX);
-  var prev = currentFix.resolvedPosition;
-  var unchanged = prev && prev.time === next.time && prev.type === next.type &&
-    Math.abs(prev.lat - next.lat) < 1e-9 && Math.abs(prev.lon - next.lon) < 1e-9;
-  if (unchanged) return;
+  currentFix.resolvedPosition = SightCalc.makePosition(latest.observationTime, fixResult.lat, fixResult.lon, SightCalc.POSITION_TYPES.FIX);
+  currentFix.resolvedPositionTzOffset = latest.tzOffset;
+  currentFix.resolvedPositionMethod = fixResult.source; // 'bisector' | 'least-squares'
+  updateFixPositionButtons();
+}
 
-  currentFix.resolvedPosition = next;
-  FixStorage.save(currentFix);
+function updateFixPositionButtons() {
+  var ready = !!currentFix.resolvedPosition;
+  document.getElementById('btnSaveFixPosition').disabled = !ready;
+  document.getElementById('btnFixToSighting').disabled = !ready;
+  document.getElementById('btnFixToDrLeg').disabled = !ready;
+}
+
+/** Explicit, deliberate persistence of the currently-displayed resolved position -- see cacheResolvedPosition's comment on why this isn't automatic. */
+function onSaveFixPosition() {
+  if (!currentFix.resolvedPosition) return;
+  var methodLabel = currentFix.resolvedPositionMethod === 'bisector' ? 'bisectors' : 'least-squares';
+  FixStorage.save(currentFix).then(function () {
+    showToast('Saved fix position (' + methodLabel + ').');
+  }).catch(function (err) {
+    console.error(err);
+    showToast('Could not save (storage may be full or unavailable).', true);
+  });
+}
+
+function onFixToSighting() {
+  if (!currentFix.resolvedPosition) return;
+  var handoff = { position: currentFix.resolvedPosition, tzOffset: currentFix.resolvedPositionTzOffset };
+  sessionStorage.setItem('ocsrApHandoff', JSON.stringify(handoff));
+  location.href = 'index.html';
+}
+
+function onFixToDrLeg() {
+  if (!currentFix.resolvedPosition) return;
+  var handoff = { position: currentFix.resolvedPosition, tzOffset: currentFix.resolvedPositionTzOffset };
+  sessionStorage.setItem('ocsrDrLegStartHandoff', JSON.stringify(handoff));
+  location.href = 'drleg.html';
 }
 
 /**
@@ -444,7 +499,8 @@ function cacheResolvedPosition(fixResult, activeSightings) {
  * sighting (so a deselected one can be switched back on); only the ones in
  * the active set are actually fed into the chart and the fix resolution.
  */
-function renderCurrentPlot() {  if (!lastChartInput) return;
+function renderCurrentPlot() {
+  if (!lastChartInput) return;
 
   var activeSet = getActiveSightingIds(currentFix);
   var plotInput = lastChartInput.filter(function (item) { return activeSet.has(item.id); });
