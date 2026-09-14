@@ -528,12 +528,28 @@ function collectObservations() {
   var rows = document.querySelectorAll('.sighting-item');
   var observations = [];
   rows.forEach(function (row) {
+    var hVal = row.querySelector('.t-h').value;
+    var mVal = row.querySelector('.t-m').value;
+    var sVal = row.querySelector('.t-s').value;
+    var degVal = row.querySelector('.s-deg').value;
+    var minVal = row.querySelector('.s-min').value;
+
+    // A brand-new/untouched sighting line (e.g. right after "+ Add Another
+    // Sight") shouldn't drag the average toward 00:00:00 / 0deg as a phantom
+    // zero-value data point -- skip it entirely until at least one of its
+    // fields has something in it, at which point it's included right away
+    // (missing sub-fields within that row still default to 0, same as
+    // before -- there's no way to average a genuinely incomplete time/height
+    // otherwise).
+    var isBlank = hVal === '' && mVal === '' && sVal === '' && degVal === '' && minVal === '';
+    if (isBlank) return;
+
     observations.push({
-      h: parseInt(row.querySelector('.t-h').value, 10) || 0,
-      m: parseInt(row.querySelector('.t-m').value, 10) || 0,
-      s: parseInt(row.querySelector('.t-s').value, 10) || 0,
-      heightDeg: parseFloat(row.querySelector('.s-deg').value) || 0,
-      heightMin: parseFloat(row.querySelector('.s-min').value) || 0
+      h: parseInt(hVal, 10) || 0,
+      m: parseInt(mVal, 10) || 0,
+      s: parseInt(sVal, 10) || 0,
+      heightDeg: parseFloat(degVal) || 0,
+      heightMin: parseFloat(minVal) || 0
     });
   });
   return observations;
@@ -710,7 +726,10 @@ function getClockErrorCorrectedLocalSec(avgLocalSec) {
 function updateAverages() {
   var observations = collectObservations();
   var avg = SightCalc.averageObservations(observations);
-  if (!avg) return;
+  if (!avg) {
+    resetAveragesDisplay();
+    return;
+  }
 
   var corrections = {
     ieMin: parseFloat(document.getElementById('ieMin').value) || 0,
@@ -740,6 +759,16 @@ function updateAverages() {
   baseUtcDate.setUTCSeconds(baseUtcDate.getUTCSeconds() + avgUtcSec);
 
   updateAlmanacHourLabels(baseUtcDate);
+}
+
+/** Placeholder state for "Average of Sightings" -- no sighting line has any data yet. */
+function resetAveragesDisplay() {
+  document.getElementById('avgLocalTime').innerText = '--:--:--';
+  document.getElementById('avgLocalTimeCorrected').innerText = '--:--:--';
+  document.getElementById('avgUtcTime').innerText = '--:--:-- UTC';
+  document.getElementById('avgHs').innerText = "--\u00B0 --.-'";
+  document.getElementById('computedHa').innerText = "--\u00B0 --.-'";
+  document.getElementById('computedHo').innerText = "--\u00B0 --.-'";
 }
 
 /** Converts a collected form-state object into the plain input shape calc.js expects. */
