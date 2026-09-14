@@ -189,7 +189,24 @@
    *  - 'fix': resolvedPosition.time -- skipped if never resolved.
    *  - 'drleg-start' / 'drleg-end': startPosition.time / endPosition.time
    *    respectively -- see above.
+   *
+   * Ties (two entries at the EXACT same instant) are broken by a fixed type
+   * priority, not left to whatever order the underlying storage happened to
+   * return records in -- that was a real bug: two chained DR Legs naturally
+   * share a timestamp (leg A's end is leg B's start), and without an
+   * explicit rule the tie was resolved by DrLegStorage.list()'s ordering
+   * (most-recently-saved first), which put leg B's start ahead of leg A's
+   * end -- backwards from the obvious reading, where a leg ending is
+   * understood to complete before the next one begins even when they land
+   * on the same instant. TYPE_SORT_WEIGHT below makes that explicit: an
+   * ending (drleg-end) sorts before anything else tied with it, and a
+   * beginning (drleg-start) sorts after everything else tied with it, with
+   * the passage's own starting position first of all (nothing precedes the
+   * start of the story) and Fix/Sight in between, arbitrarily but
+   * deterministically ordered relative to each other.
    */
+  var TYPE_SORT_WEIGHT = { position: 0, 'drleg-end': 1, fix: 2, sight: 2, 'drleg-start': 3 };
+
   function getPassageTimeline(passageId) {
     return Promise.all([get(passageId), getPassageRecords(passageId)]).then(function (results) {
       var passage = results[0];
@@ -218,7 +235,10 @@
         }
       });
 
-      entries.sort(function (a, b) { return a.time < b.time ? -1 : (a.time > b.time ? 1 : 0); });
+      entries.sort(function (a, b) {
+        if (a.time !== b.time) return a.time < b.time ? -1 : 1;
+        return TYPE_SORT_WEIGHT[a.type] - TYPE_SORT_WEIGHT[b.type];
+      });
       return entries;
     });
   }

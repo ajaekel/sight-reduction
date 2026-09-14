@@ -238,9 +238,19 @@ function sightSummary(record) {
   return (record.title || label) + ' \u00B7 ' + (record.date || 'no date');
 }
 
+/**
+ * Includes the resolved position's own time explicitly (not just relying on
+ * the timeline row's own time label) -- makes it visible, right next to the
+ * position, that this is specifically the time of the Fix's latest
+ * constituent Sight, not some other notion of "when." Same reasoning
+ * applies to this function's other use, the "Add an Existing Fix" picker,
+ * where there's no separate time label at all otherwise.
+ */
 function fixSummary(record) {
   var pos = record.resolvedPosition;
-  return record.name + (pos ? ' \u00B7 ' + SightCalc.formatLat(pos.lat) + ', ' + SightCalc.formatLon(pos.lon) : ' \u00B7 not yet resolved');
+  if (!pos) return record.name + ' \u00B7 not yet resolved';
+  return record.name + ' \u00B7 ' + SightCalc.formatLat(pos.lat) + ', ' + SightCalc.formatLon(pos.lon) +
+    ' \u00B7 as of ' + new Date(pos.time).toLocaleTimeString();
 }
 
 function drLegSummary(record, whichEnd) {
