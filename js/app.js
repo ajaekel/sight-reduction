@@ -252,12 +252,19 @@ function handleBodyTypeChange() {
   updateHeaders();
 }
 
-/** The field that should receive focus after Body Type changes, so picking a type is the only tap/click needed. */
+/**
+ * The field that should receive focus after Body Type changes, so picking a
+ * type is the only tap/click needed -- but only for Star/Planet, where a name
+ * still needs to be entered. For Sun/Moon, Limb defaults to "Lower" (correct
+ * more often than not), so auto-opening that dropdown would force an extra
+ * dismissal on the common case where the default is already right; leave
+ * focus alone and let the person tap it only if they actually need "Upper".
+ */
 function focusFieldForBodyType() {
   var type = document.getElementById('bodyType').value;
   var field = (type === 'star') ? document.getElementById('bodyName')
             : (type === 'planet') ? document.getElementById('planetSelect')
-            : document.getElementById('limbSelect');
+            : null;
   if (!field) return;
   field.focus();
   // showPicker() opens a <select>'s (or other supported input's) native picker
