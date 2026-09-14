@@ -86,10 +86,33 @@
     });
   }
 
+  /**
+   * Assigns (or clears, with passageId=null) this fix's passageId, in
+   * place -- deliberately NOT routed through save(), so filing an existing
+   * fix under a Passage doesn't touch its savedAt/sightingIds/resolved
+   * position or anything else about it. Purely organizational metadata.
+   * Resolves the updated record, or null if not found.
+   */
+  function setPassageId(id, passageId) {
+    return new Promise(function (resolve, reject) {
+      try {
+        var raw = localStorage.getItem(PREFIX + id);
+        if (!raw) { resolve(null); return; }
+        var record = JSON.parse(raw);
+        record.passageId = passageId;
+        localStorage.setItem(PREFIX + id, JSON.stringify(record));
+        resolve(record);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
   global.FixStorage = {
     save: save,
     list: list,
     get: get,
-    remove: remove
+    remove: remove,
+    setPassageId: setPassageId
   };
 })(window);

@@ -122,12 +122,37 @@
     });
   }
 
+  /**
+   * Assigns (or clears, with passageId=null) this leg's passageId, in
+   * place. This is the one deliberate exception to "every save() creates a
+   * new record" (see file header): filing an already-logged leg under a
+   * Passage is organizational metadata added after the fact, not a
+   * correction to what was assumed at the time (course, speed, positions),
+   * so it doesn't go through save() and doesn't touch savedAt or spawn a
+   * duplicate record. Resolves the updated record, or null if not found.
+   */
+  function setPassageId(id, passageId) {
+    return new Promise(function (resolve, reject) {
+      try {
+        var raw = localStorage.getItem(RECORD_PREFIX + id);
+        if (!raw) { resolve(null); return; }
+        var record = JSON.parse(raw);
+        record.passageId = passageId;
+        localStorage.setItem(RECORD_PREFIX + id, JSON.stringify(record));
+        resolve(record);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
   global.DrLegStorage = {
     saveForm: saveForm,
     loadForm: loadForm,
     save: save,
     list: list,
     get: get,
-    remove: remove
+    remove: remove,
+    setPassageId: setPassageId
   };
 })(window);

@@ -828,6 +828,10 @@ details:not([open]) > summary.cache-summary-toggle {
   align-items: center;
   gap: 8px;
 }
+.saved-item-highlight {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
 .saved-item-info {
   font-size: 0.85rem;
   line-height: 1.3;

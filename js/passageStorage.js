@@ -106,17 +106,17 @@
 
   /**
    * Fetches every full record (not just index entries) from a given storage
-   * module and keeps only the ones whose own passageId matches. Guards
+   * module and keeps only the ones matching predicate(record). Guards
    * against the module not being loaded at all (a page that only needs
    * some of Sight/Fix/DrLeg won't have included every storage script) by
    * quietly returning an empty list rather than throwing.
    */
-  function matchingRecords(storage, passageId) {
+  function filteredRecords(storage, predicate) {
     if (!storage) return Promise.resolve([]);
     return storage.list().then(function (entries) {
       return Promise.all(entries.map(function (e) { return storage.get(e.id); }));
     }).then(function (records) {
-      return records.filter(function (r) { return r && r.passageId === passageId; });
+      return records.filter(function (r) { return r && predicate(r); });
     });
   }
 
@@ -126,10 +126,29 @@
    * { sights, fixes, drLegs }, each a plain array of full records.
    */
   function getPassageRecords(passageId) {
+    var belongsToThis = function (r) { return r.passageId === passageId; };
     return Promise.all([
-      matchingRecords(global.SightStorage, passageId),
-      matchingRecords(global.FixStorage, passageId),
-      matchingRecords(global.DrLegStorage, passageId)
+      filteredRecords(global.SightStorage, belongsToThis),
+      filteredRecords(global.FixStorage, belongsToThis),
+      filteredRecords(global.DrLegStorage, belongsToThis)
+    ]).then(function (results) {
+      return { sights: results[0], fixes: results[1], drLegs: results[2] };
+    });
+  }
+
+  /**
+   * Every Sight, Fix, and DR Leg NOT currently in any passage -- the pool
+   * available to assign to one. Same shape as getPassageRecords(). A record
+   * belongs to at most one Passage (see file header), so this is exactly
+   * "everyone eligible to be added, to any passage" system-wide, not scoped
+   * to a particular one.
+   */
+  function getUnassignedRecords() {
+    var isUnassigned = function (r) { return r.passageId === null || r.passageId === undefined; };
+    return Promise.all([
+      filteredRecords(global.SightStorage, isUnassigned),
+      filteredRecords(global.FixStorage, isUnassigned),
+      filteredRecords(global.DrLegStorage, isUnassigned)
     ]).then(function (results) {
       return { sights: results[0], fixes: results[1], drLegs: results[2] };
     });
@@ -204,12 +223,34 @@
     });
   }
 
+  /**
+   * Recomputes and persists startedAt/endedAt from the current timeline
+   * extent -- the cached-summary pattern described in the file header.
+   * Called after any action that could change a passage's membership
+   * (assign, remove, or the passage's own creation with a starting
+   * position) so the list page can show accurate dates without walking the
+   * whole timeline on every render. Resolves the updated passage, or null
+   * if it doesn't exist.
+   */
+  function refreshDates(passageId) {
+    return Promise.all([get(passageId), getPassageTimeline(passageId)]).then(function (results) {
+      var passage = results[0];
+      var timeline = results[1];
+      if (!passage) return null;
+      passage.startedAt = timeline.length ? timeline[0].time : null;
+      passage.endedAt = timeline.length ? timeline[timeline.length - 1].time : null;
+      return save(passage);
+    });
+  }
+
   global.PassageStorage = {
     save: save,
     list: list,
     get: get,
     remove: remove,
     getPassageRecords: getPassageRecords,
-    getPassageTimeline: getPassageTimeline
+    getUnassignedRecords: getUnassignedRecords,
+    getPassageTimeline: getPassageTimeline,
+    refreshDates: refreshDates
   };
 })(window);

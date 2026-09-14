@@ -517,6 +517,15 @@ function refreshSavedLegsList() {
     }
     emptyEl.style.display = 'none';
 
+    // Deep-link support for "open the underlying record" from elsewhere
+    // (currently: a Passage's timeline) -- '#leg=<id>' highlights and
+    // scrolls to that specific saved leg. This page has no per-leg detail
+    // view of its own (a logged leg is historical record, not something
+    // with its own editable page), so "opening" one just means finding it
+    // in this list.
+    var m = /^#leg=(.+)$/.exec(location.hash);
+    var highlightId = m ? decodeURIComponent(m[1]) : null;
+
     entries.forEach(function (entry) {
       var item = document.createElement('div');
       item.className = 'saved-item';
@@ -538,8 +547,17 @@ function refreshSavedLegsList() {
       item.querySelector('.btn-mini-fix').addEventListener('click', function () { onChainFromSavedLeg(entry.id); });
       item.querySelector('.btn-mini-del').addEventListener('click', function () { onDeleteLeg(entry.id); });
 
+      if (highlightId && entry.id === highlightId) {
+        item.classList.add('saved-item-highlight');
+      }
+
       listEl.appendChild(item);
     });
+
+    if (highlightId) {
+      var highlighted = listEl.querySelector('.saved-item-highlight');
+      if (highlighted && highlighted.scrollIntoView) highlighted.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   }).catch(function (err) {
     console.error(err);
   });

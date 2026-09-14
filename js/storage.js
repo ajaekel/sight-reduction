@@ -108,11 +108,34 @@
     });
   }
 
+  /**
+   * Assigns (or clears, with passageId=null) this sight's passageId, in
+   * place -- deliberately NOT routed through save(), so filing an existing
+   * sight under a Passage doesn't touch its savedAt or anything else about
+   * it. This is purely organizational metadata, not a change to the
+   * observation itself. Resolves the updated record, or null if not found.
+   */
+  function setPassageId(id, passageId) {
+    return new Promise(function (resolve, reject) {
+      try {
+        var raw = localStorage.getItem(PREFIX + id);
+        if (!raw) { resolve(null); return; }
+        var record = JSON.parse(raw);
+        record.passageId = passageId;
+        localStorage.setItem(PREFIX + id, JSON.stringify(record));
+        resolve(record);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
   global.SightStorage = {
     save: save,
     list: list,
     get: get,
     remove: remove,
+    setPassageId: setPassageId,
     requestPersistence: requestPersistence
   };
 })(window);
