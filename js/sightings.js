@@ -60,7 +60,7 @@ function refreshSavedList() {
       var item = document.createElement('div');
       item.className = 'saved-item';
 
-      var title = entry.label ? entry.label : (entry.bodyLabel + ' \u2014 ' + (entry.date || ''));
+      var title = entry.title ? entry.title : (entry.bodyLabel + ' \u2014 ' + (entry.date || ''));
       var meta = entry.bodyLabel + ' \u2014 ' + (entry.date || 'no date') +
                  ' \u00B7 saved ' + new Date(entry.savedAt).toLocaleString();
 

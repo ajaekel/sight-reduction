@@ -62,7 +62,7 @@
           id: record.id,
           savedAt: record.savedAt,
           date: record.date,
-          label: record.label || '',
+          title: record.title || '',
           bodyLabel: bodyLabel(record.body)
         });
         writeIndex(idx);

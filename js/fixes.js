@@ -191,7 +191,7 @@ function setSightingActive(fix, id, isActive) {
 }
 
 function sightingRowLabel(record) {
-  var title = record.label || SightCalc.formatBodyLabel(record.body);
+  var title = record.title || SightCalc.formatBodyLabel(record.body);
   var meta = SightCalc.formatBodyLabel(record.body) + ' \u00B7 ' + (record.date || 'no date');
   if (record.results && record.results.observationTime) {
     var d = new Date(record.results.observationTime);
@@ -279,7 +279,7 @@ function renderAvailableSightings(token) {
         '<div class="saved-item-info"><div class="saved-item-title"></div><div class="saved-item-meta"></div></div>' +
         '<div class="saved-item-actions"><button class="btn-mini btn-mini-load">Add</button></div>';
 
-      item.querySelector('.saved-item-title').textContent = entry.label || entry.bodyLabel;
+      item.querySelector('.saved-item-title').textContent = entry.title || entry.bodyLabel;
       item.querySelector('.saved-item-meta').textContent =
         entry.bodyLabel + ' \u00B7 ' + (entry.date || 'no date') + ' \u00B7 saved ' + new Date(entry.savedAt).toLocaleString();
 

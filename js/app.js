@@ -74,7 +74,8 @@ function applyPendingSightingLoad() {
     if (!record) { showToast('Could not find that saved sight.', true); return; }
     applyFormState(record);
     window._currentRecordId = record.id;
-    showToast('Loaded "' + (record.label || 'sight') + '".');
+    window._currentTitle = record.title || '';
+    showToast('Loaded "' + (record.title || 'sight') + '".');
   }).catch(function (err) {
     console.error(err);
     showToast('Could not load that saved sight.', true);
@@ -514,7 +515,7 @@ function collectFormState() {
   return {
     id: null,
     schemaVersion: 1,
-    label: g('sightLabel').value.trim(),
+    notes: g('sightNotes').value.trim(),
     date: g('sightDate').value,
     body: {
       type: bodyType,
@@ -557,7 +558,7 @@ function applyFormState(state) {
   var g = function (id) { return document.getElementById(id); };
   var setVal = function (id, v) { g(id).value = (v === undefined || v === null) ? '' : v; };
 
-  setVal('sightLabel', state.label || '');
+  setVal('sightNotes', state.notes || '');
   setVal('sightDate', state.date || '');
   setVal('bodyType', (state.body && state.body.type) || 'sun');
   handleBodyTypeChange();
@@ -1118,6 +1119,7 @@ function clearAllData() {
   sightingCount = 0;
   addSightingLine(false);
   window._currentRecordId = null;
+  window._currentTitle = null;
   _almanacFieldsContext = null;
   _autoFillLoopGuard = { signature: null, count: 0 };
   setClockErrorDirection('fast');
@@ -1401,14 +1403,16 @@ function showToast(message, isError) {
 
 function onSaveSight() {
   var state = collectFormState();
-  var existingLabel = state.label || '';
-  var suggested = existingLabel || (formatBodyLabel(state.body) + (state.date ? ' - ' + state.date : ''));
 
-  var name = prompt('Save this sight as:', suggested);
+  // The save name is its own concept, tracked independently of Notes (see
+  // window._currentTitle, set on Load) -- it must never read from or write
+  // back into the Notes field.
+  var suggestedTitle = formatBodyLabel(state.body) + (state.date ? ' - ' + state.date : '');
+  var name = prompt('Save this sight as:', window._currentTitle || suggestedTitle);
   if (name === null) return; // user cancelled
 
-  state.label = name.trim() || suggested;
-  document.getElementById('sightLabel').value = state.label; // keep the form in sync
+  state.title = name.trim() || suggestedTitle;
+  window._currentTitle = state.title;
 
   // If we're editing a sight we just loaded/saved this session, update that
   // same record instead of creating a duplicate.
@@ -1418,7 +1422,7 @@ function onSaveSight() {
 
   SightStorage.save(state).then(function (saved) {
     window._currentRecordId = saved.id;
-    showToast('Saved as "' + state.label + '".');
+    showToast('Saved as "' + state.title + '".');
   }).catch(function (err) {
     console.error(err);
     showToast('Could not save sight (storage may be full or unavailable).', true);
@@ -1429,9 +1433,7 @@ function onExportJson() {
   var state = collectFormState();
   if (window._lastResult) state.results = window._lastResult;
 
-  var filenameDate = state.date || new Date().toISOString().split('T')[0];
-  var filenameBody = (state.body.name || state.body.type || 'sight').replace(/\s+/g, '_');
-  var filename = 'sight_' + filenameDate + '_' + filenameBody + '.json';
+  var filename = buildExportFilename(state) + '.json';
 
   var blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
   var url = URL.createObjectURL(blob);
@@ -1444,6 +1446,35 @@ function onExportJson() {
   URL.revokeObjectURL(url);
 
   showToast('Exported ' + filename);
+}
+
+/**
+ * "yyyy-mm-dd HH-mm-ss <type> <name>" -- date/time come from the observation
+ * itself (first sighting line's UTC time), not the moment of export, so
+ * re-exporting the same sight later reproduces the same filename. <name> is
+ * whatever save title is already known for this sight (see window._currentTitle,
+ * set on Save/Load; see the Notes/title split from earlier), falling back to
+ * the body's own name (star/planet) and omitted entirely if neither exists.
+ */
+function buildExportFilename(state) {
+  var pad2 = function (n) { return String(n).padStart(2, '0'); };
+  var now = new Date();
+
+  var dateStr = state.date || now.toISOString().split('T')[0];
+
+  var firstObs = state.observations && state.observations[0];
+  var timeStr = firstObs
+    ? pad2(firstObs.h) + '-' + pad2(firstObs.m) + '-' + pad2(firstObs.s)
+    : pad2(now.getHours()) + '-' + pad2(now.getMinutes()) + '-' + pad2(now.getSeconds());
+
+  var typeStr = (state.body && state.body.type) || 'sight';
+  var nameStr = (window._currentTitle || (state.body && state.body.name) || '').trim();
+
+  var parts = [dateStr, timeStr, typeStr];
+  if (nameStr) parts.push(nameStr);
+
+  // Strip characters that are illegal (or awkward) in filenames on common filesystems.
+  return parts.join(' ').replace(/[\\/:*?"<>|]/g, '_');
 }
 
 function onImportJson(evt) {
@@ -1459,6 +1490,7 @@ function onImportJson(evt) {
       }
       applyFormState(parsed);
       window._currentRecordId = null; // imported sight is treated as new/unsaved until user hits Save
+      window._currentTitle = parsed.title || null;
       showToast('Imported sight from ' + file.name);
     } catch (err) {
       console.error(err);
