@@ -10,11 +10,13 @@
  *
  * That's possible in the first place because every candidate record already
  * carries its own timestamp (a Sight's observationTime, a Fix's
- * resolvedPosition.time, a DR Leg's startPosition.time) -- chronological
- * order is therefore a query (sort by time), not something that needs its
- * own storage. getPassageTimeline() below is exactly that query, computed
- * fresh every time it's called -- a VIEW over the other stores, not stored
- * data of its own.
+ * resolvedPosition.time, a DR Leg's start/endPosition.time -- a DR Leg has
+ * two, since it represents an interval, not an instant; see
+ * getPassageTimeline's own comment) -- chronological order is therefore a
+ * query (sort by time), not something that needs its own storage.
+ * getPassageTimeline() below is exactly that query, computed fresh every
+ * time it's called -- a VIEW over the other stores, not stored data of its
+ * own.
  *
  * startedAt/endedAt on the Passage record itself are a cached summary (the
  * earliest/latest member timestamp) for cheap display without walking the
@@ -135,21 +137,39 @@
 
   /**
    * The chronological story of a passage: its starting position plus every
-   * Sight/Fix/DrLeg belonging to it, sorted by time. A VIEW, not stored
-   * data -- computed fresh on every call (see file header). Each entry is
-   * { type, time, record } so a caller can branch on type without having
-   * to guess it from the record's shape.
+   * Sight/Fix/DrLeg belonging to it. A VIEW, not stored data -- computed
+   * fresh on every call (see file header), and deliberately thin: each
+   * entry is { type, time, recordId }, a pointer to a moment plus which
+   * record produced it -- never a copy of the record itself. That's a
+   * distinct concept from both of the things it's built from:
+   *   - Position: a point in space/time ({lat, lon, time, sourceType,
+   *     sourceId}) -- calc.js's makePosition().
+   *   - A navigation record: something that actually happened or was
+   *     calculated (a Sight, a Fix, a DR Leg) -- these are what get stored.
+   *   - A timeline entry: this function's own output, a view over those
+   *     records for the purpose of ordering them, nothing more. Rendering
+   *     an entry's details is a separate lookup (SightStorage.get(recordId)
+   *     etc., using the entry's type to know which store) -- kept that way
+   *     on purpose, so no persisted record ever needs a UI-shaped field
+   *     bolted onto it just to make this function's output more convenient.
+   *
+   * Most records are a single POINT in time and contribute one entry. A DR
+   * Leg is different: it represents an INTERVAL (a start and an end,
+   * potentially hours apart), so it contributes two entries --
+   * 'drleg-start' and 'drleg-end' -- both carrying the same recordId, since
+   * they're two views onto the one leg, not two separate things. This is
+   * purely a computed split at view time; the DR Leg record itself still
+   * has exactly one startPosition and one endPosition, unchanged.
    *
    * Time used per type:
-   *  - 'position' (the passage's own starting position): its own time.
+   *  - 'position' (the passage's own starting position): its own time;
+   *    recordId is the passage's own id, since the starting position has no
+   *    separate record of its own to point to.
    *  - 'sight': results.observationTime -- skipped if the sight has never
    *    actually been reduced, since there's no real instant to place it at.
    *  - 'fix': resolvedPosition.time -- skipped if never resolved.
-   *  - 'drleg': startPosition.time, deliberately the START rather than the
-   *    end. A leg then sorts immediately after whatever established that
-   *    start (a prior fix, a chained leg's own start) and before whatever
-   *    happens at its end, rather than risking a tie with the very next
-   *    entry's timestamp if it were keyed by its end instead.
+   *  - 'drleg-start' / 'drleg-end': startPosition.time / endPosition.time
+   *    respectively -- see above.
    */
   function getPassageTimeline(passageId) {
     return Promise.all([get(passageId), getPassageRecords(passageId)]).then(function (results) {
@@ -158,21 +178,24 @@
       var entries = [];
 
       if (passage && passage.startingPosition && passage.startingPosition.time) {
-        entries.push({ type: 'position', time: passage.startingPosition.time, record: passage.startingPosition });
+        entries.push({ type: 'position', time: passage.startingPosition.time, recordId: passage.id });
       }
       records.sights.forEach(function (s) {
         if (s.results && s.results.observationTime) {
-          entries.push({ type: 'sight', time: s.results.observationTime, record: s });
+          entries.push({ type: 'sight', time: s.results.observationTime, recordId: s.id });
         }
       });
       records.fixes.forEach(function (f) {
         if (f.resolvedPosition && f.resolvedPosition.time) {
-          entries.push({ type: 'fix', time: f.resolvedPosition.time, record: f });
+          entries.push({ type: 'fix', time: f.resolvedPosition.time, recordId: f.id });
         }
       });
       records.drLegs.forEach(function (leg) {
         if (leg.startPosition && leg.startPosition.time) {
-          entries.push({ type: 'drleg', time: leg.startPosition.time, record: leg });
+          entries.push({ type: 'drleg-start', time: leg.startPosition.time, recordId: leg.id });
+        }
+        if (leg.endPosition && leg.endPosition.time) {
+          entries.push({ type: 'drleg-end', time: leg.endPosition.time, recordId: leg.id });
         }
       });
 
