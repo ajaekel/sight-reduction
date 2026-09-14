@@ -315,12 +315,16 @@ function onToPlanning() {
   location.href = 'planning.html';
 }
 
-/** Starts a new leg in-place: the DR result becomes the new start, duration/end-time are cleared (unknown for the new leg), SOG/course carry over since a leg often continues at the same speed/course. */
-function onChainLeg() {
-  var r = window._lastDrResult;
-  if (!r) return;
-
-  var dm = positionToDegMinFields(r.endPosition);
+/**
+ * Starts a new leg in-place from any given end position: fills the START
+ * fields, marks provenance as 'DR' (a leg's end -- whether just computed or
+ * pulled from a saved record -- is definitionally a DR position), and
+ * clears duration/end-time (unknown for the new leg). SOG/course are left
+ * alone -- shared by both call sites below since they each decide separately
+ * whether carrying them over makes sense.
+ */
+function chainFromPosition(endPosition, tzOffset) {
+  var dm = positionToDegMinFields(endPosition);
   document.getElementById('drLatDeg').value = dm.latDeg;
   document.getElementById('drLatMin').value = dm.latMin;
   document.getElementById('drLatNS').value = dm.latNS;
@@ -328,14 +332,13 @@ function onChainLeg() {
   document.getElementById('drLonMin').value = dm.lonMin;
   document.getElementById('drLonEW').value = dm.lonEW;
 
-  var local = SightCalc.utcMsToLocalDateTime(new Date(r.endPosition.time).getTime(), r.tzOffset);
+  var local = SightCalc.utcMsToLocalDateTime(new Date(endPosition.time).getTime(), tzOffset);
   document.getElementById('drStartDate').value = local.dateStr;
   var pad2 = function (n) { return String(n).padStart(2, '0'); };
   setFieldValue('drStartTime', pad2(Math.floor(local.secOfDay / 3600)) + ':' + pad2(Math.floor((local.secOfDay % 3600) / 60)));
+  document.getElementById('drTzOffset').value = tzOffset;
 
-  // The new leg's start IS the previous leg's DR-derived end -- mark the
-  // provenance accordingly (see _drStartPositionType's comment). This has
-  // to happen AFTER the field writes above: those are plain .value
+  // This has to happen AFTER the field writes above: those are plain .value
   // assignments, which don't fire 'input' events, so they won't trip the
   // "the person edited it by hand" reset wired below.
   _drStartPositionType = 'DR';
@@ -346,8 +349,36 @@ function onChainLeg() {
   document.getElementById('drEndDate').value = '';
   setFieldValue('drEndTime', '');
 
-  showToast('Started a new leg from the DR position.');
   recompute();
+}
+
+/** From the leg just computed on this page -- SOG/course carry over, since a leg often continues at the same speed/course right after. */
+function onChainLeg() {
+  var r = window._lastDrResult;
+  if (!r) return;
+  chainFromPosition(r.endPosition, r.tzOffset);
+  showToast('Started a new leg from the DR position.');
+}
+
+/**
+ * From a PREVIOUSLY saved leg's endpoint (not necessarily the one currently
+ * on screen) -- resuming a passage after navigating away, or branching a new
+ * leg off an old one. SOG/course are deliberately NOT carried over here: the
+ * saved leg could be from a while ago, so assuming the same speed/course
+ * still applies would be a bigger leap than chaining off what's freshly on
+ * screen.
+ */
+function onChainFromSavedLeg(legId) {
+  DrLegStorage.get(legId).then(function (leg) {
+    if (!leg) { showToast('Could not find that saved leg.', true); return; }
+    chainFromPosition(leg.endPosition, leg.tzOffset);
+    document.getElementById('drSog').value = '';
+    document.getElementById('drCourse').value = '';
+    showToast('Started a new leg from "' + leg.name + '".');
+  }).catch(function (err) {
+    console.error(err);
+    showToast('Could not load that saved leg.', true);
+  });
 }
 
 /**
@@ -381,6 +412,7 @@ function onSaveLeg() {
     courseDegTrue: r.courseDegTrue,
     durationHours: r.durationHours,
     endPosition: r.endPosition,
+    tzOffset: r.tzOffset, // needed to reconstruct local date/time when resuming from this leg's endpoint (see onChainFromSavedLeg)
     passageId: null
   };
 
@@ -472,11 +504,13 @@ function refreshSavedLegsList() {
           '<div class="saved-item-meta"></div>' +
         '</div>' +
         '<div class="saved-item-actions">' +
+          '<button class="btn-mini btn-mini-fix">Use as Start</button>' +
           '<button class="btn-mini btn-mini-del">Delete</button>' +
         '</div>';
 
       item.querySelector('.saved-item-title').textContent = entry.name;
       item.querySelector('.saved-item-meta').textContent = meta;
+      item.querySelector('.btn-mini-fix').addEventListener('click', function () { onChainFromSavedLeg(entry.id); });
       item.querySelector('.btn-mini-del').addEventListener('click', function () { onDeleteLeg(entry.id); });
 
       listEl.appendChild(item);
