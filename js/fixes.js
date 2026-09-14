@@ -420,24 +420,26 @@ function formatInterceptBadge(interceptNM) {
 }
 
 /**
- * Caches the Fix's resolved position (see docs/passage-design.md section 8,
- * prerequisite 2) the moment it successfully resolves, instead of only ever
- * computing it live and discarding it -- previously FixStorage never stored
- * a position at all. Timestamped with the LATEST observation time among the
- * actively-plotted sightings, matching the usual convention that a fix's
- * time is the time of its most recent constituent sight. Only writes to
- * storage when the cached value actually changed, so toggling
- * azimuth/bisector display doesn't spam localStorage on every re-render.
- */
-/**
  * Tracks the Fix's resolved position IN MEMORY on every render (so it's
  * always available to the "Use This Fix" actions below), but deliberately
- * does NOT persist it automatically -- see onSaveFixPosition(). Toggling
- * between least-squares and bisectors to compare them shouldn't silently
- * change what's saved; saving is a deliberate choice of which method's
- * answer to commit to. tzOffset is tracked alongside (not part of the
- * Position type itself, which is intentionally tz-agnostic) so the
- * handoffs below can reconstruct a local date/time.
+ * does NOT persist it automatically -- see onSaveFixPosition(). Previously
+ * FixStorage never stored a position at all (it was recomputed live on
+ * every view and discarded); toggling between least-squares and bisectors
+ * to compare them also shouldn't silently change what's saved, so caching
+ * here is memory-only and persisting is a separate, deliberate choice of
+ * which method's answer to commit to.
+ *
+ * Timestamped with the LATEST observation time among the actively-plotted
+ * sightings, matching the usual convention that a fix's time is the time of
+ * its most recent constituent sight. sourceId is stamped as this Fix's own
+ * id right away (unlike a DR Leg's live endPosition, a Fix always has a
+ * stable id already -- FixStorage.save() assigns one the moment the fix is
+ * first created, before any sightings are even added), so anything that
+ * later copies this position elsewhere (a new Sight's AP, a DR Leg's start)
+ * can say which Fix it came from. tzOffset/method are tracked alongside,
+ * not inside the Position itself (Position is intentionally tz- and
+ * method-agnostic), so the handoffs below can reconstruct a local
+ * date/time and the Save button can report which method was used.
  */
 function cacheResolvedPosition(fixResult, activeSightings) {
   document.getElementById('fixPositionCard').style.display = activeSightings.length ? 'block' : 'none';
@@ -454,7 +456,7 @@ function cacheResolvedPosition(fixResult, activeSightings) {
   });
   if (!latest) { currentFix.resolvedPosition = null; updateFixPositionButtons(); return; }
 
-  currentFix.resolvedPosition = SightCalc.makePosition(latest.observationTime, fixResult.lat, fixResult.lon, SightCalc.POSITION_TYPES.FIX);
+  currentFix.resolvedPosition = SightCalc.makePosition(latest.observationTime, fixResult.lat, fixResult.lon, SightCalc.POSITION_SOURCE_TYPES.FIX, currentFix.id);
   currentFix.resolvedPositionTzOffset = latest.tzOffset;
   currentFix.resolvedPositionMethod = fixResult.source; // 'bisector' | 'least-squares'
   updateFixPositionButtons();

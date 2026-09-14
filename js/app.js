@@ -24,8 +24,8 @@ document.addEventListener('DOMContentLoaded', function () {
  *  - planning.html's "Start a Sight with this AP" sends the older simple
  *    shape (date/tzOffset/latDeg/etc directly) -- Planning has no specific
  *    time-of-day to offer, only a date, so this shape has none either.
- *  - drleg.html sends the newer { position: {time,lat,lon,type}, tzOffset }
- *    shape (see calc.js's Position type / docs/passage-design.md section 8)
+ *  - drleg.html sends the newer { position: {time,lat,lon,sourceType,sourceId}, tzOffset }
+ *    shape (calc.js's Position type -- see makePosition's own comment)
  *    which carries an exact arrival instant, used below to pre-fill the
  *    first sighting line's observation time as a starting guess. This is a
  *    convenience, not a correctness fix -- the AP itself doesn't need a

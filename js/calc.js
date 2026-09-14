@@ -761,27 +761,41 @@
   }
 
   /**
-   * Position { time, lat, lon, type } -- the one shared shape for "a place at
-   * a moment" used across DR Leg, Fix, and the handoffs between pages. See
-   * docs/passage-design.md section 3 for the reasoning: this concept already
-   * existed in three incompatible partial forms (a Sight's AP had no time, a
-   * Fix's resolved point had neither a stored time nor a persisted value at
-   * all, a DR Leg's result had time but no provenance) before being unified
-   * here.
+   * Position { time, lat, lon, sourceType, sourceId } -- the one shared shape
+   * for "a place at a moment, and how we know it" used across DR Leg, Fix,
+   * Passage, and the handoffs between pages. Before this existed as one
+   * type, the same concept was scattered in three incompatible partial
+   * forms: a Sight's AP had no time attached to it at all, a Fix's resolved
+   * point had neither a stored time nor a persisted value in the first
+   * place (recomputed live and thrown away), and a DR Leg's result had a
+   * time but no record of where it came from.
    *
    * time: ISO 8601 UTC string, or null if only a date (no specific instant)
    *       is meaningful -- e.g. Planning's AP isn't tied to one instant.
    * lat/lon: signed decimal degrees (N/E positive).
-   * type: one of POSITION_TYPES -- how much to trust this position. A KNOWN
-   *       position is exact (GPS, a charted mark, hand-verified); a FIX is
-   *       the best current celestial/other estimate; a DR position is
+   * sourceType: one of POSITION_SOURCE_TYPES -- how much to trust this
+   *       position. KNOWN is exact (GPS, a charted mark, hand-verified);
+   *       FIX is the best current celestial/other estimate; DR is
    *       provisional and accumulates uncertainty the longer it's been
    *       projected without a new fix.
+   * sourceId: the id of the specific record this position came from (a Fix
+   *       id, a DR Leg id), or null if it isn't backed by one -- e.g. a
+   *       hand-typed KNOWN position, or a DR Leg's own live result before
+   *       it's been saved (it can't reference a record that doesn't exist
+   *       yet). This is what lets a UI eventually say "current position:
+   *       DR, derived from DR Leg #7" instead of just "DR" with no way to
+   *       go look at the leg that produced it. Set by whichever code is
+   *       handing this position to another record, at the moment of
+   *       handoff -- not necessarily by whoever first computed it (e.g. a
+   *       Fix's resolvedPosition gets its own id stamped on save, but a
+   *       live/unsaved DR Leg's endPosition stays null until that leg is
+   *       actually saved, since only then does it have a stable id to
+   *       point back to).
    */
-  var POSITION_TYPES = { KNOWN: 'KNOWN', FIX: 'FIX', DR: 'DR' };
+  var POSITION_SOURCE_TYPES = { KNOWN: 'KNOWN', FIX: 'FIX', DR: 'DR' };
 
-  function makePosition(time, lat, lon, type) {
-    return { time: time || null, lat: lat, lon: lon, type: type };
+  function makePosition(time, lat, lon, sourceType, sourceId) {
+    return { time: time || null, lat: lat, lon: lon, sourceType: sourceType, sourceId: sourceId || null };
   }
 
   /**
@@ -874,7 +888,7 @@
     computeTwilightTimes: computeTwilightTimes,
     localDateTimeToUtcMs: localDateTimeToUtcMs,
     utcMsToLocalDateTime: utcMsToLocalDateTime,
-    POSITION_TYPES: POSITION_TYPES,
+    POSITION_SOURCE_TYPES: POSITION_SOURCE_TYPES,
     makePosition: makePosition,
     drPosition: drPosition,
     computeDrLeg: computeDrLeg,

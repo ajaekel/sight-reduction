@@ -8,13 +8,13 @@
  *
  *  - Saved DR Leg records (new): an actual list of logged legs, each with a
  *    stable id, matching the same save()/list()/get()/remove() shape as
- *    SightStorage/FixStorage. This is what makes a DR Leg something a
- *    Passage timeline (or anything else) can reference by id -- see
- *    docs/passage-design.md section 8, prerequisite 1. A DR Leg, once
- *    logged, is treated as historical record (see the design doc's answer
- *    to "is Passage immutable or editable" -- a leg says what was assumed
- *    at the time, and isn't meant to be edited after the fact), so there's
- *    no update-in-place here: every save creates a new record.
+ *    SightStorage/FixStorage. That stable id is what lets a Passage (or
+ *    anything else) reference "this specific leg" rather than having to
+ *    describe it some other way. A DR Leg, once logged, is treated as
+ *    historical record -- it says what was assumed at the time (course,
+ *    speed, start position), and isn't meant to be corrected in place after
+ *    the fact the way a live in-progress form would be -- so there's no
+ *    update-in-place here: every save creates a new record.
  */
 (function (global) {
   'use strict';
@@ -60,7 +60,7 @@
    * Save (always creates a new record -- see file header on why there's no
    * update-in-place). Mutates record.id/savedAt.
    * Expected shape: { id, savedAt, name, startPosition, sog, courseDegTrue,
-   *                    durationHours, endPosition, passageId }
+   *                    durationHours, endPosition, tzOffset, passageId }
    * where startPosition/endPosition are calc.js's Position shape.
    */
   function save(record) {
@@ -69,6 +69,14 @@
         record.id = uid(); // always a new id -- see file header
         record.savedAt = new Date().toISOString();
         if (record.passageId === undefined) record.passageId = null;
+
+        // endPosition is this leg's own definitive output -- now that the
+        // leg has a stable id (just assigned above), stamp it as the
+        // position's source so anything that later copies this position
+        // elsewhere (a new Sight's AP, a chained leg's start) can say where
+        // it actually came from. Can't do this any earlier: before this
+        // point the leg has no id yet to point back to.
+        if (record.endPosition) record.endPosition.sourceId = record.id;
 
         localStorage.setItem(RECORD_PREFIX + record.id, JSON.stringify(record));
 

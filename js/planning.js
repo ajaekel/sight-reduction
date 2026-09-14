@@ -529,7 +529,10 @@ function onToDrLeg() {
   if (!pos || !dateVal || isNaN(tzOffset) || !r) return;
 
   var utcMs = SightCalc.localDateTimeToUtcMs(dateVal, 0, tzOffset) + r.dayOffset * 86400000 + r.zoneSec * 1000;
-  var position = SightCalc.makePosition(new Date(utcMs).toISOString(), pos.lat, pos.lon, SightCalc.POSITION_TYPES.KNOWN);
+  // sourceId stays null: Planning's AP is a hand-entered field with no
+  // record of its own to point back to (unlike a Fix, which always has a
+  // stable id by the time it resolves a position).
+  var position = SightCalc.makePosition(new Date(utcMs).toISOString(), pos.lat, pos.lon, SightCalc.POSITION_SOURCE_TYPES.KNOWN, null);
   sessionStorage.setItem('ocsrDrLegStartHandoff', JSON.stringify({ position: position, tzOffset: tzOffset }));
   location.href = 'drleg.html';
 }

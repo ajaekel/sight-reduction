@@ -12,12 +12,17 @@
 
 var _drMode = 'duration'; // 'duration' | 'endtime'
 
-// Provenance of the START position -- 'KNOWN' unless it was carried in from
-// chaining a previous leg (see onChainLeg), in which case it's 'DR'. Reset
-// to 'KNOWN' the moment the person actually edits a start field by hand
+// Provenance of the START position, per calc.js's Position.sourceType/sourceId
+// (see makePosition's own comment for the full reasoning). 'KNOWN'/null
+// unless it was carried in from chaining a previous leg (onChainLeg /
+// onChainFromSavedLeg) or receiving a handoff from Fix, in which case
+// sourceType/sourceId identify where it actually came from. Reset to
+// 'KNOWN'/null the moment the person actually edits a start field by hand
 // (see the DR_START_FIELD_IDS wiring below) -- editing implies they're
-// overriding it with a value they're now vouching for directly.
+// overriding it with a value they're now vouching for directly, not
+// whatever record it used to trace back to.
 var _drStartPositionType = 'KNOWN';
+var _drStartSourceId = null;
 
 /** Every logical field whose value should survive navigating away and back. Time fields map to id+'H'/id+'M' -- see getFieldValue/setFieldValue. */
 var DRLEG_FIELD_IDS = [
@@ -28,7 +33,7 @@ var DRLEG_FIELD_IDS = [
   'drEndDate', 'drEndTime'
 ];
 
-/** The subset of the above that define the START position's identity -- editing any of these by hand means it's no longer a carried-over DR position (see _drStartPositionType). */
+/** The subset of the above that define the START position's identity -- editing any of these by hand means it's no longer a carried-over DR/Fix position (see _drStartPositionType/_drStartSourceId). */
 var DR_START_FIELD_IDS = [
   'drStartDate', 'drStartTime', 'drLatDeg', 'drLatMin', 'drLatNS', 'drLonDeg', 'drLonMin', 'drLonEW'
 ];
@@ -213,12 +218,15 @@ function recompute() {
   document.getElementById('resArrival').textContent = arrival.dateStr + ' ' + pad2(arrH) + ':' + pad2(arrM);
 
   // The full domain-model result: a start Position (provenance tracked in
-  // _drStartPositionType) and an end Position (always DR-derived), plus the
-  // inputs that produced it. This is what feeds the handoffs, chaining, and
-  // "Save Leg" -- see docs/passage-design.md's DrLeg model.
+  // _drStartPositionType/_drStartSourceId, set wherever the start actually
+  // came from -- chaining, a Fix handoff, or plain hand-entry) and an end
+  // Position (always DR-derived; sourceId stays null until this leg is
+  // actually saved, since only then does it have a stable id of its own to
+  // point back to -- see drlegStorage.js's save()). This is what feeds the
+  // handoffs, chaining, and "Save Leg" below.
   window._lastDrResult = {
-    startPosition: SightCalc.makePosition(new Date(startUtcMs).toISOString(), pos.lat, pos.lon, _drStartPositionType),
-    endPosition: SightCalc.makePosition(new Date(leg.endUtcMs).toISOString(), leg.latDeg, leg.lonDeg, SightCalc.POSITION_TYPES.DR),
+    startPosition: SightCalc.makePosition(new Date(startUtcMs).toISOString(), pos.lat, pos.lon, _drStartPositionType, _drStartSourceId),
+    endPosition: SightCalc.makePosition(new Date(leg.endUtcMs).toISOString(), leg.latDeg, leg.lonDeg, SightCalc.POSITION_SOURCE_TYPES.DR, null),
     sog: sog,
     courseDegTrue: course,
     durationHours: leg.durationHours,
@@ -234,7 +242,7 @@ function recompute() {
 }
 
 function saveForm() {
-  var data = { mode: _drMode, startPositionType: _drStartPositionType, fields: {} };
+  var data = { mode: _drMode, startPositionType: _drStartPositionType, startSourceId: _drStartSourceId, fields: {} };
   DRLEG_FIELD_IDS.forEach(function (id) {
     data.fields[id] = getFieldValue(id);
   });
@@ -250,7 +258,10 @@ function restoreForm() {
     }
   });
   if (data.mode === 'duration' || data.mode === 'endtime') _drMode = data.mode;
-  if (data.startPositionType === 'KNOWN' || data.startPositionType === 'DR') _drStartPositionType = data.startPositionType;
+  if (data.startPositionType === 'KNOWN' || data.startPositionType === 'FIX' || data.startPositionType === 'DR') {
+    _drStartPositionType = data.startPositionType;
+  }
+  _drStartSourceId = data.startSourceId || null;
   return true;
 }
 
@@ -269,11 +280,10 @@ function positionToDegMinFields(position) {
 /**
  * New Sighting handoff: the rich, Position-aware shape, since index.html
  * has somewhere meaningful to put an exact time (the first observation
- * line) -- see docs/passage-design.md section 8, prerequisite 3. Note this
- * is a convenience prefill, not a correctness fix: the AP itself never
- * needed a time (reduceSight only reads the observation's own clock time),
- * it's just a time-saver for the common "DR to an event, then observe"
- * workflow.
+ * line). Note this is a convenience prefill, not a correctness fix: the AP
+ * itself never needed a time (reduceSight only reads the observation's own
+ * clock time), it's just a time-saver for the common "DR to an event, then
+ * observe" workflow.
  */
 function buildSightingHandoff() {
   var r = window._lastDrResult;
@@ -317,8 +327,11 @@ function onToPlanning() {
 
 /**
  * Starts a new leg in-place from any given end position: fills the START
- * fields, marks provenance as 'DR' (a leg's end -- whether just computed or
- * pulled from a saved record -- is definitionally a DR position), and
+ * fields, marks provenance as sourceType 'DR' with sourceId set to whatever
+ * this end position's own sourceId already is (a leg's end -- whether just
+ * computed or pulled from a saved record -- is definitionally a DR
+ * position; sourceId will be null if the leg producing it hasn't been
+ * saved yet, since only a saved leg has a stable id to point back to), and
  * clears duration/end-time (unknown for the new leg). SOG/course are left
  * alone -- shared by both call sites below since they each decide separately
  * whether carrying them over makes sense.
@@ -341,7 +354,8 @@ function chainFromPosition(endPosition, tzOffset) {
   // This has to happen AFTER the field writes above: those are plain .value
   // assignments, which don't fire 'input' events, so they won't trip the
   // "the person edited it by hand" reset wired below.
-  _drStartPositionType = 'DR';
+  _drStartPositionType = SightCalc.POSITION_SOURCE_TYPES.DR;
+  _drStartSourceId = endPosition.sourceId || null;
 
   // Duration/end-time are unknown for the new leg -- clear both sets of fields either way.
   document.getElementById('drDurationHours').value = '';
@@ -395,11 +409,10 @@ function computeLegName(result) {
 }
 
 /**
- * Persists the current computed leg as a permanent, id'd record -- see
- * docs/passage-design.md section 8, prerequisite 1. Every save creates a
- * new record (DrLegStorage.save() always assigns a fresh id): a logged DR
- * leg is historical record of what was assumed at the time, not something
- * edited in place after the fact.
+ * Persists the current computed leg as a permanent, id'd record. Every save
+ * creates a new record (DrLegStorage.save() always assigns a fresh id): a
+ * logged DR leg is historical record of what was assumed at the time, not
+ * something edited in place after the fact.
  */
 function onSaveLeg() {
   var r = window._lastDrResult;
@@ -417,6 +430,13 @@ function onSaveLeg() {
   };
 
   DrLegStorage.save(record).then(function (saved) {
+    // The live result's endPosition was built with sourceId null (this leg
+    // didn't have an id yet -- see recompute()); now that it's saved and
+    // DrLegStorage has stamped saved.endPosition.sourceId = saved.id, patch
+    // the live result to match, so chaining from it immediately afterward
+    // (without a reload in between) correctly points back to this leg
+    // rather than staying null.
+    r.endPosition.sourceId = saved.id;
     showToast('Saved "' + saved.name + '".');
     refreshSavedLegsList();
   }).catch(function (err) {
@@ -435,12 +455,15 @@ function onDeleteLeg(id) {
 
 /**
  * Consumes a one-time start-position handoff via sessionStorage key
- * 'ocsrDrLegStartHandoff' -- currently sent only by fixes.html's "Send to DR
- * Leg" (see onFixToDrLeg in js/fixes.js), carrying the same
- * { position: {time,lat,lon,type}, tzOffset } shape as the New Sighting
- * handoff. Fills the START fields (not the result) and marks the start
- * position's provenance as whatever the sender's Position.type says --
- * 'FIX' from a Fix, matching the DR Leg's own POSITION_TYPES.
+ * 'ocsrDrLegStartHandoff' -- currently sent by fixes.html's "Send to DR Leg"
+ * (see onFixToDrLeg in js/fixes.js) and planning.html's "Send to DR Leg"
+ * (see onToDrLeg in js/planning.js), both carrying the same
+ * { position: {time,lat,lon,sourceType,sourceId}, tzOffset } shape as the
+ * New Sighting handoff. Fills the START fields (not the result) and copies
+ * the incoming position's own sourceType/sourceId directly -- whoever built
+ * the handoff already stamped it correctly (a Fix stamps its own id when
+ * caching resolvedPosition; Planning has no id of its own, so it sends
+ * sourceType KNOWN with no sourceId), so there's nothing to re-derive here.
  */
 function applyPendingDrLegStartHandoff() {
   var raw;
@@ -474,9 +497,11 @@ function applyPendingDrLegStartHandoff() {
   document.getElementById('drLonMin').value = dm.lonMin;
   document.getElementById('drLonEW').value = dm.lonEW;
 
-  _drStartPositionType = h.position.type || 'KNOWN';
+  _drStartPositionType = h.position.sourceType || 'KNOWN';
+  _drStartSourceId = h.position.sourceId || null;
 
-  showToast('Start position filled in from Fix.');
+  var sourceLabel = _drStartPositionType === 'FIX' ? 'Fix' : _drStartPositionType === 'DR' ? 'DR' : 'Planning';
+  showToast('Start position filled in from ' + sourceLabel + '.');
   return true;
 }
 
@@ -566,7 +591,7 @@ document.addEventListener('DOMContentLoaded', function () {
     elems.forEach(function (el) {
       if (!el) return;
       el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', function () {
-        if (isStartField) _drStartPositionType = 'KNOWN';
+        if (isStartField) { _drStartPositionType = 'KNOWN'; _drStartSourceId = null; }
         recompute();
       });
     });

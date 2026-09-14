@@ -54,6 +54,14 @@
       try {
         if (!record.id) record.id = uid();
         record.savedAt = new Date().toISOString();
+        // Defaulted here rather than at every call site (the form, JSON
+        // import, anywhere else a Sight gets built) so none of them have to
+        // remember to include it. null until a Passage feature actually
+        // assigns one -- see Fix/DrLeg, which carry the same field for the
+        // same reason: a Sight, Fix, or DR Leg belongs to at most one
+        // Passage, and that's a fact the record itself should be able to
+        // state on its own, not something a container has to track for it.
+        if (record.passageId === undefined) record.passageId = null;
 
         localStorage.setItem(PREFIX + record.id, JSON.stringify(record));
 

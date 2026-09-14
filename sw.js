@@ -27,6 +27,7 @@ var PRECACHE_URLS = [
   './js/sightings.js',
   './js/drleg.js',
   './js/drlegStorage.js',
+  './js/passageStorage.js',
   './js/version.js'
 ];
 
