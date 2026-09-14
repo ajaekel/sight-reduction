@@ -117,6 +117,18 @@ h1 {
   background: var(--accent);
   color: #000;
 }
+.nav-menu-header {
+  display: block;
+  padding: 9px 14px 3px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #888;
+}
+.nav-menu-item.nav-menu-sub {
+  padding-left: 26px;
+}
 .card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -328,6 +340,30 @@ select {
   text-align: center;
   padding: 8px 2px;
 }
+.time-hm {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.planning-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.planning-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.planning-cell label {
+  font-size: 0.72rem;
+  color: #aaa;
+}
+.planning-cell-lat {
+  width: 44px;
+}
 .btn-add {
   background: transparent;
   border: 1px dashed var(--accent);
@@ -453,6 +489,16 @@ select {
   color: #aaa;
   margin: 0 0 12px 0;
   line-height: 1.45;
+}
+.planning-manual-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+}
+@media (max-width: 480px) {
+  .planning-manual-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .cache-progress {
   font-size: 0.8rem;

@@ -18,10 +18,76 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('swVersion').textContent = APP_VERSION;
 });
 
+/**
+ * Consumes a one-time Date/TZ/AP handoff from planning.html's
+ * "Start a Sight with this AP" (see sessionStorage key 'ocsrApHandoff' in
+ * js/planning.js). Only this direction -- planning -> index -- exists
+ * today; nothing currently reads FROM index.html's live fields.
+ */
+function applyPendingHandoff() {
+  var raw;
+  try {
+    raw = sessionStorage.getItem('ocsrApHandoff');
+  } catch (e) {
+    return false;
+  }
+  if (!raw) return false;
+  sessionStorage.removeItem('ocsrApHandoff'); // one-time consume, even if parsing fails below
+
+  var h;
+  try {
+    h = JSON.parse(raw);
+  } catch (e) {
+    return false;
+  }
+
+  if (h.date) document.getElementById('sightDate').value = h.date;
+  if (h.tzOffset !== undefined) document.getElementById('tzOffset').value = h.tzOffset;
+  if (h.latDeg !== undefined) document.getElementById('latDeg').value = h.latDeg;
+  if (h.latMin !== undefined) document.getElementById('latMin').value = h.latMin;
+  if (h.latNS) document.getElementById('latNS').value = h.latNS;
+  if (h.lonDeg !== undefined) document.getElementById('lonDeg').value = h.lonDeg;
+  if (h.lonMin !== undefined) document.getElementById('lonMin').value = h.lonMin;
+  if (h.lonEW) document.getElementById('lonEW').value = h.lonEW;
+
+  showToast('Date, time zone, and AP filled in from Planning.');
+  return true;
+}
+
+/**
+ * Consumes a one-time "load this saved sighting" handoff from sightings.html's
+ * "Load" button (see sessionStorage key 'ocsrLoadSightingId' in js/sightings.js).
+ * Sightings.html can't apply the record itself (it doesn't have the sight
+ * reduction form), so it hands the id off here instead.
+ */
+function applyPendingSightingLoad() {
+  var id;
+  try {
+    id = sessionStorage.getItem('ocsrLoadSightingId');
+  } catch (e) {
+    return;
+  }
+  if (!id) return;
+  sessionStorage.removeItem('ocsrLoadSightingId'); // one-time consume
+
+  SightStorage.get(id).then(function (record) {
+    if (!record) { showToast('Could not find that saved sight.', true); return; }
+    applyFormState(record);
+    window._currentRecordId = record.id;
+    showToast('Loaded "' + (record.label || 'sight') + '".');
+  }).catch(function (err) {
+    console.error(err);
+    showToast('Could not load that saved sight.', true);
+  });
+}
+
 function initApp() {
   try {
     document.getElementById('sightDate').value = new Date().toISOString().split('T')[0];
   } catch (e) {}
+
+  applyPendingHandoff(); // overrides the date above if Planning just sent one
+  applyPendingSightingLoad(); // may override the AP/date further if Sightings just sent one
 
   document.getElementById('bodyType').addEventListener('change', function () {
     handleBodyTypeChange();
@@ -121,7 +187,6 @@ function initApp() {
   addSightingLine(false);
   handleBodyTypeChange();
   refreshLiveCalculations();
-  refreshSavedList();
   refreshCacheSummary();
 
   try {
@@ -1354,7 +1419,6 @@ function onSaveSight() {
   SightStorage.save(state).then(function (saved) {
     window._currentRecordId = saved.id;
     showToast('Saved as "' + state.label + '".');
-    refreshSavedList();
   }).catch(function (err) {
     console.error(err);
     showToast('Could not save sight (storage may be full or unavailable).', true);
@@ -1410,59 +1474,4 @@ function onImportJson(evt) {
   reader.readAsText(file);
 }
 
-function refreshSavedList() {
-  SightStorage.list().then(function (entries) {
-    var listEl = document.getElementById('savedList');
-    var emptyEl = document.getElementById('savedListEmpty');
-    listEl.innerHTML = '';
 
-    if (!entries.length) {
-      emptyEl.style.display = 'block';
-      return;
-    }
-    emptyEl.style.display = 'none';
-
-    entries.forEach(function (entry) {
-      var item = document.createElement('div');
-      item.className = 'saved-item';
-
-      var title = entry.label ? entry.label : (entry.bodyLabel + ' \u2014 ' + (entry.date || ''));
-      var meta = entry.bodyLabel + ' \u2014 ' + (entry.date || 'no date') +
-                 ' \u00B7 saved ' + new Date(entry.savedAt).toLocaleString();
-
-      item.innerHTML =
-        '<div class="saved-item-info">' +
-          '<div class="saved-item-title"></div>' +
-          '<div class="saved-item-meta"></div>' +
-        '</div>' +
-        '<div class="saved-item-actions">' +
-          '<button class="btn-mini btn-mini-load">Load</button>' +
-          '<button class="btn-mini btn-mini-del">Delete</button>' +
-        '</div>';
-
-      item.querySelector('.saved-item-title').textContent = title;
-      item.querySelector('.saved-item-meta').textContent = meta;
-
-      item.querySelector('.btn-mini-load').addEventListener('click', function () {
-        SightStorage.get(entry.id).then(function (record) {
-          if (!record) { showToast('Could not find that saved sight.', true); return; }
-          applyFormState(record);
-          window._currentRecordId = record.id;
-          showToast('Loaded "' + title + '"');
-        });
-      });
-
-      item.querySelector('.btn-mini-del').addEventListener('click', function () {
-        if (!confirm('Delete this saved sight? This cannot be undone.')) return;
-        SightStorage.remove(entry.id).then(function () {
-          showToast('Deleted.');
-          refreshSavedList();
-        });
-      });
-
-      listEl.appendChild(item);
-    });
-  }).catch(function (err) {
-    console.error(err);
-  });
-}

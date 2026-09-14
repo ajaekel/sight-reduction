@@ -317,6 +317,52 @@
       assertClose('widest-spread triple includes index 3', triple.indexOf(3) !== -1 ? 1 : 0, 1, 0);
     })();
 
+    // --- Planning page: LMT -> UTC longitude conversion ---
+    (function testUtcFromLmtSeconds() {
+      // 75W, LMT 06:00 -> UT 11:00 (west longitude adds time).
+      var a = SightCalc.utcFromLmtSeconds(6 * 3600, -75);
+      assertClose('utcFromLmtSeconds 75W LMT 06:00 -> UT seconds', a.sec, 11 * 3600, 0.01);
+      assertClose('utcFromLmtSeconds 75W dayOffset', a.dayOffset, 0, 0);
+
+      // 0 longitude: LMT and UT are identical.
+      var b = SightCalc.utcFromLmtSeconds(6 * 3600, 0);
+      assertClose('utcFromLmtSeconds 0 longitude is a no-op', b.sec, 6 * 3600, 0.01);
+
+      // 60E, LMT 18:00 -> UT 14:00 (east longitude subtracts time).
+      var c = SightCalc.utcFromLmtSeconds(18 * 3600, 60);
+      assertClose('utcFromLmtSeconds 60E LMT 18:00 -> UT seconds', c.sec, 14 * 3600, 0.01);
+    })();
+
+    // --- Planning page: latitude interpolation between two tabulated times ---
+    (function testInterpolateByLatitude() {
+      // AP at 37N, between tabulated 35N (06:10) and 40N (06:20) -> 06:14.
+      var lmt = SightCalc.interpolateByLatitude(35, 6 * 3600 + 10 * 60, 40, 6 * 3600 + 20 * 60, 37);
+      assertClose('interpolateByLatitude AP 37N between 35N/40N', lmt, 6 * 3600 + 14 * 60, 0.01);
+
+      // Degenerate case (same latitude given twice) shouldn't divide by zero.
+      var lmt2 = SightCalc.interpolateByLatitude(35, 100, 35, 999, 35);
+      assertClose('interpolateByLatitude degenerate (latAbove === latBelow)', lmt2, 100, 0.01);
+    })();
+
+    // --- Planning page: full manual pipeline (latitude interpolation already
+    // folded in via the LMT passed here) -> UTC -> zone time ---
+    (function testManualEventToZoneTime() {
+      // AP at 75W, zone -5 (nearly matches its own longitude): LMT 06:14
+      // should come back very close to the same clock reading in zone time.
+      var r1 = SightCalc.manualEventToZoneTime(6 * 3600 + 14 * 60, -75, -5);
+      assertClose('manualEventToZoneTime AP-matching zone stays close to LMT', r1.zoneSec, 6 * 3600 + 14 * 60, 0.01);
+
+      // Same LMT and longitude, but a mismatched zone (-8) -- confirms zone
+      // and longitude are applied as genuinely independent corrections.
+      var r2 = SightCalc.manualEventToZoneTime(6 * 3600 + 14 * 60, -75, -8);
+      assertClose('manualEventToZoneTime mismatched zone shifts independently', r2.zoneSec, 3 * 3600 + 14 * 60, 0.01);
+
+      // Midnight wrap: LMT 00:00:05, 170W -> UT rolls forward, but zone -11
+      // (close to 170W) should land back near local midnight, same/next day.
+      var r3 = SightCalc.manualEventToZoneTime(5, -170, -11);
+      assertClose('manualEventToZoneTime near-midnight wrap stays sane', r3.zoneSec, 20 * 60 + 5, 0.01);
+    })();
+
     console.log('--- ' + pass + ' passed, ' + fail + ' failed ---');
     if (fail > 0) {
       throw new Error(fail + ' calc.js regression test(s) failed. See console above.');

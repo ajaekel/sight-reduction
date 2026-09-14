@@ -24,9 +24,7 @@
 
 ## Miscellaneous
 
-* [X] Add a clock error correction
-
-* [ ] Calculate sunset for the AP
+* [X] Calculate sunset for the AP
 
   * [ ] Include a note indicating how many minutes after sunset the sighting occurred
 

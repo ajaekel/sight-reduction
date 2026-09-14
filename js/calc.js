@@ -107,6 +107,192 @@
   }
 
   /**
+   * UTC seconds-of-day -> local (zone) seconds-of-day. Also returns how many
+   * calendar days the conversion crossed (-1, 0, or +1) relative to the UTC
+   * date, since a local time can land on the day before or after.
+   */
+  function localFromUtcSeconds(utcSec, tzOffsetHours) {
+    var raw = utcSec + (tzOffsetHours || 0) * 3600;
+    return { sec: ((raw % 86400) + 86400) % 86400, dayOffset: Math.floor(raw / 86400) };
+  }
+
+  /**
+   * Interpolates a rise/set/transit time between two latitude bands, the way
+   * a Nautical Almanac's tables are read: given the tabulated time at a
+   * latitude below the AP and one above it (signed decimal degrees, either
+   * order), linearly interpolate for the AP's actual latitude. Times are
+   * seconds-of-day (LMT, as tabulated); the result is not wrapped, since
+   * that's handled consistently later by utcFromLmtSeconds/localFromUtcSeconds.
+   */
+  function interpolateByLatitude(latBelow, timeBelowSec, latAbove, timeAboveSec, apLat) {
+    if (latAbove === latBelow) return timeBelowSec; // degenerate: nothing to interpolate
+    var fraction = (apLat - latBelow) / (latAbove - latBelow);
+    return timeBelowSec + fraction * (timeAboveSec - timeBelowSec);
+  }
+
+  /**
+   * Converts a Local Mean Time (as tabulated in a Nautical Almanac -- local
+   * to the observer's OWN meridian) to UTC, via the standard longitude/15
+   * conversion (East longitude positive). This is a distinct step from
+   * converting UTC to the observer's zone/clock time: LMT tracks true
+   * longitude continuously, while zone time is a discrete administrative
+   * offset (tzOffset) that may not exactly match it. Deliberately does not
+   * apply the day-to-day-drift refinement some almanacs' explanatory notes
+   * describe -- for rise/set/transit timing this is normally well under a
+   * minute of additional error.
+   */
+  function utcFromLmtSeconds(lmtSec, lonSignedDecimal) {
+    var raw = lmtSec - (lonSignedDecimal / 15) * 3600;
+    return { sec: ((raw % 86400) + 86400) % 86400, dayOffset: Math.floor(raw / 86400) };
+  }
+
+  /**
+   * Full manual-mode pipeline for one rise/set/transit event: LMT (already
+   * latitude-interpolated, or read directly off the almanac for transit,
+   * which doesn't depend on latitude) -> UTC -> the observer's zone time.
+   * dayOffset is the zone-time date's offset (in days) from the nominal
+   * date the LMT was tabulated for -- e.g. a moonrise just after midnight
+   * zone time, tabulated for the evening before.
+   */
+  function manualEventToZoneTime(lmtSec, lonSignedDecimal, tzOffsetHours) {
+    var utc = utcFromLmtSeconds(lmtSec, lonSignedDecimal);
+    var zone = localFromUtcSeconds(utc.sec, tzOffsetHours);
+    return { zoneSec: zone.sec, dayOffset: utc.dayOffset + zone.dayOffset };
+  }
+
+  /**
+   * Nautical Almanac "Table II" longitude correction for Moonrise, Moonset,
+   * and Moon Meridian Passage. Unlike the Sun (which drifts under a minute a
+   * day and is fine to ignore), the Moon's rise/set/transit LMT drifts by an
+   * average of ~50 minutes a day, so an observer far from Greenwich needs to
+   * interpolate between the tabulated LMT for their own date and the LMT for
+   * the adjacent Greenwich date -- the FOLLOWING date if in west longitude,
+   * or the PRECEDING date if in east longitude (see Bowditch/American
+   * Practical Navigator Vol. 1, Ch. 19, "Longitude Correction", and the
+   * Nautical Almanac's own "Tables for Interpolating Sunrise, Moonrise,
+   * etc.", Table II). This function is agnostic to which calendar day
+   * adjacentLmtSec actually represents -- the caller must supply the correct
+   * one for the observer's hemisphere; only the sign of lonSignedDecimal
+   * determines whether the correction is added (west) or subtracted (east),
+   * matching the almanac's own sign convention.
+   *
+   * todayLmtSec should already be latitude-interpolated for rise/set (via
+   * interpolateByLatitude), or the transit LMT directly (no latitude
+   * dependence there); adjacentLmtSec is the equivalent quantity for the
+   * adjacent date. Returns todayLmtSec unchanged if adjacentLmtSec is not
+   * supplied, so the correction is opt-in.
+   */
+  function applyMoonLongitudeCorrection(lonSignedDecimal, todayLmtSec, adjacentLmtSec) {
+    if (adjacentLmtSec === null || adjacentLmtSec === undefined || isNaN(adjacentLmtSec)) return todayLmtSec;
+    var diff = adjacentLmtSec - todayLmtSec;
+    // The daily drift is well under an hour, so a raw difference bigger than
+    // half a day means the two tabulated times straddle midnight (e.g. today
+    // at 23:52, adjacent day at 00:41) rather than a real ~24h jump.
+    if (diff > 12 * 3600) diff -= 24 * 3600;
+    if (diff < -12 * 3600) diff += 24 * 3600;
+    var fraction = Math.abs(lonSignedDecimal) / 360;
+    var corr = fraction * diff;
+    return todayLmtSec + (lonSignedDecimal < 0 ? corr : -corr);
+  }
+
+  /** Standard altitudes (decimal degrees) that define each event, center of body. */
+  var STANDARD_ALTITUDE_DEG = {
+    sunRiseSet: -50 / 60,     // -0.8333 deg: -34' refraction, -16' semidiameter
+    civilTwilight: -6,
+    nauticalTwilight: -12
+  };
+
+  /**
+   * Derives the Sun's declination (signed decimal degrees) implied by a known
+   * Sunrise or Sunset time relative to Meridian Passage, at a known latitude
+   * -- by inverting the standard altitude formula
+   *   sin(h) = sin(lat)*sin(dec) + cos(lat)*cos(dec)*cos(H)
+   * for h = the standard rise/set altitude and H = the hour angle implied by
+   * the time gap from transit. transitSec and riseOrSetSec must be on the
+   * same time base (both LMT, or both zone time, or both UTC -- doesn't
+   * matter which, since only their difference is used), and can cross
+   * midnight (the gap is normalized to under 12h either way).
+   *
+   * This lets twilight be computed directly from data already on screen
+   * (Sunrise/Sunset/Meridian Passage) instead of requiring a separate
+   * almanac lookup. Returns null if the geometry doesn't resolve to a real
+   * declination (shouldn't happen for real sun data, but guards against
+   * bad/inconsistent input).
+   */
+  function deriveSunDeclination(apLatDeg, transitSec, riseOrSetSec) {
+    var gap = riseOrSetSec - transitSec;
+    if (gap > 12 * 3600) gap -= 24 * 3600;
+    if (gap < -12 * 3600) gap += 24 * 3600;
+    if (gap === 0) return null;
+
+    var H = rad(Math.abs(gap) / 3600 * 15);
+    var lat = rad(apLatDeg);
+    var h0 = rad(STANDARD_ALTITUDE_DEG.sunRiseSet);
+
+    var P = Math.sin(lat);
+    var Q = Math.cos(lat) * Math.cos(H);
+    var R = Math.sqrt(P * P + Q * Q);
+    if (R === 0) return null;
+    var ratio = Math.sin(h0) / R;
+    if (ratio < -1 || ratio > 1) return null;
+    var phi = Math.atan2(Q, P);
+    return deg(Math.asin(ratio) - phi);
+  }
+
+  /**
+   * Hour angle (seconds, always non-negative) at which the Sun reaches the
+   * given altitude, for a known latitude/declination. Returns null if the
+   * Sun never reaches that altitude that day (continuous daylight/twilight/
+   * darkness, which happens at high latitude depending on season).
+   */
+  function sunHourAngleForAltitude(apLatDeg, decDeg, altitudeDeg) {
+    var lat = rad(apLatDeg);
+    var dec = rad(decDeg);
+    var h = rad(altitudeDeg);
+    var cosH = (Math.sin(h) - Math.sin(lat) * Math.sin(dec)) / (Math.cos(lat) * Math.cos(dec));
+    if (cosH < -1 || cosH > 1) return null;
+    return Math.acos(cosH) * (180 / Math.PI) / 15 * 3600;
+  }
+
+  /**
+   * Computes Civil and Nautical Twilight (begin/end) from the Sun's already-
+   * known Meridian Passage time plus at least one of Sunrise/Sunset -- no
+   * separate twilight almanac entry needed. transitSec/sunriseSec/sunsetSec
+   * must all be on the same time base (see deriveSunDeclination); the
+   * returned civil/nautical values are on that same base, ready to run
+   * through whatever conversion the caller already applies to transit.
+   *
+   * If both sunrise and sunset are supplied, their implied declinations are
+   * averaged for a little extra robustness against rounding in the source
+   * data. Pass null for whichever of sunriseSec/sunsetSec isn't available.
+   * Returns null only if neither is available; individual civil/nautical
+   * fields are null if the Sun doesn't reach that altitude that day.
+   */
+  function computeTwilightTimes(apLatDeg, transitSec, sunriseSec, sunsetSec) {
+    var decs = [];
+    if (sunriseSec !== null && sunriseSec !== undefined) {
+      var d1 = deriveSunDeclination(apLatDeg, transitSec, sunriseSec);
+      if (d1 !== null) decs.push(d1);
+    }
+    if (sunsetSec !== null && sunsetSec !== undefined) {
+      var d2 = deriveSunDeclination(apLatDeg, transitSec, sunsetSec);
+      if (d2 !== null) decs.push(d2);
+    }
+    if (decs.length === 0) return null;
+    var dec = decs.reduce(function (a, b) { return a + b; }, 0) / decs.length;
+
+    var civilH = sunHourAngleForAltitude(apLatDeg, dec, STANDARD_ALTITUDE_DEG.civilTwilight);
+    var nauticalH = sunHourAngleForAltitude(apLatDeg, dec, STANDARD_ALTITUDE_DEG.nauticalTwilight);
+
+    return {
+      civilAM: civilH === null ? null : transitSec - civilH,
+      civilPM: civilH === null ? null : transitSec + civilH,
+      nauticalAM: nauticalH === null ? null : transitSec - nauticalH,
+      nauticalPM: nauticalH === null ? null : transitSec + nauticalH
+    };
+  }
+
+  /**
    * Interpolate a GHA-like value (0-360, wraps at the hour boundary) across the
    * fraction of the hour that has elapsed.
    */
@@ -541,6 +727,14 @@
     computeHa: computeHa,
     computeHo: computeHo,
     utcSecondsFromLocal: utcSecondsFromLocal,
+    localFromUtcSeconds: localFromUtcSeconds,
+    interpolateByLatitude: interpolateByLatitude,
+    utcFromLmtSeconds: utcFromLmtSeconds,
+    manualEventToZoneTime: manualEventToZoneTime,
+    applyMoonLongitudeCorrection: applyMoonLongitudeCorrection,
+    deriveSunDeclination: deriveSunDeclination,
+    sunHourAngleForAltitude: sunHourAngleForAltitude,
+    computeTwilightTimes: computeTwilightTimes,
     interpolateGha: interpolateGha,
     interpolateLinear: interpolateLinear,
     reduceSight: reduceSight,
