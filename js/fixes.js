@@ -170,7 +170,13 @@ function openFix(id) {
     // anything's changed since the last Save.
     document.getElementById('fixPositionCard').style.display = fix.sightingIds.length ? 'block' : 'none';
     updateFixPositionButtons();
-    setFixMethodState(false); // fresh fix: always start on least-squares
+    // Reflect whichever method was actually saved (if any) -- not just
+    // always defaulting to least-squares. renderCurrentPlot() below will
+    // fall back to least-squares on its own if this fix no longer has
+    // enough active sightings to support bisectors (see its own guard),
+    // so this only needs to express what was last explicitly saved, not
+    // re-validate it.
+    setFixMethodState(fix.resolvedPositionMethod === 'bisector');
 
     renderFixSightings(myToken);
     renderAvailableSightings(myToken);
