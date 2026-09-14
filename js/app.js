@@ -74,7 +74,8 @@ function applyPendingSightingLoad() {
     if (!record) { showToast('Could not find that saved sight.', true); return; }
     applyFormState(record);
     window._currentRecordId = record.id;
-    showToast('Loaded "' + (record.label || 'sight') + '".');
+    window._currentTitle = record.title || '';
+    showToast('Loaded "' + (record.title || 'sight') + '".');
   }).catch(function (err) {
     console.error(err);
     showToast('Could not load that saved sight.', true);
@@ -514,7 +515,7 @@ function collectFormState() {
   return {
     id: null,
     schemaVersion: 1,
-    label: g('sightLabel').value.trim(),
+    notes: g('sightNotes').value.trim(),
     date: g('sightDate').value,
     body: {
       type: bodyType,
@@ -557,7 +558,7 @@ function applyFormState(state) {
   var g = function (id) { return document.getElementById(id); };
   var setVal = function (id, v) { g(id).value = (v === undefined || v === null) ? '' : v; };
 
-  setVal('sightLabel', state.label || '');
+  setVal('sightNotes', state.notes || '');
   setVal('sightDate', state.date || '');
   setVal('bodyType', (state.body && state.body.type) || 'sun');
   handleBodyTypeChange();
@@ -1075,6 +1076,7 @@ function refreshLiveCalculations() {
   updateAverages();
   tryAutoFillAlmanacFromCache();
   tryAutoCalculateReduction();
+  updateAutoNamePreview();
 }
 
 function formatBodyLabel(body) {
@@ -1118,6 +1120,7 @@ function clearAllData() {
   sightingCount = 0;
   addSightingLine(false);
   window._currentRecordId = null;
+  window._currentTitle = null;
   _almanacFieldsContext = null;
   _autoFillLoopGuard = { signature: null, count: 0 };
   setClockErrorDirection('fast');
@@ -1399,39 +1402,128 @@ function showToast(message, isError) {
   showToast._t = setTimeout(function () { toast.classList.remove('show'); }, 2200);
 }
 
+/**
+ * The sight's "name" is fully derived, never typed: "yyyy-mm-dd HH-mm-ss <type>
+ * <name>", from the observation date, the first sighting line's UTC time, and
+ * the body type/name. It's used as both the Save-to-Device record's title and
+ * the Export filename base, and updates live on screen (see
+ * updateAutoNamePreview) as those fields change -- no prompt, ever.
+ */
+function computeAutoName(state) {
+  var pad2 = function (n) { return String(n).padStart(2, '0'); };
+  var now = new Date();
+
+  var dateStr = state.date || now.toISOString().split('T')[0];
+
+  var firstObs = state.observations && state.observations[0];
+  var timeStr = firstObs
+    ? pad2(firstObs.h) + '-' + pad2(firstObs.m) + '-' + pad2(firstObs.s)
+    : pad2(now.getHours()) + '-' + pad2(now.getMinutes()) + '-' + pad2(now.getSeconds());
+
+  // Sun/Moon are themselves proper nouns and get capitalized; "star"/"planet"
+  // are just category words, so they stay lowercase -- only the actual name
+  // that follows (Arcturus, Venus, etc.) is the proper noun there.
+  var rawType = (state.body && state.body.type) || 'sight';
+  var properTypeNames = { sun: 'Sun', moon: 'Moon' };
+  var typeStr = properTypeNames[rawType] || rawType;
+  var nameStr = ((state.body && state.body.name) || '').trim();
+
+  var parts = [dateStr, timeStr, typeStr];
+  if (nameStr) parts.push(nameStr);
+
+  // Strip characters that are illegal (or awkward) in filenames on common filesystems.
+  return parts.join(' ').replace(/[\\/:*?"<>|]/g, '_');
+}
+
+/** Keeps the on-screen "Save name" preview (next to the Save/Export buttons) in sync. */
+function updateAutoNamePreview() {
+  var el = document.getElementById('autoNamePreview');
+  if (!el) return;
+  el.textContent = computeAutoName(collectFormState());
+}
+
 function onSaveSight() {
   var state = collectFormState();
-  var existingLabel = state.label || '';
-  var suggested = existingLabel || (formatBodyLabel(state.body) + (state.date ? ' - ' + state.date : ''));
+  var autoName = computeAutoName(state);
 
-  var name = prompt('Save this sight as:', suggested);
-  if (name === null) return; // user cancelled
+  var name = prompt('Save sight as:', autoName);
+  if (name === null) return; // cancelled
+  name = name.trim() || autoName;
 
-  state.label = name.trim() || suggested;
-  document.getElementById('sightLabel').value = state.label; // keep the form in sync
+  SightStorage.list().then(function (existing) {
+    resolveSaveName(existing, name, autoName, function (finalName, targetId) {
+      if (finalName === null) return; // backed out of the whole save
 
-  // If we're editing a sight we just loaded/saved this session, update that
-  // same record instead of creating a duplicate.
-  if (window._currentRecordId) state.id = window._currentRecordId;
+      var toSave = collectFormState(); // re-collect: form hasn't changed, but keeps this self-contained
+      toSave.title = finalName;
+      if (targetId) toSave.id = targetId;
+      if (window._lastResult) toSave.results = window._lastResult;
 
-  if (window._lastResult) state.results = window._lastResult;
+      var isNewRecord = !targetId;
 
-  SightStorage.save(state).then(function (saved) {
-    window._currentRecordId = saved.id;
-    showToast('Saved as "' + state.label + '".');
+      SightStorage.save(toSave).then(function (saved) {
+        window._currentRecordId = saved.id;
+        window._currentTitle = saved.title;
+        showToast((isNewRecord ? 'Saved as new sight "' : 'Saved as "') + finalName + '".');
+      }).catch(function (err) {
+        console.error(err);
+        showToast('Could not save sight (storage may be full or unavailable).', true);
+      });
+    });
   }).catch(function (err) {
     console.error(err);
-    showToast('Could not save sight (storage may be full or unavailable).', true);
+    showToast('Could not check existing saved sights.', true);
   });
+}
+
+/**
+ * Standard "Save As" overwrite-or-rename flow: if `name` collides with a
+ * DIFFERENT existing record (i.e. some other saved sight already has this
+ * exact title), ask whether to overwrite it or pick a new name, looping
+ * until resolved. Resaving under the sight's OWN current name/id is not a
+ * collision -- that's just an ordinary save. Calls back with (null, null)
+ * if the user backs out entirely, or (name, idToSaveUnderOrNull) once
+ * resolved -- a null id means "create a new record".
+ */
+function resolveSaveName(existing, name, autoName, callback) {
+  var collision = null;
+  for (var i = 0; i < existing.length; i++) {
+    if (existing[i].title === name) { collision = existing[i]; break; }
+  }
+
+  if (!collision || collision.id === window._currentRecordId) {
+    callback(name, collision ? collision.id : null);
+    return;
+  }
+
+  var overwrite = confirm(
+    'A sight named "' + name + '" already exists.\n\n' +
+    'OK: overwrite it.\n' +
+    'Cancel: choose a different name.'
+  );
+  if (overwrite) {
+    callback(name, collision.id);
+    return;
+  }
+
+  var retry = prompt('Save sight as:', name);
+  if (retry === null) { callback(null, null); return; }
+  resolveSaveName(existing, retry.trim() || autoName, autoName, callback);
 }
 
 function onExportJson() {
   var state = collectFormState();
   if (window._lastResult) state.results = window._lastResult;
 
-  var filenameDate = state.date || new Date().toISOString().split('T')[0];
-  var filenameBody = (state.body.name || state.body.type || 'sight').replace(/\s+/g, '_');
-  var filename = 'sight_' + filenameDate + '_' + filenameBody + '.json';
+  var autoName = computeAutoName(state);
+  var name = prompt('Export sight as:', autoName);
+  if (name === null) return; // cancelled
+  name = name.trim() || autoName;
+
+  // A real file-save destination (browser download, not our own storage), so
+  // collision handling is the browser's job -- same as any other download,
+  // it'll auto-suffix ("(1)") or ask, per the user's own browser settings.
+  var filename = name + '.json';
 
   var blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
   var url = URL.createObjectURL(blob);
@@ -1446,6 +1538,7 @@ function onExportJson() {
   showToast('Exported ' + filename);
 }
 
+
 function onImportJson(evt) {
   var file = evt.target.files && evt.target.files[0];
   if (!file) return;
@@ -1459,6 +1552,7 @@ function onImportJson(evt) {
       }
       applyFormState(parsed);
       window._currentRecordId = null; // imported sight is treated as new/unsaved until user hits Save
+      window._currentTitle = parsed.title || null;
       showToast('Imported sight from ' + file.name);
     } catch (err) {
       console.error(err);
