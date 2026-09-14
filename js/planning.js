@@ -93,6 +93,44 @@ function restorePlanningForm() {
   return true;
 }
 
+/**
+ * Consumes a one-time Date/TZ/AP handoff from drleg.html's "Send to Planning"
+ * (see sessionStorage key 'ocsrPlanningApHandoff' in js/drleg.js). Same
+ * {date, tzOffset, latDeg, latMin, latNS, lonDeg, lonMin, lonEW} shape as
+ * the existing DR-Leg-to-New-Sighting / Planning-to-New-Sighting handoff
+ * (sessionStorage key 'ocsrApHandoff', consumed in app.js) -- just a
+ * different destination page, so it gets its own key rather than racing
+ * index.html for the same one.
+ */
+function applyPendingPlanningHandoff() {
+  var raw;
+  try {
+    raw = sessionStorage.getItem('ocsrPlanningApHandoff');
+  } catch (e) {
+    return false;
+  }
+  if (!raw) return false;
+  sessionStorage.removeItem('ocsrPlanningApHandoff'); // one-time consume, even if parsing fails below
+
+  var h;
+  try {
+    h = JSON.parse(raw);
+  } catch (e) {
+    return false;
+  }
+
+  if (h.date) document.getElementById('planDate').value = h.date;
+  if (h.tzOffset !== undefined) document.getElementById('planTzOffset').value = h.tzOffset;
+  if (h.latDeg !== undefined) document.getElementById('planLatDeg').value = h.latDeg;
+  if (h.latMin !== undefined) document.getElementById('planLatMin').value = h.latMin;
+  if (h.latNS) document.getElementById('planLatNS').value = h.latNS;
+  if (h.lonDeg !== undefined) document.getElementById('planLonDeg').value = h.lonDeg;
+  if (h.lonMin !== undefined) document.getElementById('planLonMin').value = h.lonMin;
+  if (h.lonEW) document.getElementById('planLonEW').value = h.lonEW;
+
+  return true;
+}
+
 /** Digit-only filtering, range validation (via .input-error), and auto-advance to nextId once full. */
 function wireDigitBox(id, maxLen, min, max, nextId) {
   var el = document.getElementById(id);
@@ -170,6 +208,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   document.getElementById('planDate').valueAsDate = new Date(); // default, overridden below if a saved value exists
   var restored = restorePlanningForm();
+  applyPendingPlanningHandoff(); // overrides the restored/default AP above if DR Leg just sent one
   // Moon's mirrored latitude boxes aren't persisted directly (see wireLatMirror) -- sync
   // them from the just-restored (or default-empty) Sun boxes now that both exist.
   document.getElementById('refLatAboveMoon').value = document.getElementById('refLatAboveSun').value;

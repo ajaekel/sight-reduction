@@ -717,11 +717,124 @@
     return CHART_PALETTE[i];
   }
 
+  /** Format signed decimal latitude as "D° MM.M' N" (or S). */
+  function formatLat(signedDeg) {
+    return formatDegMin(Math.abs(signedDeg)) + ' ' + (signedDeg < 0 ? 'S' : 'N');
+  }
+
+  /** Format signed decimal longitude as "D° MM.M' E" (or W). */
+  function formatLon(signedDeg) {
+    return formatDegMin(Math.abs(signedDeg)) + ' ' + (signedDeg < 0 ? 'W' : 'E');
+  }
+
+  /**
+   * Combines a local calendar date ("yyyy-mm-dd"), a local time-of-day
+   * (seconds since local midnight), and a UTC offset (hours, e.g. -4 for
+   * EDT) into the true UTC instant, in milliseconds since the epoch.
+   *
+   * This is genuine multi-day date arithmetic using a real JS Date -- unlike
+   * the Sun/Moon rise-set helpers above (which only ever need to reason
+   * about a single calendar day and wrap seconds-of-day into [0, 86400)),
+   * DR Leg runs can span many hours or cross into following days, so the
+   * calendar date itself has to move, not just wrap.
+   */
+  function localDateTimeToUtcMs(dateStr, localSecOfDay, tzOffsetHours) {
+    var p = dateStr.split('-');
+    var y = parseInt(p[0], 10), mo = parseInt(p[1], 10) - 1, d = parseInt(p[2], 10);
+    var localMs = Date.UTC(y, mo, d, 0, 0, 0) + localSecOfDay * 1000;
+    return localMs - tzOffsetHours * 3600 * 1000;
+  }
+
+  /**
+   * Inverse of localDateTimeToUtcMs: given a true UTC instant (ms since
+   * epoch) and a UTC offset, returns the local calendar date + time of day
+   * it corresponds to.
+   */
+  function utcMsToLocalDateTime(utcMs, tzOffsetHours) {
+    var localMs = utcMs + tzOffsetHours * 3600 * 1000;
+    var d = new Date(localMs);
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    return {
+      dateStr: d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()),
+      secOfDay: d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds()
+    };
+  }
+
+  /**
+   * Dead Reckoning position via Mid-Latitude Sailing (Bowditch/Dutton's
+   * standard method for exactly this: given a start position, a true
+   * course, and a distance run, find the resulting position). Accurate for
+   * the leg lengths DR is normally used for; a genuinely long leg (ocean-
+   * crossing scale) would call for full Mercator or great-circle sailing,
+   * but mid-latitude sailing is what's conventionally used for DR between
+   * fixes.
+   *
+   * startLatDeg/startLonDeg: signed decimal degrees (N/E positive).
+   * courseDegTrue: true course, 0-360 (0 = North, 90 = East, measured clockwise).
+   * distanceNM: nautical miles run (1 NM = 1 minute of latitude, by definition).
+   *
+   * Returns signed decimal degrees, longitude normalized into (-180, 180],
+   * plus the intermediate departure (east-west distance run, NM) since
+   * that's often worth showing alongside the result.
+   */
+  function drPosition(startLatDeg, startLonDeg, courseDegTrue, distanceNM) {
+    var C = rad(courseDegTrue);
+    var dLatMin = distanceNM * Math.cos(C);
+    var newLatDeg = startLatDeg + dLatMin / 60;
+
+    var meanLatDeg = (startLatDeg + newLatDeg) / 2;
+    var cosMeanLat = Math.cos(rad(meanLatDeg));
+    var departureNM = distanceNM * Math.sin(C);
+
+    // A course running due north/south right at the pole has no meaningful
+    // departure/longitude-change -- there's no real DR leg this applies to,
+    // but guard the division rather than blow up on it.
+    var dLonDeg = (Math.abs(cosMeanLat) < 1e-9) ? 0 : (departureNM / 60) / cosMeanLat;
+    var newLonDeg = startLonDeg + dLonDeg;
+    while (newLonDeg > 180) newLonDeg -= 360;
+    while (newLonDeg <= -180) newLonDeg += 360;
+
+    return { latDeg: newLatDeg, lonDeg: newLonDeg, departureNM: departureNM };
+  }
+
+  /**
+   * A full DR leg: start position + instant, course, speed, and EITHER a
+   * duration or an end instant (pass exactly one of durationHours/endUtcMs
+   * as a number; leave the other null/undefined -- it's the one being
+   * solved for). Returns the DR position plus both the duration and end
+   * instant either way, so the caller never has to branch on which one was
+   * the input.
+   */
+  function computeDrLeg(input) {
+    var durationHours = input.durationHours;
+    var endUtcMs = input.endUtcMs;
+
+    if (durationHours === null || durationHours === undefined) {
+      durationHours = (endUtcMs - input.startUtcMs) / 3600000;
+    } else {
+      endUtcMs = input.startUtcMs + durationHours * 3600000;
+    }
+
+    var distanceNM = input.sog * durationHours;
+    var pos = drPosition(input.startLatDeg, input.startLonDeg, input.courseDegTrue, distanceNM);
+
+    return {
+      latDeg: pos.latDeg,
+      lonDeg: pos.lonDeg,
+      departureNM: pos.departureNM,
+      distanceNM: distanceNM,
+      durationHours: durationHours,
+      endUtcMs: endUtcMs
+    };
+  }
+
   global.SightCalc = {
     rad: rad,
     deg: deg,
     dmToDecimal: dmToDecimal,
     formatDegMin: formatDegMin,
+    formatLat: formatLat,
+    formatLon: formatLon,
     secondsToTimeString: secondsToTimeString,
     averageObservations: averageObservations,
     computeHa: computeHa,
@@ -735,6 +848,10 @@
     deriveSunDeclination: deriveSunDeclination,
     sunHourAngleForAltitude: sunHourAngleForAltitude,
     computeTwilightTimes: computeTwilightTimes,
+    localDateTimeToUtcMs: localDateTimeToUtcMs,
+    utcMsToLocalDateTime: utcMsToLocalDateTime,
+    drPosition: drPosition,
+    computeDrLeg: computeDrLeg,
     interpolateGha: interpolateGha,
     interpolateLinear: interpolateLinear,
     reduceSight: reduceSight,
