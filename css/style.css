@@ -409,6 +409,16 @@ select {
   cursor: pointer;
   margin-top: 8px;
 }
+.save-export-row {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+.save-export-row .btn-secondary {
+  width: auto;
+  flex: 1;
+  margin-top: 0;
+}
 .summary-box {
   background: #252525;
   padding: 10px;

@@ -34,6 +34,15 @@
     </div>
   </div>
 
+  <div class="save-export-row">
+    <button class="btn-secondary" id="btnSaveSightTop">Save</button>
+    <button class="btn-secondary" id="btnExportJsonTop">Export</button>
+    <button class="btn-secondary" id="btnImportTop">Import</button>
+  </div>
+  <div style="font-size: 0.75rem; color: #aaa; margin: -6px 0 4px;">
+    Save name: <span id="autoNamePreview" style="color: var(--accent); font-family: monospace;">-</span>
+  </div>
+
   <!-- SECTION 1: HEADER & AP POSITION -->
   <div class="card">
     <div class="section-title">1. Trip Info &amp; Assumed Position</div>
@@ -420,28 +429,17 @@
     <div class="chart-caption" id="chartCaption"></div>
   </div>
 
-  <!-- SECTION 4: SAVE & EXPORT -->
-  <div class="card" id="saveExportSection">
-    <div class="section-title">4. Save &amp; Export</div>
-    <div style="font-size: 0.8rem; color: #aaa; margin-bottom: 12px;">
-      Save name: <span id="autoNamePreview" style="color: var(--accent); font-family: monospace;">-</span>
-      <div style="font-size: 0.72rem; color: #666; margin-top: 2px;">
-        Derived automatically from date, first sighting time, and body -- not editable.
-      </div>
-    </div>
-
-    <button class="btn-secondary" id="btnSaveSight">Save Sight to Device</button>
-    <button class="btn-secondary" id="btnExportJson">Export Sight as JSON</button>
-    <label class="file-import-label" for="fileImportJson">
-      Import Sight from JSON
-      <input type="file" id="fileImportJson" accept="application/json,.json">
-    </label>
-
-    <p class="cache-blurb" style="margin-top: 18px; margin-bottom: 0;">
-      To view, load, or delete previously saved sightings, see the
-      <a href="sightings.html" style="color: var(--accent);">Sightings</a> page.
-    </p>
+  <!-- SAVE / EXPORT / IMPORT (bottom) -->
+  <div class="save-export-row">
+    <button class="btn-secondary" id="btnSaveSightBottom">Save</button>
+    <button class="btn-secondary" id="btnExportJsonBottom">Export</button>
+    <button class="btn-secondary" id="btnImportBottom">Import</button>
   </div>
+  <p class="cache-blurb" style="margin-top: 12px;">
+    To view, load, or delete previously saved sightings, see the
+    <a href="sightings.html" style="color: var(--accent);">Sightings</a> page.
+  </p>
+  <input type="file" id="fileImportJson" accept="application/json,.json" style="display: none;">
 </div>
 
 <div class="toast" id="toast"></div>

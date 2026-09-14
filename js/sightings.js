@@ -15,7 +15,54 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('swVersion').textContent = APP_VERSION;
   initNavMenu();
   refreshSavedList();
+
+  document.getElementById('btnImport').addEventListener('click', function () {
+    document.getElementById('fileImportJson').click();
+  });
+  document.getElementById('fileImportJson').addEventListener('change', onImportJson);
 });
+
+/**
+ * Imports a previously-exported JSON file straight into device storage --
+ * this page has no sight-reduction form to load it into, so unlike index.html's
+ * import (which fills the form for further editing), this one saves it right
+ * away and refreshes the list. Always saved as a NEW record (any id in the
+ * file itself is dropped first): re-importing a file that happens to still
+ * carry an old id from this same device shouldn't silently overwrite
+ * whatever's already saved under that id.
+ */
+function onImportJson(evt) {
+  var file = evt.target.files && evt.target.files[0];
+  if (!file) return;
+
+  var reader = new FileReader();
+  reader.onload = function () {
+    try {
+      var parsed = JSON.parse(reader.result);
+      if (!parsed || !parsed.position || !parsed.observations) {
+        throw new Error('File does not look like a sight record.');
+      }
+      parsed.id = null;
+      SightStorage.save(parsed).then(function () {
+        showToast('Imported sight from ' + file.name);
+        refreshSavedList();
+      }).catch(function (err) {
+        console.error(err);
+        showToast('Could not save the imported sight.', true);
+      });
+    } catch (err) {
+      console.error(err);
+      showToast('Could not import file: not a valid sight JSON.', true);
+    } finally {
+      evt.target.value = '';
+    }
+  };
+  reader.onerror = function () {
+    showToast('Could not read that file.', true);
+    evt.target.value = '';
+  };
+  reader.readAsText(file);
+}
 
 function showToast(msg, isError) {
   var toast = document.getElementById('toast');

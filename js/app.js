@@ -107,8 +107,17 @@ function initApp() {
   });
   document.getElementById('btnClearAll').addEventListener('click', clearAllData);
 
-  document.getElementById('btnSaveSight').addEventListener('click', onSaveSight);
-  document.getElementById('btnExportJson').addEventListener('click', onExportJson);
+  ['btnSaveSightTop', 'btnSaveSightBottom'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', onSaveSight);
+  });
+  ['btnExportJsonTop', 'btnExportJsonBottom'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', onExportJson);
+  });
+  ['btnImportTop', 'btnImportBottom'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', function () {
+      document.getElementById('fileImportJson').click();
+    });
+  });
   document.getElementById('fileImportJson').addEventListener('change', onImportJson);
   document.getElementById('btnFetchUsno').addEventListener('click', onFetchUsno);
   document.getElementById('btnCacheRange').addEventListener('click', onCacheRange);
