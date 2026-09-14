@@ -33,9 +33,9 @@
   * [X] This field should no longer factor into the filename upon saving Stop notes from replacing the default name upon “Save to Device”
   * [X] Refactor code for clarity; rename `label` to `notes`, `sightLabel` to `sightNotes`, etc...
 
-* [ ] If Celestial Body is `Sun` or `Moon`, add new field `Limb` (dropdown options: `lower` (default), `upper`)
+* [X] If Celestial Body is `Sun` or `Moon`, add new field `Limb` (dropdown options: `lower` (default), `upper`)
 
-  * [ ] Make the placement/size of "Celestial Body" steady. Make "Date (local)" just wide enought to comfortably display the selected date and keep it at that size. There should be blank space to the right of "Celestial Body" which will get populated with either `Limb` or `Name`.
+  * [X] Make the placement/size of "Celestial Body" steady. Make "Date (local)" just wide enought to comfortably display the selected date and keep it at that size. There should be blank space to the right of "Celestial Body" which will get populated with either `Limb` or `Name`.
 
 * [ ] Restructure the Assumed Postion section to occupy less realestate. Add a label "Assumed Position" below which the screen is split into two columns each "column" has its own header "Latitude" and "Longitude", each with fields for "Deg / Min / N-S" (similar to how Sun > Declination is rendered in section "3. Nautical Almanac Data").
 
