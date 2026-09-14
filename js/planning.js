@@ -11,6 +11,123 @@
 
 var _planningMode = 'manual'; // 'manual' | 'autofill'
 
+/**
+ * PlanningStorage lives in a separate file (js/planningStorage.js) that must be
+ * included before this one. If it's ever missing (a deploy that dropped the new
+ * file, a stale cache, etc.), persistence should just quietly not happen rather
+ * than break the actual calculator -- hence the guard on every call site below.
+ */
+function hasPlanningStorage() {
+  if (typeof PlanningStorage === 'undefined') {
+    console.warn('PlanningStorage is not loaded (missing js/planningStorage.js?) -- form/cache persistence is disabled this session.');
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Every LOGICAL field whose value should survive navigating away and back.
+ * Most of these map 1:1 to a DOM element by id. The time fields (Sunrise,
+ * Sunset, Meridian Passage, etc.) instead map to a pair of digit boxes,
+ * id+'H' and id+'M' -- see getFieldValue/setFieldValue, which are the only
+ * two places that need to know about that split. Everything else (parsing,
+ * persistence, calculation) keeps working against a plain "HH:MM" string.
+ */
+var PLANNING_FIELD_IDS = [
+  'planDate', 'planTzOffset', 'planLatDeg', 'planLatMin', 'planLatNS', 'planLonDeg', 'planLonMin', 'planLonEW',
+  'refLatAboveSun', 'refLatBelowSun',
+  'sunriseTimeBelow', 'sunriseTimeAbove', 'sunsetTimeBelow', 'sunsetTimeAbove', 'sunTransitTime',
+  'moonriseTimeBelow', 'moonriseTimeAbove', 'moonsetTimeBelow', 'moonsetTimeAbove', 'moonTransitTime',
+  'moonriseTimeBelowAdj', 'moonriseTimeAboveAdj', 'moonsetTimeBelowAdj', 'moonsetTimeAboveAdj', 'moonTransitTimeAdj'
+];
+
+/** Reads a logical field's value as a plain string ("HH:MM" for time fields). */
+function getFieldValue(id) {
+  var hEl = document.getElementById(id + 'H');
+  var mEl = document.getElementById(id + 'M');
+  if (hEl && mEl) {
+    if (hEl.value === '' && mEl.value === '') return '';
+    var hh = (hEl.value || '0').length < 2 ? ('0' + hEl.value).slice(-2) : hEl.value;
+    var mm = (mEl.value || '0').length < 2 ? ('0' + mEl.value).slice(-2) : mEl.value;
+    return hh + ':' + mm;
+  }
+  var el = document.getElementById(id);
+  return el ? el.value : '';
+}
+
+/** Writes a plain string ("HH:MM" for time fields) into a logical field. */
+function setFieldValue(id, val) {
+  var hEl = document.getElementById(id + 'H');
+  var mEl = document.getElementById(id + 'M');
+  if (hEl && mEl) {
+    var p = (val || '').split(':');
+    hEl.value = p[0] || '';
+    mEl.value = p[1] || '';
+    return;
+  }
+  var el = document.getElementById(id);
+  if (el) el.value = val;
+}
+
+/** Serializes all persisted fields + the current mode, and writes them to localStorage. */
+function savePlanningForm() {
+  if (!hasPlanningStorage()) return;
+  var data = { mode: _planningMode, fields: {} };
+  PLANNING_FIELD_IDS.forEach(function (id) {
+    data.fields[id] = getFieldValue(id);
+  });
+  PlanningStorage.saveForm(data);
+}
+
+/** Restores previously-saved field values + mode, if any. Returns true if anything was restored. */
+function restorePlanningForm() {
+  if (!hasPlanningStorage()) return false;
+  var data = PlanningStorage.loadForm();
+  if (!data || !data.fields) return false;
+  PLANNING_FIELD_IDS.forEach(function (id) {
+    if (Object.prototype.hasOwnProperty.call(data.fields, id) && data.fields[id]) {
+      setFieldValue(id, data.fields[id]);
+    }
+  });
+  if (data.mode === 'manual' || data.mode === 'autofill') _planningMode = data.mode;
+  return true;
+}
+
+/** Digit-only filtering, range validation (via .input-error), and auto-advance to nextId once full. */
+function wireDigitBox(id, maxLen, min, max, nextId) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('focus', function () { this.select(); });
+  el.addEventListener('input', function () {
+    var cleaned = this.value.replace(/[^0-9]/g, '').slice(0, maxLen);
+    if (cleaned !== this.value) this.value = cleaned;
+    var n = parseInt(cleaned, 10);
+    this.classList.toggle('input-error', cleaned !== '' && (isNaN(n) || n < min || n > max));
+    if (cleaned.length >= maxLen && nextId) {
+      var nextEl = document.getElementById(nextId);
+      if (nextEl) { nextEl.focus(); nextEl.select(); }
+    }
+  });
+}
+
+/**
+ * The Moon uses the same reference latitude bands as the Sun (same almanac
+ * page, same two rows) -- rather than make the person type them twice,
+ * canonicalId is the value actually used in calculations and mirrorId is a
+ * second, visually-identical box that stays in sync with it either way.
+ */
+function wireLatMirror(canonicalId, mirrorId) {
+  var canonical = document.getElementById(canonicalId);
+  var mirror = document.getElementById(mirrorId);
+  canonical.addEventListener('input', function () { mirror.value = canonical.value; });
+  mirror.addEventListener('input', function () {
+    canonical.value = mirror.value;
+    refreshPlanning();
+    savePlanningForm();
+    if (_planningMode === 'autofill') refreshRsttStalenessStatus();
+  });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('swVersion').textContent = APP_VERSION;
   initNavMenu();
@@ -20,21 +137,54 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('btnFetchRstt').addEventListener('click', onFetchRstt);
   document.getElementById('btnStartSight').addEventListener('click', onStartSight);
 
-  var reactiveIds = [
-    'planDate', 'planTzOffset', 'planLatDeg', 'planLatMin', 'planLatNS', 'planLonDeg', 'planLonMin', 'planLonEW',
-    'refLatBelow', 'refLatAbove',
-    'sunriseTimeBelow', 'sunriseTimeAbove', 'sunsetTimeBelow', 'sunsetTimeAbove', 'sunTransitTime',
-    'moonriseTimeBelow', 'moonriseTimeAbove', 'moonsetTimeBelow', 'moonsetTimeAbove', 'moonTransitTime',
-    'moonriseTimeBelowAdj', 'moonriseTimeAboveAdj', 'moonsetTimeBelowAdj', 'moonsetTimeAboveAdj', 'moonTransitTimeAdj'
-  ];
-  reactiveIds.forEach(function (id) {
-    var el = document.getElementById(id);
-    el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', refreshPlanning);
+  // Digit-box behavior (filtering/validation/auto-advance) for every H/M pair...
+  PLANNING_FIELD_IDS.forEach(function (id) {
+    var hEl = document.getElementById(id + 'H');
+    var mEl = document.getElementById(id + 'M');
+    if (hEl && mEl) {
+      wireDigitBox(id + 'H', 2, 0, 23, id + 'M');
+      wireDigitBox(id + 'M', 2, 0, 59, null);
+    }
+  });
+  // ...and for the reference-latitude magnitude boxes (Sun canonical + Moon mirror).
+  ['refLatAboveSun', 'refLatBelowSun', 'refLatAboveMoon', 'refLatBelowMoon'].forEach(function (id) {
+    wireDigitBox(id, 2, 0, 90, null);
+  });
+  wireLatMirror('refLatAboveSun', 'refLatAboveMoon');
+  wireLatMirror('refLatBelowSun', 'refLatBelowMoon');
+
+  // Recalculate + persist on every change.
+  PLANNING_FIELD_IDS.forEach(function (id) {
+    var hEl = document.getElementById(id + 'H');
+    var mEl = document.getElementById(id + 'M');
+    var elems = (hEl && mEl) ? [hEl, mEl] : [document.getElementById(id)];
+    elems.forEach(function (el) {
+      if (!el) return;
+      el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', function () {
+        refreshPlanning();
+        savePlanningForm();
+        if (_planningMode === 'autofill') refreshRsttStalenessStatus();
+      });
+    });
   });
 
-  document.getElementById('planDate').valueAsDate = new Date();
+  document.getElementById('planDate').valueAsDate = new Date(); // default, overridden below if a saved value exists
+  var restored = restorePlanningForm();
+  // Moon's mirrored latitude boxes aren't persisted directly (see wireLatMirror) -- sync
+  // them from the just-restored (or default-empty) Sun boxes now that both exist.
+  document.getElementById('refLatAboveMoon').value = document.getElementById('refLatAboveSun').value;
+  document.getElementById('refLatBelowMoon').value = document.getElementById('refLatBelowSun').value;
+
+  // Reflect the restored (or default) mode in the UI without re-saving it as a
+  // fresh "change" -- setPlanningMode() below already calls refreshPlanning().
+  document.getElementById('modeManual').setAttribute('aria-pressed', _planningMode === 'manual' ? 'true' : 'false');
+  document.getElementById('modeAutoFill').setAttribute('aria-pressed', _planningMode === 'autofill' ? 'true' : 'false');
+  document.getElementById('manualCard').style.display = _planningMode === 'manual' ? 'block' : 'none';
+  document.getElementById('autoFillCard').style.display = _planningMode === 'autofill' ? 'block' : 'none';
 
   refreshPlanning();
+  if (_planningMode === 'autofill') restoreRsttCache();
+  if (!restored) savePlanningForm(); // first visit: persist the defaults so the key exists
 });
 
 // ---------------------------------------------------------------------
@@ -64,9 +214,9 @@ function parseHHMM(v) {
   return parseInt(p[0], 10) * 3600 + parseInt(p[1], 10) * 60;
 }
 
-/** "HH:MM" (from <input type="time">) -> seconds-of-day, or null if blank. */
+/** "HH:MM" -> seconds-of-day, or null if blank. */
 function parseTimeField(id) {
-  return parseHHMM(document.getElementById(id).value);
+  return parseHHMM(getFieldValue(id));
 }
 
 /** Below/above LMT fields -> latitude-interpolated LMT (seconds-of-day), or null if either input/ref is missing. */
@@ -116,7 +266,9 @@ function setPlanningMode(mode) {
   document.getElementById('autoFillCard').style.display = mode === 'autofill' ? 'block' : 'none';
   setRsttStatus('', '');
   clearResults();
+  savePlanningForm();
   refreshPlanning();
+  if (mode === 'autofill') restoreRsttCache();
 }
 
 // ---------------------------------------------------------------------
@@ -159,8 +311,13 @@ function refreshManualResults() {
   if (!pos) { clearResults(); return; }
 
   var tz = parseFloat(document.getElementById('planTzOffset').value) || 0;
-  var refBelow = parseFloat(document.getElementById('refLatBelow').value);
-  var refAbove = parseFloat(document.getElementById('refLatAbove').value);
+
+  // Reference latitude bands are entered as a plain 0-90 magnitude (matching the
+  // almanac page) -- the hemisphere is inferred from the AP's own latitude, since
+  // a real navigator wouldn't be reading a band from the opposite hemisphere.
+  var latSign = pos.lat < 0 ? -1 : 1;
+  var refAbove = latSign * parseFloat(document.getElementById('refLatAboveSun').value);
+  var refBelow = latSign * parseFloat(document.getElementById('refLatBelowSun').value);
 
   var sunriseLmt = interpolatedLmt('sunriseTimeBelow', 'sunriseTimeAbove', refBelow, refAbove, pos.lat);
   var sunsetLmt = interpolatedLmt('sunsetTimeBelow', 'sunsetTimeAbove', refBelow, refAbove, pos.lat);
@@ -188,6 +345,62 @@ function refreshManualResults() {
 // Auto-fill mode -- one explicit, user-triggered USNO request; never reactive.
 // ---------------------------------------------------------------------
 
+/** Renders a USNO fetch result (fresh or restored from cache) into the result spans. */
+function renderRsttResult(pos, result) {
+  document.getElementById('resSunrise').textContent = result.sunrise || 'Does not occur';
+  document.getElementById('resSunset').textContent = result.sunset || 'Does not occur';
+  document.getElementById('resCivilTwilightAM').textContent = result.civilTwilightAM || 'Does not occur';
+  document.getElementById('resCivilTwilightPM').textContent = result.civilTwilightPM || 'Does not occur';
+  document.getElementById('resSunTransit').textContent = result.sunTransit || 'Does not occur';
+  document.getElementById('resMoonrise').textContent = result.moonrise || 'Does not occur';
+  document.getElementById('resMoonset').textContent = result.moonset || 'Does not occur';
+  document.getElementById('resMoonTransit').textContent = result.moonTransit || 'Does not occur';
+
+  // USNO's rstt/oneday service doesn't report Nautical Twilight at all, so it's
+  // derived from the Sun data it DOES report (same approach as manual mode).
+  var transitSec = parseHHMM(result.sunTransit);
+  var twilight = transitSec === null ? null : SightCalc.computeTwilightTimes(pos.lat, transitSec, parseHHMM(result.sunrise), parseHHMM(result.sunset));
+  var fmt = function (sec) { return (sec === null || sec === undefined) ? null : SightCalc.secondsToTimeString(sec).slice(0, 5); };
+  document.getElementById('resNauticalTwilightAM').textContent = (twilight && fmt(twilight.nauticalAM)) || 'Does not occur';
+  document.getElementById('resNauticalTwilightPM').textContent = (twilight && fmt(twilight.nauticalPM)) || 'Does not occur';
+}
+
+/** True if a cached fetch's inputs still match what's currently in the form. */
+function rsttCacheMatchesCurrentInputs(cached, pos, dateVal, tz) {
+  return !!cached && !!pos &&
+    cached.date === dateVal && cached.tz === tz &&
+    Math.abs(cached.lat - pos.lat) < 1e-6 && Math.abs(cached.lon - pos.lon) < 1e-6;
+}
+
+/** Re-checks whether the cached USNO fetch still matches the current form inputs, and updates the status line. Safe to call anytime; no-ops if nothing has ever been fetched this session. */
+function refreshRsttStalenessStatus() {
+  if (!hasPlanningStorage()) return;
+  var cached = PlanningStorage.loadRsttCache();
+  if (!cached) return;
+
+  var pos = getPlanningPosition();
+  var dateVal = document.getElementById('planDate').value;
+  var tz = parseFloat(document.getElementById('planTzOffset').value) || 0;
+
+  if (rsttCacheMatchesCurrentInputs(cached, pos, dateVal, tz)) {
+    setRsttStatus('Fetched from USNO.', 'ok');
+  } else {
+    setRsttStatus('Showing last USNO fetch (' + cached.date + ', ' + cached.lat.toFixed(2) + ', ' + cached.lon.toFixed(2) + '). Date or position has changed since -- fetch again to update.', 'loading');
+  }
+}
+
+/** On page load (or switching into Auto-fill mode), show the last USNO fetch from this session, if any. */
+function restoreRsttCache() {
+  if (!hasPlanningStorage()) return;
+  var cached = PlanningStorage.loadRsttCache();
+  if (!cached) return;
+
+  // Render with whatever position the fetch was actually made for, even if the
+  // form has since changed -- the result text came from that position/date.
+  renderRsttResult({ lat: cached.lat, lon: cached.lon }, cached.result);
+  refreshRsttStalenessStatus();
+}
+
 function onFetchRstt() {
   var pos = getPlanningPosition();
   var dateVal = document.getElementById('planDate').value;
@@ -204,23 +417,10 @@ function onFetchRstt() {
 
   SightUsno.fetchRiseSetTransit(dateVal, pos.lat, pos.lon, tz)
     .then(function (result) {
-      document.getElementById('resSunrise').textContent = result.sunrise || 'Does not occur';
-      document.getElementById('resSunset').textContent = result.sunset || 'Does not occur';
-      document.getElementById('resCivilTwilightAM').textContent = result.civilTwilightAM || 'Does not occur';
-      document.getElementById('resCivilTwilightPM').textContent = result.civilTwilightPM || 'Does not occur';
-      document.getElementById('resSunTransit').textContent = result.sunTransit || 'Does not occur';
-      document.getElementById('resMoonrise').textContent = result.moonrise || 'Does not occur';
-      document.getElementById('resMoonset').textContent = result.moonset || 'Does not occur';
-      document.getElementById('resMoonTransit').textContent = result.moonTransit || 'Does not occur';
-
-      // USNO's rstt/oneday service doesn't report Nautical Twilight at all, so it's
-      // derived from the Sun data it DOES report (same approach as manual mode).
-      var transitSec = parseHHMM(result.sunTransit);
-      var twilight = transitSec === null ? null : SightCalc.computeTwilightTimes(pos.lat, transitSec, parseHHMM(result.sunrise), parseHHMM(result.sunset));
-      var fmt = function (sec) { return (sec === null || sec === undefined) ? null : SightCalc.secondsToTimeString(sec).slice(0, 5); };
-      document.getElementById('resNauticalTwilightAM').textContent = (twilight && fmt(twilight.nauticalAM)) || 'Does not occur';
-      document.getElementById('resNauticalTwilightPM').textContent = (twilight && fmt(twilight.nauticalPM)) || 'Does not occur';
-
+      renderRsttResult(pos, result);
+      if (hasPlanningStorage()) {
+        PlanningStorage.saveRsttCache({ date: dateVal, lat: pos.lat, lon: pos.lon, tz: tz, result: result });
+      }
       setRsttStatus('Fetched from USNO.', 'ok');
     })
     .catch(function (err) {

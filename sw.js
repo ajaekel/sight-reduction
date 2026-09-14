@@ -22,6 +22,7 @@ var PRECACHE_URLS = [
   './js/app.js',
   './js/fixes.js',
   './js/planning.js',
+  './js/planningStorage.js',
   './js/sightings.js',
   './js/version.js'
 ];

@@ -50,8 +50,8 @@
           <input type="date" id="planDate">
         </div>
         <div class="body-inline-col" style="flex: 1;">
-          <label>Time Zone (hours from UTC)</label>
-          <input type="text" inputmode="decimal" id="planTzOffset" placeholder="-4" onfocus="this.select()">
+          <label>Timezone Offset (UTC Offset in Hours)</label>
+          <input type="text" inputmode="decimal" id="planTzOffset" placeholder="-4" value="-4" onfocus="this.select()">
         </div>
       </div>
     </div>
@@ -100,58 +100,127 @@
   <div class="card" id="manualCard">
     <div class="section-title">Manual Entry (from a printed Nautical Almanac)</div>
     <p class="cache-blurb" style="margin-top:0;">
-      Enter the tabulated latitude band above and below your AP once -- it's reused for all four
-      rise/set events, the way a real almanac page is laid out. Meridian passage doesn't depend
-      on latitude, so just enter it directly. Times are Local Mean Time (LMT), as tabulated.
-      Civil and Nautical Twilight are calculated automatically from Sunrise, Sunset, and Meridian
-      Passage above -- no separate entry needed.
+      Enter the reference latitude bands and the tabulated times exactly as printed on the daily
+      page -- above the AP's latitude on the top row, below it on the row underneath. These are
+      LMT (Local Mean Time): the almanac computes them as the Universal Time of the event at the
+      Greenwich meridian for that date, which -- because the Sun and Moon barely move in a few
+      hours -- doubles as a very close approximation of the event's Local Mean Time at any
+      longitude. That's what makes a single table work worldwide; it's also why a longitude
+      correction (applied automatically below) is still needed to get your actual zone time.
+      24-hour clock. Civil and Nautical Twilight are calculated automatically from Sunrise,
+      Sunset, and Meridian Passage -- no separate entry needed.
     </p>
 
-    <div class="form-group">
-      <div class="input-row">
-        <div style="width: 150px; flex-shrink: 0; font-size: 0.85rem; color: #aaa;">Reference latitudes</div>
-        <input type="text" inputmode="decimal" id="refLatBelow" placeholder="Below, e.g. 35" onfocus="this.select()">
-        <input type="text" inputmode="decimal" id="refLatAbove" placeholder="Above, e.g. 40" onfocus="this.select()">
+    <div class="sub-title">Sun</div>
+    <div class="planning-row">
+      <div class="planning-cell planning-cell-lat">
+        <label>Lat, above</label>
+        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="refLatAboveSun" placeholder="45">
       </div>
-      <div style="font-size:0.75rem; color:#888; margin-top:2px;">Signed decimal degrees (N positive, S negative)</div>
+      <div class="planning-cell">
+        <label>Sunrise</label>
+        <span class="time-hm">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="sunriseTimeAboveH" placeholder="05">
+          <span>:</span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="sunriseTimeAboveM" placeholder="39">
+        </span>
+      </div>
+      <div class="planning-cell">
+        <label>Sunset</label>
+        <span class="time-hm">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="sunsetTimeAboveH" placeholder="18">
+          <span>:</span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="sunsetTimeAboveM" placeholder="13">
+        </span>
+      </div>
+    </div>
+    <div class="planning-row">
+      <div class="planning-cell planning-cell-lat">
+        <label>Lat, below</label>
+        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="refLatBelowSun" placeholder="40">
+      </div>
+      <div class="planning-cell">
+        <label>Sunrise</label>
+        <span class="time-hm">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="sunriseTimeBelowH" placeholder="05">
+          <span>:</span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="sunriseTimeBelowM" placeholder="41">
+        </span>
+      </div>
+      <div class="planning-cell">
+        <label>Sunset</label>
+        <span class="time-hm">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="sunsetTimeBelowH" placeholder="18">
+          <span>:</span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="sunsetTimeBelowM" placeholder="11">
+        </span>
+      </div>
     </div>
 
-    <div class="planning-manual-grid">
-      <div class="form-group">
-        <label>Sunrise LMT (below / above)</label>
-        <div class="input-row">
-          <input type="time" id="sunriseTimeBelow">
-          <input type="time" id="sunriseTimeAbove">
-        </div>
+    <div class="sub-title" style="margin-top: 14px;">Moon</div>
+    <div style="font-size: 0.72rem; color: #888; margin-bottom: 6px;">Same reference latitudes as Sun, above.</div>
+    <div class="planning-row">
+      <div class="planning-cell planning-cell-lat">
+        <label>Lat, above</label>
+        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="refLatAboveMoon" placeholder="45">
       </div>
-      <div class="form-group">
-        <label>Sunset LMT (below / above)</label>
-        <div class="input-row">
-          <input type="time" id="sunsetTimeBelow">
-          <input type="time" id="sunsetTimeAbove">
-        </div>
+      <div class="planning-cell">
+        <label>Moonrise</label>
+        <span class="time-hm">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonriseTimeAboveH" placeholder="08">
+          <span>:</span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonriseTimeAboveM" placeholder="15">
+        </span>
       </div>
-      <div class="form-group">
-        <label>Sun Meridian Passage LMT</label>
-        <input type="time" id="sunTransitTime">
+      <div class="planning-cell">
+        <label>Moonset</label>
+        <span class="time-hm">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonsetTimeAboveH" placeholder="18">
+          <span>:</span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonsetTimeAboveM" placeholder="55">
+        </span>
       </div>
-      <div class="form-group">
-        <label>Moonrise LMT (below / above)</label>
-        <div class="input-row">
-          <input type="time" id="moonriseTimeBelow">
-          <input type="time" id="moonriseTimeAbove">
-        </div>
+    </div>
+    <div class="planning-row">
+      <div class="planning-cell planning-cell-lat">
+        <label>Lat, below</label>
+        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="refLatBelowMoon" placeholder="40">
       </div>
-      <div class="form-group">
-        <label>Moonset LMT (below / above)</label>
-        <div class="input-row">
-          <input type="time" id="moonsetTimeBelow">
-          <input type="time" id="moonsetTimeAbove">
-        </div>
+      <div class="planning-cell">
+        <label>Moonrise</label>
+        <span class="time-hm">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonriseTimeBelowH" placeholder="08">
+          <span>:</span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonriseTimeBelowM" placeholder="07">
+        </span>
       </div>
-      <div class="form-group">
-        <label>Moon Meridian Passage LMT</label>
-        <input type="time" id="moonTransitTime">
+      <div class="planning-cell">
+        <label>Moonset</label>
+        <span class="time-hm">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonsetTimeBelowH" placeholder="19">
+          <span>:</span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonsetTimeBelowM" placeholder="05">
+        </span>
+      </div>
+    </div>
+
+    <div class="sub-title" style="margin-top: 14px;">Meridian Passage</div>
+    <div class="planning-row">
+      <div class="planning-cell">
+        <label>Sun</label>
+        <span class="time-hm">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="sunTransitTimeH" placeholder="11">
+          <span>:</span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="sunTransitTimeM" placeholder="56">
+        </span>
+      </div>
+      <div class="planning-cell">
+        <label>Moon</label>
+        <span class="time-hm">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonTransitTimeH" placeholder="13">
+          <span>:</span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonTransitTimeM" placeholder="41">
+        </span>
       </div>
     </div>
 
@@ -160,27 +229,53 @@
       rise/set/transit time drifts by up to ~1 hour a day, which matters once you're any real
       distance from Greenwich. To correct for it, also enter the Moon's tabulated time for the
       <em>adjacent</em> Greenwich date -- the <strong>following</strong> date if your AP is in West
-      longitude, or the <strong>preceding</strong> date if East. Leave these blank to skip the
-      correction (matches the old behavior).
+      longitude, or the <strong>preceding</strong> date if East. Same reference latitudes as
+      above. Leave these blank to skip the correction.
     </p>
-    <div class="planning-manual-grid">
-      <div class="form-group">
-        <label>Moonrise LMT, adjacent date (below / above)</label>
-        <div class="input-row">
-          <input type="time" id="moonriseTimeBelowAdj">
-          <input type="time" id="moonriseTimeAboveAdj">
-        </div>
+    <div class="planning-row">
+      <div class="planning-cell">
+        <label>Moonrise, above (adjacent date)</label>
+        <span class="time-hm">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonriseTimeAboveAdjH" placeholder="09">
+          <span>:</span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonriseTimeAboveAdjM" placeholder="25">
+        </span>
       </div>
-      <div class="form-group">
-        <label>Moonset LMT, adjacent date (below / above)</label>
-        <div class="input-row">
-          <input type="time" id="moonsetTimeBelowAdj">
-          <input type="time" id="moonsetTimeAboveAdj">
-        </div>
+      <div class="planning-cell">
+        <label>Moonset, above (adjacent date)</label>
+        <span class="time-hm">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonsetTimeAboveAdjH" placeholder="19">
+          <span>:</span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonsetTimeAboveAdjM" placeholder="45">
+        </span>
       </div>
-      <div class="form-group">
-        <label>Moon Meridian Passage LMT, adjacent date</label>
-        <input type="time" id="moonTransitTimeAdj">
+    </div>
+    <div class="planning-row">
+      <div class="planning-cell">
+        <label>Moonrise, below (adjacent date)</label>
+        <span class="time-hm">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonriseTimeBelowAdjH" placeholder="09">
+          <span>:</span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonriseTimeBelowAdjM" placeholder="15">
+        </span>
+      </div>
+      <div class="planning-cell">
+        <label>Moonset, below (adjacent date)</label>
+        <span class="time-hm">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonsetTimeBelowAdjH" placeholder="19">
+          <span>:</span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonsetTimeBelowAdjM" placeholder="55">
+        </span>
+      </div>
+    </div>
+    <div class="planning-row">
+      <div class="planning-cell">
+        <label>Moon Meridian Passage (adjacent date)</label>
+        <span class="time-hm">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonTransitTimeAdjH" placeholder="14">
+          <span>:</span>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="moonTransitTimeAdjM" placeholder="31">
+        </span>
       </div>
     </div>
   </div>
@@ -216,6 +311,7 @@
 <script src="js/usno.js"></script>
 <script src="js/nav.js"></script>
 <script src="js/version.js"></script>
+<script src="js/planningStorage.js"></script>
 <script src="js/planning.js"></script>
 </body>
 </html>

@@ -19,12 +19,12 @@
 ## Support multiple sightings
 
 * [X] Support multiple sightings in a session
-* [ ] Add bisectors / multi-LOP fix
+* [X] Add bisectors / multi-LOP fix
 * [ ] Add running fix; accept inputs for SOG and bearing
 
 ## Miscellaneous
 
-* [ ] Calculate sunset for the AP
+* [X] Calculate sunset for the AP
 
   * [ ] Include a note indicating how many minutes after sunset the sighting occurred
 
