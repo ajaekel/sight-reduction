@@ -92,6 +92,7 @@ function initApp() {
 
   document.getElementById('bodyType').addEventListener('change', function () {
     handleBodyTypeChange();
+    focusFieldForBodyType(); // only on a real user selection, not when Load/Import calls handleBodyTypeChange() directly
     refreshLiveCalculations();
   });
   initStarCombo();
@@ -213,11 +214,13 @@ function handleBodyTypeChange() {
   var nameLabel = document.getElementById('bodyNameLabel');
   var nameInput = document.getElementById('bodyName');
   var planetSelect = document.getElementById('planetSelect');
+  var limbSelect = document.getElementById('limbSelect');
   var starFields = document.getElementById('starFields');
   var nonStarFields = document.getElementById('nonStarFields');
 
   nameInput.style.display = 'none';
   planetSelect.style.display = 'none';
+  limbSelect.style.display = 'none';
   nameContainer.style.display = 'none';
 
   if (type === 'star') {
@@ -233,12 +236,36 @@ function handleBodyTypeChange() {
     starFields.style.display = 'none';
     nonStarFields.style.display = 'block';
   } else {
+    // Sun or Moon: no name to enter, but which limb was brought to the
+    // horizon/AP does matter (semi-diameter correction, someday automatic --
+    // see ROADMAP -- is manual for now, but the choice is still worth
+    // recording), so the same slot shows a Limb picker instead.
     nameInput.value = '';
     starFields.style.display = 'none';
     nonStarFields.style.display = 'block';
+    nameContainer.style.display = 'block';
+    nameLabel.innerText = 'Limb';
+    limbSelect.style.display = 'block';
+    if (!limbSelect.value) limbSelect.value = 'lower';
   }
 
   updateHeaders();
+}
+
+/** The field that should receive focus after Body Type changes, so picking a type is the only tap/click needed. */
+function focusFieldForBodyType() {
+  var type = document.getElementById('bodyType').value;
+  var field = (type === 'star') ? document.getElementById('bodyName')
+            : (type === 'planet') ? document.getElementById('planetSelect')
+            : document.getElementById('limbSelect');
+  if (!field) return;
+  field.focus();
+  // showPicker() opens a <select>'s (or other supported input's) native picker
+  // immediately, without a second click -- supported in most current browsers,
+  // and a plain focus() is still a fine, harmless fallback where it isn't.
+  if (typeof field.showPicker === 'function') {
+    try { field.showPicker(); } catch (e) { /* not from a direct user gesture, or unsupported here -- ignore */ }
+  }
 }
 
 function updateHeaders() {
@@ -521,7 +548,10 @@ function collectFormState() {
       type: bodyType,
       name: bodyType === 'star' ? g('bodyName').value.trim()
           : bodyType === 'planet' ? g('planetSelect').value
-          : ''
+          : null,
+      // Limb only means anything for Sun/Moon (which limb crossed the horizon);
+      // for a star or planet (point sources) it's not a meaningful concept.
+      limb: (bodyType === 'sun' || bodyType === 'moon') ? (g('limbSelect').value || 'lower') : null
     },
     position: {
       latDeg: num('latDeg'), latMin: num('latMin'), latNS: g('latNS').value,
@@ -563,6 +593,10 @@ function applyFormState(state) {
   setVal('bodyType', (state.body && state.body.type) || 'sun');
   handleBodyTypeChange();
 
+  // limb is independent of name/type -- collectFormState always includes it,
+  // regardless of body type, so it must always be restored too, or loading a
+  // star/planet record would leave a stale value in place from before the load.
+  setVal('limbSelect', (state.body && state.body.limb) || 'lower');
   if (state.body && state.body.type === 'star') {
     setVal('bodyName', state.body.name || '');
   } else if (state.body && state.body.type === 'planet') {
@@ -1403,7 +1437,7 @@ function showToast(message, isError) {
 }
 
 /**
- * The sight's "name" is fully derived, never typed: "yyyy-mm-dd HH-mm-ss <type>
+ * The sight's "name" is fully derived, never typed: "yyyy-mm-dd HH.mm.ss <type>
  * <name>", from the observation date, the clock-error-corrected AVERAGE local
  * time across all sighting lines (the same "Average of Sightings -> Local
  * Time corrected" value shown on the form -- it's what the reduction math
