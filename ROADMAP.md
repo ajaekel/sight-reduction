@@ -19,19 +19,20 @@
 ## Support multiple sightings
 
 * [X] Support multiple sightings in a session
-* [ ] Add bisectors / multi-LOP fix
+* [X] Add bisectors / multi-LOP fix
 * [ ] Add running fix; accept inputs for SOG and bearing
 
 ## Miscellaneous
 
-* [ ] Calculate sunset for the AP
+* [X] Calculate sunset for the AP
 
-  * [ ] Include a note indicating how many minutes after sunset the sighting occurred
+  * [ ] Add a data point to Sightings, how many minutes after/before sunset/sunrise/meridian passage of Sun/Moon
+  * [ ] For the Moon, include it's percentage, i.e., from "new" to "full"
 
-* [ ] Change “Label / Notes (optional, helps you find this sight later)” to “Notes (observed bearing, visibility, etc...)”
+* [X] Change “Label / Notes (optional, helps you find this sight later)” to “Notes (observed bearing, visibility, etc...)”
 
-  * [ ] This field should no longer factor into the filename upon saving Stop notes from replacing the default name upon “Save to Device”
-  * [ ] Refactor code for clarity; rename `label` to `notes`, `sightLabel` to `sightNotes`, etc...
+  * [X] This field should no longer factor into the filename upon saving Stop notes from replacing the default name upon “Save to Device”
+  * [X] Refactor code for clarity; rename `label` to `notes`, `sightLabel` to `sightNotes`, etc...
 
 * [ ] If Celestial Body is `Sun` or `Moon`, add new field `Limb` (dropdown options: `lower` (default), `upper`)
 
@@ -43,7 +44,7 @@
 
 * [ ] Data fetch from USNO fails on cellular data, only works on wifi, should have option to download data over cellular
 
-* [ ] If user loads a sighting and edit it and resaves with a new name, it overwrites the original sighting (User should be able to load a sighting to use as the base for another, e.g., avoid needing to manually enter the AP again and again for a multi-star stationary fix)
+* [X] If user loads a sighting and edit it and resaves with a new name, it overwrites the original sighting (User should be able to load a sighting to use as the base for another, e.g., avoid needing to manually enter the AP again and again for a multi-star stationary fix)
 Expected behavior, if a sighting is saved and renamed, it's saved as a new sighting
 
 # Completed

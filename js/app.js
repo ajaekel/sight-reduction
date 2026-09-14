@@ -1404,10 +1404,14 @@ function showToast(message, isError) {
 
 /**
  * The sight's "name" is fully derived, never typed: "yyyy-mm-dd HH-mm-ss <type>
- * <name>", from the observation date, the first sighting line's UTC time, and
- * the body type/name. It's used as both the Save-to-Device record's title and
- * the Export filename base, and updates live on screen (see
- * updateAutoNamePreview) as those fields change -- no prompt, ever.
+ * <name>", from the observation date, the clock-error-corrected AVERAGE local
+ * time across all sighting lines (the same "Average of Sightings -> Local
+ * Time corrected" value shown on the form -- it's what the reduction math
+ * itself treats as the moment of the sight, and unlike UT it's immediately
+ * meaningful to the person who took it: a dusk sight, a daytime sight, a
+ * dawn sight), and the body type/name. It's used as both the Save-to-Device
+ * record's title and the Export filename base, and updates live on screen
+ * (see updateAutoNamePreview) as those fields change -- no prompt, ever.
  */
 function computeAutoName(state) {
   var pad2 = function (n) { return String(n).padStart(2, '0'); };
@@ -1415,10 +1419,19 @@ function computeAutoName(state) {
 
   var dateStr = state.date || now.toISOString().split('T')[0];
 
-  var firstObs = state.observations && state.observations[0];
-  var timeStr = firstObs
-    ? pad2(firstObs.h) + '-' + pad2(firstObs.m) + '-' + pad2(firstObs.s)
-    : pad2(now.getHours()) + '-' + pad2(now.getMinutes()) + '-' + pad2(now.getSeconds());
+  var avg = SightCalc.averageObservations(state.observations);
+  var timeStr;
+  if (avg) {
+    var corr = state.corrections || {};
+    var sign = (corr.clockErrorDirection === 'fast') ? -1 : 1;
+    var correctedSec = ((avg.avgLocalSec + sign * (corr.clockErrorSec || 0)) % 86400 + 86400) % 86400;
+    var h = Math.floor(correctedSec / 3600);
+    var m = Math.floor((correctedSec % 3600) / 60);
+    var s = Math.floor(correctedSec % 60);
+    timeStr = pad2(h) + '.' + pad2(m) + '.' + pad2(s);
+  } else {
+    timeStr = pad2(now.getHours()) + '.' + pad2(now.getMinutes()) + '.' + pad2(now.getSeconds());
+  }
 
   // Sun/Moon are themselves proper nouns and get capitalized; "star"/"planet"
   // are just category words, so they stay lowercase -- only the actual name
@@ -1477,13 +1490,16 @@ function onSaveSight() {
 }
 
 /**
- * Standard "Save As" overwrite-or-rename flow: if `name` collides with a
- * DIFFERENT existing record (i.e. some other saved sight already has this
- * exact title), ask whether to overwrite it or pick a new name, looping
- * until resolved. Resaving under the sight's OWN current name/id is not a
- * collision -- that's just an ordinary save. Calls back with (null, null)
- * if the user backs out entirely, or (name, idToSaveUnderOrNull) once
- * resolved -- a null id means "create a new record".
+ * Standard "Save As" overwrite-or-rename flow: every time the chosen name
+ * matches an EXISTING saved sight -- including the one currently loaded and
+ * otherwise unchanged -- ask whether to overwrite it or pick a different
+ * name, looping until resolved. This deliberately does not special-case
+ * "it's the same record you already have open": once Save always goes
+ * through a name prompt, it should behave like a real Save As dialog every
+ * time, exactly the way overwriting a file you have open still asks first.
+ * Calls back with (null, null) if the user backs out entirely, or
+ * (name, idToSaveUnderOrNull) once resolved -- a null id means "create a
+ * new record".
  */
 function resolveSaveName(existing, name, autoName, callback) {
   var collision = null;
@@ -1491,15 +1507,15 @@ function resolveSaveName(existing, name, autoName, callback) {
     if (existing[i].title === name) { collision = existing[i]; break; }
   }
 
-  if (!collision || collision.id === window._currentRecordId) {
-    callback(name, collision ? collision.id : null);
+  if (!collision) {
+    callback(name, null);
     return;
   }
 
   var overwrite = confirm(
     'A sight named "' + name + '" already exists.\n\n' +
-    'OK: overwrite it.\n' +
-    'Cancel: choose a different name.'
+    'OK: save over it.\n' +
+    'Cancel: change the name.'
   );
   if (overwrite) {
     callback(name, collision.id);
