@@ -12,6 +12,13 @@
 
 var _drMode = 'duration'; // 'duration' | 'endtime'
 
+// Provenance of the START position -- 'KNOWN' unless it was carried in from
+// chaining a previous leg (see onChainLeg), in which case it's 'DR'. Reset
+// to 'KNOWN' the moment the person actually edits a start field by hand
+// (see the DR_START_FIELD_IDS wiring below) -- editing implies they're
+// overriding it with a value they're now vouching for directly.
+var _drStartPositionType = 'KNOWN';
+
 /** Every logical field whose value should survive navigating away and back. Time fields map to id+'H'/id+'M' -- see getFieldValue/setFieldValue. */
 var DRLEG_FIELD_IDS = [
   'drStartDate', 'drStartTime', 'drTzOffset',
@@ -19,6 +26,11 @@ var DRLEG_FIELD_IDS = [
   'drSog', 'drCourse',
   'drDurationHours', 'drDurationMinutes',
   'drEndDate', 'drEndTime'
+];
+
+/** The subset of the above that define the START position's identity -- editing any of these by hand means it's no longer a carried-over DR position (see _drStartPositionType). */
+var DR_START_FIELD_IDS = [
+  'drStartDate', 'drStartTime', 'drLatDeg', 'drLatMin', 'drLatNS', 'drLonDeg', 'drLonMin', 'drLonEW'
 ];
 
 /** Reads a logical field's value as a plain string ("HH:MM" for time fields). */
@@ -111,6 +123,7 @@ function resetResults() {
   document.getElementById('btnToSighting').disabled = true;
   document.getElementById('btnToPlanning').disabled = true;
   document.getElementById('btnChainLeg').disabled = true;
+  document.getElementById('btnSaveLeg').disabled = true;
   window._lastDrResult = null;
 }
 
@@ -199,22 +212,29 @@ function recompute() {
   var arrM = Math.floor((arrival.secOfDay % 3600) / 60);
   document.getElementById('resArrival').textContent = arrival.dateStr + ' ' + pad2(arrH) + ':' + pad2(arrM);
 
+  // The full domain-model result: a start Position (provenance tracked in
+  // _drStartPositionType) and an end Position (always DR-derived), plus the
+  // inputs that produced it. This is what feeds the handoffs, chaining, and
+  // "Save Leg" -- see docs/passage-design.md's DrLeg model.
   window._lastDrResult = {
-    latDeg: leg.latDeg,
-    lonDeg: leg.lonDeg,
-    dateStr: arrival.dateStr,
-    secOfDay: arrival.secOfDay,
+    startPosition: SightCalc.makePosition(new Date(startUtcMs).toISOString(), pos.lat, pos.lon, _drStartPositionType),
+    endPosition: SightCalc.makePosition(new Date(leg.endUtcMs).toISOString(), leg.latDeg, leg.lonDeg, SightCalc.POSITION_TYPES.DR),
+    sog: sog,
+    courseDegTrue: course,
+    durationHours: leg.durationHours,
+    distanceNM: leg.distanceNM,
     tzOffset: tzOffset
   };
   document.getElementById('btnToSighting').disabled = false;
   document.getElementById('btnToPlanning').disabled = false;
   document.getElementById('btnChainLeg').disabled = false;
+  document.getElementById('btnSaveLeg').disabled = false;
 
   saveForm();
 }
 
 function saveForm() {
-  var data = { mode: _drMode, fields: {} };
+  var data = { mode: _drMode, startPositionType: _drStartPositionType, fields: {} };
   DRLEG_FIELD_IDS.forEach(function (id) {
     data.fields[id] = getFieldValue(id);
   });
@@ -230,36 +250,66 @@ function restoreForm() {
     }
   });
   if (data.mode === 'duration' || data.mode === 'endtime') _drMode = data.mode;
+  if (data.startPositionType === 'KNOWN' || data.startPositionType === 'DR') _drStartPositionType = data.startPositionType;
   return true;
 }
 
-/** Builds the {date, tzOffset, latDeg, latMin, latNS, lonDeg, lonMin, lonEW} shape shared by both handoff destinations, from the last computed DR result. */
-function buildPositionHandoff() {
+/** Position -> {latDeg, latMin, latNS, lonDeg, lonMin, lonEW} for writing into deg/min/hemisphere form fields. */
+function positionToDegMinFields(position) {
+  var latAbs = Math.abs(position.lat);
+  var lonAbs = Math.abs(position.lon);
+  var latDM = SightCalc.decimalToDM(latAbs);
+  var lonDM = SightCalc.decimalToDM(lonAbs);
+  return {
+    latDeg: String(latDM.deg), latMin: latDM.min.toFixed(1), latNS: position.lat < 0 ? 'S' : 'N',
+    lonDeg: String(lonDM.deg), lonMin: lonDM.min.toFixed(1), lonEW: position.lon < 0 ? 'W' : 'E'
+  };
+}
+
+/**
+ * New Sighting handoff: the rich, Position-aware shape, since index.html
+ * has somewhere meaningful to put an exact time (the first observation
+ * line) -- see docs/passage-design.md section 8, prerequisite 3. Note this
+ * is a convenience prefill, not a correctness fix: the AP itself never
+ * needed a time (reduceSight only reads the observation's own clock time),
+ * it's just a time-saver for the common "DR to an event, then observe"
+ * workflow.
+ */
+function buildSightingHandoff() {
   var r = window._lastDrResult;
   if (!r) return null;
-  var latAbs = Math.abs(r.latDeg);
-  var lonAbs = Math.abs(r.lonDeg);
+  return { position: r.endPosition, tzOffset: r.tzOffset };
+}
+
+/**
+ * Planning handoff: kept in the older simple shape on purpose. Planning's
+ * own fields have no specific time-of-day to receive precision into (its
+ * "date" is a whole-day concept, used to look up that day's events) -- so
+ * there's nowhere for the extra precision to go yet. Still sourced from the
+ * same endPosition, just formatted the way Planning already expects.
+ */
+function buildPlanningHandoff() {
+  var r = window._lastDrResult;
+  if (!r) return null;
+  var local = SightCalc.utcMsToLocalDateTime(new Date(r.endPosition.time).getTime(), r.tzOffset);
+  var dm = positionToDegMinFields(r.endPosition);
   return {
-    date: r.dateStr,
+    date: local.dateStr,
     tzOffset: String(r.tzOffset),
-    latDeg: String(Math.floor(latAbs)),
-    latMin: (Math.round((latAbs - Math.floor(latAbs)) * 60 * 10) / 10).toFixed(1),
-    latNS: r.latDeg < 0 ? 'S' : 'N',
-    lonDeg: String(Math.floor(lonAbs)),
-    lonMin: (Math.round((lonAbs - Math.floor(lonAbs)) * 60 * 10) / 10).toFixed(1),
-    lonEW: r.lonDeg < 0 ? 'W' : 'E'
+    latDeg: dm.latDeg, latMin: dm.latMin, latNS: dm.latNS,
+    lonDeg: dm.lonDeg, lonMin: dm.lonMin, lonEW: dm.lonEW
   };
 }
 
 function onToSighting() {
-  var handoff = buildPositionHandoff();
+  var handoff = buildSightingHandoff();
   if (!handoff) return;
   sessionStorage.setItem('ocsrApHandoff', JSON.stringify(handoff));
   location.href = 'index.html';
 }
 
 function onToPlanning() {
-  var handoff = buildPositionHandoff();
+  var handoff = buildPlanningHandoff();
   if (!handoff) return;
   sessionStorage.setItem('ocsrPlanningApHandoff', JSON.stringify(handoff));
   location.href = 'planning.html';
@@ -270,18 +320,25 @@ function onChainLeg() {
   var r = window._lastDrResult;
   if (!r) return;
 
-  var latAbs = Math.abs(r.latDeg);
-  var lonAbs = Math.abs(r.lonDeg);
-  document.getElementById('drLatDeg').value = Math.floor(latAbs);
-  document.getElementById('drLatMin').value = (Math.round((latAbs - Math.floor(latAbs)) * 60 * 10) / 10).toFixed(1);
-  document.getElementById('drLatNS').value = r.latDeg < 0 ? 'S' : 'N';
-  document.getElementById('drLonDeg').value = Math.floor(lonAbs);
-  document.getElementById('drLonMin').value = (Math.round((lonAbs - Math.floor(lonAbs)) * 60 * 10) / 10).toFixed(1);
-  document.getElementById('drLonEW').value = r.lonDeg < 0 ? 'W' : 'E';
+  var dm = positionToDegMinFields(r.endPosition);
+  document.getElementById('drLatDeg').value = dm.latDeg;
+  document.getElementById('drLatMin').value = dm.latMin;
+  document.getElementById('drLatNS').value = dm.latNS;
+  document.getElementById('drLonDeg').value = dm.lonDeg;
+  document.getElementById('drLonMin').value = dm.lonMin;
+  document.getElementById('drLonEW').value = dm.lonEW;
 
-  document.getElementById('drStartDate').value = r.dateStr;
+  var local = SightCalc.utcMsToLocalDateTime(new Date(r.endPosition.time).getTime(), r.tzOffset);
+  document.getElementById('drStartDate').value = local.dateStr;
   var pad2 = function (n) { return String(n).padStart(2, '0'); };
-  setFieldValue('drStartTime', pad2(Math.floor(r.secOfDay / 3600)) + ':' + pad2(Math.floor((r.secOfDay % 3600) / 60)));
+  setFieldValue('drStartTime', pad2(Math.floor(local.secOfDay / 3600)) + ':' + pad2(Math.floor((local.secOfDay % 3600) / 60)));
+
+  // The new leg's start IS the previous leg's DR-derived end -- mark the
+  // provenance accordingly (see _drStartPositionType's comment). This has
+  // to happen AFTER the field writes above: those are plain .value
+  // assignments, which don't fire 'input' events, so they won't trip the
+  // "the person edited it by hand" reset wired below.
+  _drStartPositionType = 'DR';
 
   // Duration/end-time are unknown for the new leg -- clear both sets of fields either way.
   document.getElementById('drDurationHours').value = '';
@@ -291,6 +348,95 @@ function onChainLeg() {
 
   showToast('Started a new leg from the DR position.');
   recompute();
+}
+
+/**
+ * Auto-generated, no prompt -- same philosophy as the Sight page's save
+ * naming: derived from the data that defines this leg, not hand-typed.
+ * "yyyy-mm-dd HH.mm DR <course>\u00B0/<sog>kt", local start time.
+ */
+function computeLegName(result) {
+  var local = SightCalc.utcMsToLocalDateTime(new Date(result.startPosition.time).getTime(), result.tzOffset);
+  var pad2 = function (n) { return String(n).padStart(2, '0'); };
+  var h = Math.floor(local.secOfDay / 3600), m = Math.floor((local.secOfDay % 3600) / 60);
+  var courseStr = String(Math.round(result.courseDegTrue)).padStart(3, '0');
+  return local.dateStr + ' ' + pad2(h) + '.' + pad2(m) + ' DR ' + courseStr + '\u00B0/' + result.sog + 'kt';
+}
+
+/**
+ * Persists the current computed leg as a permanent, id'd record -- see
+ * docs/passage-design.md section 8, prerequisite 1. Every save creates a
+ * new record (DrLegStorage.save() always assigns a fresh id): a logged DR
+ * leg is historical record of what was assumed at the time, not something
+ * edited in place after the fact.
+ */
+function onSaveLeg() {
+  var r = window._lastDrResult;
+  if (!r) return;
+
+  var record = {
+    name: computeLegName(r),
+    startPosition: r.startPosition,
+    sog: r.sog,
+    courseDegTrue: r.courseDegTrue,
+    durationHours: r.durationHours,
+    endPosition: r.endPosition,
+    passageId: null
+  };
+
+  DrLegStorage.save(record).then(function (saved) {
+    showToast('Saved "' + saved.name + '".');
+    refreshSavedLegsList();
+  }).catch(function (err) {
+    console.error(err);
+    showToast('Could not save this leg (storage may be full or unavailable).', true);
+  });
+}
+
+function onDeleteLeg(id) {
+  if (!confirm('Delete this saved DR leg? This cannot be undone.')) return;
+  DrLegStorage.remove(id).then(function () {
+    showToast('Deleted.');
+    refreshSavedLegsList();
+  });
+}
+
+function refreshSavedLegsList() {
+  DrLegStorage.list().then(function (entries) {
+    var listEl = document.getElementById('savedLegsList');
+    var emptyEl = document.getElementById('savedLegsEmpty');
+    listEl.innerHTML = '';
+
+    if (!entries.length) {
+      emptyEl.style.display = 'block';
+      return;
+    }
+    emptyEl.style.display = 'none';
+
+    entries.forEach(function (entry) {
+      var item = document.createElement('div');
+      item.className = 'saved-item';
+
+      var meta = 'saved ' + new Date(entry.savedAt).toLocaleString();
+
+      item.innerHTML =
+        '<div class="saved-item-info">' +
+          '<div class="saved-item-title"></div>' +
+          '<div class="saved-item-meta"></div>' +
+        '</div>' +
+        '<div class="saved-item-actions">' +
+          '<button class="btn-mini btn-mini-del">Delete</button>' +
+        '</div>';
+
+      item.querySelector('.saved-item-title').textContent = entry.name;
+      item.querySelector('.saved-item-meta').textContent = meta;
+      item.querySelector('.btn-mini-del').addEventListener('click', function () { onDeleteLeg(entry.id); });
+
+      listEl.appendChild(item);
+    });
+  }).catch(function (err) {
+    console.error(err);
+  });
 }
 
 function showToast(msg, isError) {
@@ -311,6 +457,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('btnToSighting').addEventListener('click', onToSighting);
   document.getElementById('btnToPlanning').addEventListener('click', onToPlanning);
   document.getElementById('btnChainLeg').addEventListener('click', onChainLeg);
+  document.getElementById('btnSaveLeg').addEventListener('click', onSaveLeg);
 
   // Digit-box behavior for every H/M time-field pair.
   DRLEG_FIELD_IDS.forEach(function (id) {
@@ -325,14 +472,22 @@ document.addEventListener('DOMContentLoaded', function () {
   wireDigitBox('drDurationHours', null, null, null, null);
   wireDigitBox('drDurationMinutes', 2, 0, 59, null);
 
-  // Recalculate + persist on every change.
+  // Recalculate + persist on every change. Editing any of the start-identity
+  // fields by hand also resets the start position's provenance back to
+  // KNOWN (see _drStartPositionType) -- this only fires on genuine input
+  // events, which programmatic field writes (like onChainLeg's) don't emit,
+  // so chaining's own 'DR' marking survives.
   DRLEG_FIELD_IDS.forEach(function (id) {
     var hEl = document.getElementById(id + 'H');
     var mEl = document.getElementById(id + 'M');
     var elems = (hEl && mEl) ? [hEl, mEl] : [document.getElementById(id)];
+    var isStartField = DR_START_FIELD_IDS.indexOf(id) !== -1;
     elems.forEach(function (el) {
       if (!el) return;
-      el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', recompute);
+      el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', function () {
+        if (isStartField) _drStartPositionType = 'KNOWN';
+        recompute();
+      });
     });
   });
 
@@ -351,4 +506,5 @@ document.addEventListener('DOMContentLoaded', function () {
 
   recompute();
   if (!restored) saveForm();
+  refreshSavedLegsList();
 });

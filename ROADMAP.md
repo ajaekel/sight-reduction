@@ -23,6 +23,10 @@
 * [X] Add DR Leg
 * [ ] Add running fix; accept inputs for SOG and bearing
 
+## Support passage
+
+* [ ] Chronological record of navigation
+
 ## Miscellaneous
 
 * [X] Calculate sunset for the AP

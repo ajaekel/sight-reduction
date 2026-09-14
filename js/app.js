@@ -19,10 +19,19 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 /**
- * Consumes a one-time Date/TZ/AP handoff from planning.html's
- * "Start a Sight with this AP" (see sessionStorage key 'ocsrApHandoff' in
- * js/planning.js). Only this direction -- planning -> index -- exists
- * today; nothing currently reads FROM index.html's live fields.
+ * Consumes a one-time AP handoff via sessionStorage key 'ocsrApHandoff'.
+ * Two producers, two shapes, both supported:
+ *  - planning.html's "Start a Sight with this AP" sends the older simple
+ *    shape (date/tzOffset/latDeg/etc directly) -- Planning has no specific
+ *    time-of-day to offer, only a date, so this shape has none either.
+ *  - drleg.html sends the newer { position: {time,lat,lon,type}, tzOffset }
+ *    shape (see calc.js's Position type / docs/passage-design.md section 8)
+ *    which carries an exact arrival instant, used below to pre-fill the
+ *    first sighting line's observation time as a starting guess. This is a
+ *    convenience, not a correctness fix -- the AP itself doesn't need a
+ *    time (reduceSight only ever reads the observation's own clock time),
+ *    it just saves a little typing on the common "DR to an event, then
+ *    observe" workflow.
  */
 function applyPendingHandoff() {
   var raw;
@@ -41,6 +50,48 @@ function applyPendingHandoff() {
     return false;
   }
 
+  if (h.position) {
+    // Newer Position-aware shape (currently: DR Leg).
+    var tzOffset = h.tzOffset;
+    var local = SightCalc.utcMsToLocalDateTime(new Date(h.position.time).getTime(), tzOffset);
+    var latDM = SightCalc.decimalToDM(Math.abs(h.position.lat));
+    var lonDM = SightCalc.decimalToDM(Math.abs(h.position.lon));
+
+    document.getElementById('sightDate').value = local.dateStr;
+    document.getElementById('tzOffset').value = tzOffset;
+    document.getElementById('latDeg').value = latDM.deg;
+    document.getElementById('latMin').value = latDM.min.toFixed(1);
+    document.getElementById('latNS').value = h.position.lat < 0 ? 'S' : 'N';
+    document.getElementById('lonDeg').value = lonDM.deg;
+    document.getElementById('lonMin').value = lonDM.min.toFixed(1);
+    document.getElementById('lonEW').value = h.position.lon < 0 ? 'W' : 'E';
+
+    var firstRow = document.querySelector('.sighting-item');
+    if (firstRow) {
+      var pad2 = function (n) { return String(n).padStart(2, '0'); };
+      var hh = Math.floor(local.secOfDay / 3600);
+      var mm = Math.floor((local.secOfDay % 3600) / 60);
+      var ss = local.secOfDay % 60;
+      firstRow.querySelector('.t-h').value = pad2(hh);
+      firstRow.querySelector('.t-m').value = pad2(mm);
+      firstRow.querySelector('.t-s').value = pad2(ss);
+    } else {
+      // Called early in initApp(), before addSightingLine(false) has created
+      // the first row yet -- stash it and apply once that row exists (see
+      // initApp(), right after addSightingLine(false)).
+      var pad2b = function (n) { return String(n).padStart(2, '0'); };
+      window._pendingObservationTime = {
+        h: pad2b(Math.floor(local.secOfDay / 3600)),
+        m: pad2b(Math.floor((local.secOfDay % 3600) / 60)),
+        s: pad2b(local.secOfDay % 60)
+      };
+    }
+
+    showToast('Date, time, time zone, and AP filled in from DR Leg.');
+    return true;
+  }
+
+  // Older simple shape (Planning) -- unchanged behavior.
   if (h.date) document.getElementById('sightDate').value = h.date;
   if (h.tzOffset !== undefined) document.getElementById('tzOffset').value = h.tzOffset;
   if (h.latDeg !== undefined) document.getElementById('latDeg').value = h.latDeg;
@@ -196,6 +247,15 @@ function initApp() {
   });
 
   addSightingLine(false);
+  if (window._pendingObservationTime) {
+    var firstRowNow = document.querySelector('.sighting-item');
+    if (firstRowNow) {
+      firstRowNow.querySelector('.t-h').value = window._pendingObservationTime.h;
+      firstRowNow.querySelector('.t-m').value = window._pendingObservationTime.m;
+      firstRowNow.querySelector('.t-s').value = window._pendingObservationTime.s;
+    }
+    window._pendingObservationTime = null;
+  }
   handleBodyTypeChange();
   refreshLiveCalculations();
   refreshCacheSummary();

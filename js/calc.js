@@ -761,6 +761,30 @@
   }
 
   /**
+   * Position { time, lat, lon, type } -- the one shared shape for "a place at
+   * a moment" used across DR Leg, Fix, and the handoffs between pages. See
+   * docs/passage-design.md section 3 for the reasoning: this concept already
+   * existed in three incompatible partial forms (a Sight's AP had no time, a
+   * Fix's resolved point had neither a stored time nor a persisted value at
+   * all, a DR Leg's result had time but no provenance) before being unified
+   * here.
+   *
+   * time: ISO 8601 UTC string, or null if only a date (no specific instant)
+   *       is meaningful -- e.g. Planning's AP isn't tied to one instant.
+   * lat/lon: signed decimal degrees (N/E positive).
+   * type: one of POSITION_TYPES -- how much to trust this position. A KNOWN
+   *       position is exact (GPS, a charted mark, hand-verified); a FIX is
+   *       the best current celestial/other estimate; a DR position is
+   *       provisional and accumulates uncertainty the longer it's been
+   *       projected without a new fix.
+   */
+  var POSITION_TYPES = { KNOWN: 'KNOWN', FIX: 'FIX', DR: 'DR' };
+
+  function makePosition(time, lat, lon, type) {
+    return { time: time || null, lat: lat, lon: lon, type: type };
+  }
+
+  /**
    * Dead Reckoning position via Mid-Latitude Sailing (Bowditch/Dutton's
    * standard method for exactly this: given a start position, a true
    * course, and a distance run, find the resulting position). Accurate for
@@ -850,6 +874,8 @@
     computeTwilightTimes: computeTwilightTimes,
     localDateTimeToUtcMs: localDateTimeToUtcMs,
     utcMsToLocalDateTime: utcMsToLocalDateTime,
+    POSITION_TYPES: POSITION_TYPES,
+    makePosition: makePosition,
     drPosition: drPosition,
     computeDrLeg: computeDrLeg,
     interpolateGha: interpolateGha,

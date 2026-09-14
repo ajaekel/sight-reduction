@@ -369,6 +369,7 @@ function autoPlotFix() {
           lon: pos.lon,
           zn: record.results.zn,
           interceptNM: record.results.interceptNM,
+          observationTime: record.results.observationTime, // ISO UTC -- used to timestamp the Fix's cached resolvedPosition
           label: labels.title,
           color: SightCalc.paletteColor(i),
           badgeNumber: i + 1
@@ -409,13 +410,41 @@ function formatInterceptBadge(interceptNM) {
 }
 
 /**
+ * Caches the Fix's resolved position (see docs/passage-design.md section 8,
+ * prerequisite 2) the moment it successfully resolves, instead of only ever
+ * computing it live and discarding it -- previously FixStorage never stored
+ * a position at all. Timestamped with the LATEST observation time among the
+ * actively-plotted sightings, matching the usual convention that a fix's
+ * time is the time of its most recent constituent sight. Only writes to
+ * storage when the cached value actually changed, so toggling
+ * azimuth/bisector display doesn't spam localStorage on every re-render.
+ */
+function cacheResolvedPosition(fixResult, activeSightings) {
+  if (!fixResult.solvable || typeof fixResult.lat !== 'number' || typeof fixResult.lon !== 'number') return;
+
+  var latestTime = null;
+  activeSightings.forEach(function (s) {
+    if (s.observationTime && (!latestTime || s.observationTime > latestTime)) latestTime = s.observationTime;
+  });
+  if (!latestTime) return; // shouldn't happen if fixResult resolved, but guard anyway
+
+  var next = SightCalc.makePosition(latestTime, fixResult.lat, fixResult.lon, SightCalc.POSITION_TYPES.FIX);
+  var prev = currentFix.resolvedPosition;
+  var unchanged = prev && prev.time === next.time && prev.type === next.type &&
+    Math.abs(prev.lat - next.lat) < 1e-9 && Math.abs(prev.lon - next.lon) < 1e-9;
+  if (unchanged) return;
+
+  currentFix.resolvedPosition = next;
+  FixStorage.save(currentFix);
+}
+
+/**
  * Re-renders the already-fetched plot using the current toggle/method/active
  * states -- no re-fetch needed. The legend always lists every plottable
  * sighting (so a deselected one can be switched back on); only the ones in
  * the active set are actually fed into the chart and the fix resolution.
  */
-function renderCurrentPlot() {
-  if (!lastChartInput) return;
+function renderCurrentPlot() {  if (!lastChartInput) return;
 
   var activeSet = getActiveSightingIds(currentFix);
   var plotInput = lastChartInput.filter(function (item) { return activeSet.has(item.id); });
@@ -431,6 +460,7 @@ function renderCurrentPlot() {
 
   var container = document.getElementById('fixChartContainer');
   var result = SightChart.renderMultiSightChart(container, plotInput, opts);
+  cacheResolvedPosition(result.fix, plotInput);
 
   var legendEl = document.getElementById('fixChartLegend');
   legendEl.innerHTML = '';
