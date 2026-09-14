@@ -26,7 +26,8 @@
 
 * [X] Calculate sunset for the AP
 
-  * [ ] Include a note indicating how many minutes after sunset the sighting occurred
+  * [ ] Add a data point to Sightings, how many minutes after/before sunset/sunrise/meridian passage of Sun/Moon
+  * [ ] For the Moon, include it's percentage, i.e., from "new" to "full"
 
 * [X] Change “Label / Notes (optional, helps you find this sight later)” to “Notes (observed bearing, visibility, etc...)”
 
