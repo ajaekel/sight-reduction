@@ -63,28 +63,3 @@ Expected behavior, if a sighting is saved and renamed, it's saved as a new sight
   * [X] `Ho`
 
 * [X] Add charting: Visualize the Assumed Position, Azimuth to celestial body and LOP
-
-
-# Data-model specification
-
-```
-Observation
-    belongs to a Sight
-
-Sight
-    belongs to a Fix (optionally, until assigned)
-    produces one or more LOPs
-
-Fix
-    contains one or more Sights / LOPs
-    produces one Position
-
-DR Leg
-    starts at a Position
-    has course + SOG + duration
-    produces a DR Position
-
-Passage
-    contains the chronological navigation history
-    consists of Positions, DR Legs, Sights, and Fixes
-```
