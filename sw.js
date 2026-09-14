@@ -10,6 +10,7 @@ var PRECACHE_URLS = [
   './fixes.html',
   './planning.html',
   './sightings.html',
+  './drleg.html',
   './css/style.css',
   './js/calc.js',
   './js/storage.js',
@@ -24,6 +25,8 @@ var PRECACHE_URLS = [
   './js/planning.js',
   './js/planningStorage.js',
   './js/sightings.js',
+  './js/drleg.js',
+  './js/drlegStorage.js',
   './js/version.js'
 ];
 
