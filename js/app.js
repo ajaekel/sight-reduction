@@ -1584,10 +1584,28 @@ function showToast(message, isError) {
  * (see updateAutoNamePreview) as those fields change -- no prompt, ever.
  */
 /** Keeps the on-screen "Save name" preview (next to the Save/Export buttons) in sync. */
+/**
+ * Keeps the on-screen "Save name" preview (next to the Save/Export buttons)
+ * in sync. Wrapped in try/catch deliberately: this is a cosmetic preview,
+ * not load-bearing for anything else -- but it's called from
+ * refreshLiveCalculations(), which runs from many places including
+ * initApp() and addObservationLine(), both of which have real,
+ * load-bearing work queued AFTER this call in the same synchronous
+ * function. A failure here (e.g. a version mismatch where calc.js is
+ * missing a function app.js expects -- exactly what happened once already)
+ * would otherwise silently abort everything queued after it in the same
+ * call stack, with symptoms in completely unrelated features (the Limb
+ * field never showing on load, "Add Observation" never focusing its new
+ * row) that give no hint the actual failure was here.
+ */
 function updateAutoNamePreview() {
   var el = document.getElementById('autoNamePreview');
   if (!el) return;
-  el.textContent = SightCalc.computeAutoName(collectFormState());
+  try {
+    el.textContent = SightCalc.computeAutoName(collectFormState());
+  } catch (e) {
+    console.error('updateAutoNamePreview failed (non-fatal, preview left as-is):', e);
+  }
 }
 
 function onSaveSight() {
