@@ -484,9 +484,11 @@ function addObservationLine(autoFocus) {
         '<span>:</span>' +
         '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-s" placeholder="00" maxlength="2">' +
       '</span>' +
-      '<input type="text" inputmode="decimal" class="s-deg" placeholder="31">' +
-      '<input type="text" inputmode="decimal" class="s-min" placeholder="08.1">' +
-      (observationCount > 1 ? '<button class="btn-del" type="button">\u2715</button>' : '') +
+      '<span class="height-group">' +
+        '<input type="text" inputmode="decimal" class="s-deg" placeholder="31">' +
+        '<input type="text" inputmode="decimal" class="s-min" placeholder="08.1">' +
+      '</span>' +
+      (observationCount > 1 ? '<button class="btn-del" type="button">\u2715</button>' : '<span class="row-del-spacer"></span>') +
     '</div>' +
     '<div class="error-msg"></div>';
 
