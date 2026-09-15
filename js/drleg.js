@@ -465,15 +465,28 @@ function onDeleteLeg(id) {
 
 /**
  * Consumes a one-time start-position handoff via sessionStorage key
- * 'ocsrDrLegStartHandoff' -- currently sent by fixes.html's "Send to DR Leg"
- * (see onFixToDrLeg in js/fixes.js) and planning.html's "Send to DR Leg"
- * (see onToDrLeg in js/planning.js), both carrying the same
- * { position: {time,lat,lon,sourceType,sourceId}, tzOffset } shape as the
- * New Sighting handoff. Fills the START fields (not the result) and copies
- * the incoming position's own sourceType/sourceId directly -- whoever built
- * the handoff already stamped it correctly (a Fix stamps its own id when
- * caching resolvedPosition; Planning has no id of its own, so it sends
- * sourceType KNOWN with no sourceId), so there's nothing to re-derive here.
+ * 'ocsrDrLegStartHandoff' -- sent by fixes.html's "Send to DR Leg" (see
+ * onFixToDrLeg in js/fixes.js), planning.html's "Send to DR Leg" (see
+ * onToDrLeg in js/planning.js), and index.html/sightings.html's "Send to
+ * DR Leg" (see onSendToDrLeg in js/app.js and js/sightings.js), all
+ * carrying the same { position: {time,lat,lon,sourceType,sourceId},
+ * tzOffset, sentFrom } shape as the New Sighting handoff. Fills the START
+ * fields (not the result) and copies the incoming position's own
+ * sourceType/sourceId directly -- whoever built the handoff already
+ * stamped it correctly (a Fix stamps its own id when caching
+ * resolvedPosition; Planning and a lone Sight have no id of their own in
+ * the sourceType sense, so they send sourceType KNOWN, a Sight with its
+ * own id as sourceId since it's still worth pointing back to even though
+ * KNOWN doesn't imply a resolved fix), so there's nothing to re-derive
+ * here.
+ *
+ * sentFrom is separate from sourceType on purpose: sourceType/sourceId
+ * describe navigational provenance (how much to trust this position and
+ * which record backs it), which is genuinely ambiguous between "Planning"
+ * and "a lone Sight" since both are honestly just KNOWN with no fix behind
+ * them -- sentFrom is purely "which page's button was clicked," used only
+ * for this toast, so it doesn't need to (and shouldn't) piggyback on the
+ * trust-category field.
  *
  * The incoming position.time may carry seconds (a Fix's resolvedPosition.time
  * is timestamped from a Sight's own observation seconds; Planning's computed
@@ -518,8 +531,7 @@ function applyPendingDrLegStartHandoff() {
   _drStartPositionType = h.position.sourceType || 'KNOWN';
   _drStartSourceId = h.position.sourceId || null;
 
-  var sourceLabel = _drStartPositionType === 'FIX' ? 'Fix' : _drStartPositionType === 'DR' ? 'DR' : 'Planning';
-  showToast('Start position filled in from ' + sourceLabel + '.');
+  showToast('Start position filled in from ' + (h.sentFrom || 'another page') + '.');
   return true;
 }
 

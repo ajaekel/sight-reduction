@@ -175,6 +175,9 @@ function initApp() {
   ['btnAddToFixTop', 'btnAddToFixBottom'].forEach(function (id) {
     document.getElementById(id).addEventListener('click', openAddToFixPanel);
   });
+  ['btnSendToDrLegTop', 'btnSendToDrLegBottom'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', onSendToDrLeg);
+  });
   document.getElementById('addToFixSelect').addEventListener('change', updateAddToFixPanel);
   document.getElementById('btnConfirmAddToFix').addEventListener('click', onConfirmAddToFix);
   document.getElementById('btnCancelAddToFix').addEventListener('click', closeAddToFixPanel);
@@ -1798,6 +1801,44 @@ function onConfirmAddToFix() {
   }).catch(function (err) {
     console.error(err);
     showToast('Could not add to that fix.', true);
+  });
+}
+
+/**
+ * Sends this sight's own position and observation time to DR Leg as its
+ * start -- the missing piece for building a Running Fix from scratch: take
+ * a sight, start a DR Leg from exactly where and when it was taken, run it
+ * forward to a second sight hours later, then advance the first sight by
+ * that leg on the Fix page. Requires the sight to already be saved, same
+ * precondition and reasoning as "Add to a Fix" above (there has to be a
+ * stable record to read position/time back off of).
+ *
+ * sourceType is KNOWN, same as Planning's own AP handoff -- a single
+ * sight's AP is an assumed position, not a resolved fix, so it doesn't
+ * warrant the FIX category even though it's headed to the same field.
+ * Unlike Planning, though, this DOES have a stable record behind it, so
+ * sourceId is set to the sight's own id -- still worth being able to say
+ * "derived from this Sight" later even though the trust category is the
+ * same as Planning's.
+ */
+function onSendToDrLeg() {
+  if (!window._currentRecordId) {
+    showToast('Save this sight first, then send it to DR Leg.', true);
+    return;
+  }
+
+  SightStorage.get(window._currentRecordId).then(function (record) {
+    if (!record || !record.results || !record.results.observationTime) {
+      showToast('This sight has no calculated observation time yet.', true);
+      return;
+    }
+    var pos = SightCalc.signedPositionFromRecord(record.position);
+    var position = SightCalc.makePosition(record.results.observationTime, pos.lat, pos.lon, SightCalc.POSITION_SOURCE_TYPES.KNOWN, record.id);
+    sessionStorage.setItem('ocsrDrLegStartHandoff', JSON.stringify({ position: position, tzOffset: record.position.tzOffset, sentFrom: 'Sight' }));
+    location.href = 'drleg.html';
+  }).catch(function (err) {
+    console.error(err);
+    showToast('Could not send this sight to DR Leg.', true);
   });
 }
 

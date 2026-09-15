@@ -533,7 +533,7 @@ function onToDrLeg() {
   // record of its own to point back to (unlike a Fix, which always has a
   // stable id by the time it resolves a position).
   var position = SightCalc.makePosition(new Date(utcMs).toISOString(), pos.lat, pos.lon, SightCalc.POSITION_SOURCE_TYPES.KNOWN, null);
-  sessionStorage.setItem('ocsrDrLegStartHandoff', JSON.stringify({ position: position, tzOffset: tzOffset }));
+  sessionStorage.setItem('ocsrDrLegStartHandoff', JSON.stringify({ position: position, tzOffset: tzOffset, sentFrom: 'Planning' }));
   location.href = 'drleg.html';
 }
 

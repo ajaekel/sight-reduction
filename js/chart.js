@@ -229,8 +229,17 @@
     multiGeo.sightings.forEach(function (s) {
       var idx = s.badgeNumber;
       var apPx = toPx(s.apPoint, pxPerNm);
-
+      var isAdvanced = !!s.originalApPoint;
       var lopExtendNm = scale * 2.2;
+
+      // The main LOP line -- as-observed if this sighting hasn't been
+      // advanced, or the transferred/advanced LOP if it has (s.interceptPoint
+      // is already anchored at the advanced AP either way -- see
+      // computeMultiLopGeometry). Convention (per USCG/RYA piloting
+      // practice): a transferred LOP is drawn parallel to the original,
+      // marked with double arrowheads at each end, and labeled with both
+      // times it spans -- distinct from an ordinary LOP's single
+      // end-of-line arrow.
       var lopP1Px = toPx({
         x: s.interceptPoint.x + s.lopDirection.x * lopExtendNm,
         y: s.interceptPoint.y + s.lopDirection.y * lopExtendNm
@@ -240,8 +249,66 @@
         y: s.interceptPoint.y - s.lopDirection.y * lopExtendNm
       }, pxPerNm);
 
-      clippedLines +=
-        '<line x1="' + lopP1Px.x + '" y1="' + lopP1Px.y + '" x2="' + lopP2Px.x + '" y2="' + lopP2Px.y + '" stroke="' + s.color + '" stroke-width="2.5"/>';
+      if (isAdvanced) {
+        defs += '<marker id="transferArrow' + idx + '" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">' +
+                '<path d="M0,0 L8,4 L0,8 Z" fill="' + s.color + '"/></marker>';
+        clippedLines +=
+          '<line x1="' + lopP1Px.x + '" y1="' + lopP1Px.y + '" x2="' + lopP2Px.x + '" y2="' + lopP2Px.y +
+          '" stroke="' + s.color + '" stroke-width="2.5" stroke-dasharray="7,5" ' +
+          'marker-start="url(#transferArrow' + idx + ')" marker-end="url(#transferArrow' + idx + ')"/>';
+
+        // The original, as-observed LOP -- solid, same as any ordinary LOP,
+        // through the ORIGINAL AP's intercept offset (same lopDirection:
+        // advancing is a pure parallel translation, so both lines are
+        // parallel by construction).
+        var origLopP1Px = toPx({
+          x: s.originalInterceptPoint.x + s.lopDirection.x * lopExtendNm,
+          y: s.originalInterceptPoint.y + s.lopDirection.y * lopExtendNm
+        }, pxPerNm);
+        var origLopP2Px = toPx({
+          x: s.originalInterceptPoint.x - s.lopDirection.x * lopExtendNm,
+          y: s.originalInterceptPoint.y - s.lopDirection.y * lopExtendNm
+        }, pxPerNm);
+        clippedLines +=
+          '<line x1="' + origLopP1Px.x + '" y1="' + origLopP1Px.y + '" x2="' + origLopP2Px.x + '" y2="' + origLopP2Px.y +
+          '" stroke="' + s.color + '" stroke-width="2.5"/>';
+
+        // The DR track connecting the original AP to the advanced AP --
+        // same dashed-with-single-arrow style as an azimuth line (a DR
+        // track and an azimuth line are visually the same kind of thing:
+        // a directional dashed line with one arrowhead at the destination),
+        // but along the actual course run rather than toward the body.
+        var origApPx = toPx(s.originalApPoint, pxPerNm);
+        defs += '<marker id="drTrackArrow' + idx + '" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto">' +
+                '<path d="M0,0 L9,4.5 L0,9 Z" fill="' + s.color + '"/></marker>';
+        clippedLines +=
+          '<line x1="' + origApPx.x + '" y1="' + origApPx.y + '" x2="' + apPx.x + '" y2="' + apPx.y +
+          '" stroke="' + s.color + '" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#drTrackArrow' + idx + ')"/>';
+
+        // Original AP: a small hollow circle (not the filled badge -- the
+        // badge belongs at the position this sighting actually contributes
+        // to the fix, i.e. the advanced one).
+        markers += '<circle cx="' + origApPx.x + '" cy="' + origApPx.y + '" r="5" fill="none" stroke="' + s.color + '" stroke-width="2"/>';
+
+        // Labels: the transferred LOP gets both times it spans, placed near
+        // the advanced end since that's the end that matters for the fix;
+        // the DR track gets whatever caption fixes.js provided (course/
+        // speed or the leg's own name).
+        if (s.transferLabel) {
+          var labelAnchorPx = toPx({
+            x: s.interceptPoint.x + s.lopDirection.x * (scale * 0.55),
+            y: s.interceptPoint.y + s.lopDirection.y * (scale * 0.55)
+          }, pxPerNm);
+          clippedLines += '<text x="' + labelAnchorPx.x + '" y="' + (labelAnchorPx.y - 5) + '" text-anchor="middle" class="chart-transfer-label" fill="' + s.color + '">' + s.transferLabel + '</text>';
+        }
+        if (s.drTrackLabel) {
+          var midDrPx = { x: (origApPx.x + apPx.x) / 2, y: (origApPx.y + apPx.y) / 2 };
+          clippedLines += '<text x="' + midDrPx.x + '" y="' + (midDrPx.y - 6) + '" text-anchor="middle" class="chart-transfer-label" fill="' + s.color + '">' + s.drTrackLabel + '</text>';
+        }
+      } else {
+        clippedLines +=
+          '<line x1="' + lopP1Px.x + '" y1="' + lopP1Px.y + '" x2="' + lopP2Px.x + '" y2="' + lopP2Px.y + '" stroke="' + s.color + '" stroke-width="2.5"/>';
+      }
 
       if (showAzimuth) {
         var azEndPx = toPx({ x: s.apPoint.x + s.azimuthUnit.x * scale, y: s.apPoint.y + s.azimuthUnit.y * scale }, pxPerNm);
@@ -262,7 +329,8 @@
         color: s.color,
         label: s.label || ('Sight ' + idx),
         znText: pad3(s.zn) + '\u00B0',
-        interceptText: interceptAbs + ' nm ' + interceptDir
+        interceptText: interceptAbs + ' nm ' + interceptDir,
+        advanced: isAdvanced
       });
     });
 

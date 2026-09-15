@@ -698,6 +698,13 @@ details:not([open]) > summary.cache-summary-toggle {
   font-weight: bold;
   fill: #000;
 }
+.chart-transfer-label {
+  font-size: 9px;
+  font-weight: bold;
+  stroke: var(--card);
+  stroke-width: 3px;
+  paint-order: stroke fill;
+}
 .plot-controls {
   display: flex;
   align-items: center;
@@ -861,7 +868,8 @@ details:not([open]) > summary.cache-summary-toggle {
   background: var(--accent);
   color: #000;
 }
-.btn-mini-fix {
+.btn-mini-fix,
+.btn-mini-drleg {
   background: transparent;
   border: 1px solid var(--accent);
   color: var(--accent);

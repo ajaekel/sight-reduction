@@ -42,6 +42,13 @@
         // most one Passage, and null until a Passage feature actually
         // assigns one.
         if (fix.passageId === undefined) fix.passageId = null;
+        // Running Fix support: maps sightingId -> the id of the DrLeg used
+        // to advance that sighting's LOP to a later time (see
+        // js/fixes.js's onAdvanceSighting / SightCalc.advancePositionByLeg).
+        // A Running Fix is deliberately NOT a different kind of Fix -- it's
+        // an ordinary Fix where one or more sightings carry an entry here;
+        // a sighting absent from this map is used as-observed, unchanged.
+        if (!fix.advances || typeof fix.advances !== 'object') fix.advances = {};
 
         localStorage.setItem(PREFIX + fix.id, JSON.stringify(fix));
 
