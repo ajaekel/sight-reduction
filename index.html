@@ -167,20 +167,23 @@
     <div class="sub-title" style="margin-top: 18px;">Sextant Altitude Corrections</div>
 
     <div class="form-group">
-      <label>Index Error (IE) [Minutes / On-Off Arc]</label>
-      <div class="input-row">
-        <input type="text" inputmode="decimal" id="ieMin" placeholder="2.0" value="0.0" onfocus="this.select()">
-        <select id="ieSign">
-          <option value="on">On the Arc (-)</option>
-          <option value="off">Off the Arc (+)</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label>Dip Correction [Minutes (-)]</label>
-      <div class="input-row">
-        <input type="text" inputmode="decimal" id="dipMin" placeholder="3.8" value="0.0" onfocus="this.select()">
+      <div class="body-inline-row">
+        <div class="body-inline-col almanac-col-border">
+          <label>IE (Min / On-Off Arc)</label>
+          <div class="input-row">
+            <input type="text" inputmode="decimal" id="ieMin" placeholder="2.0" value="0.0" onfocus="this.select()">
+            <select id="ieSign">
+              <option value="on">On the Arc (-)</option>
+              <option value="off">Off the Arc (+)</option>
+            </select>
+          </div>
+        </div>
+        <div class="body-inline-col">
+          <label>Dip (Min, always &minus;)</label>
+          <div class="input-row">
+            <input type="text" inputmode="decimal" id="dipMin" placeholder="3.8" value="0.0" onfocus="this.select()">
+          </div>
+        </div>
       </div>
     </div>
 
