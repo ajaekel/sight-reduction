@@ -93,40 +93,27 @@
     </div>
 
     <div class="form-group">
-      <div class="sub-title">ASSUMED POSITION</div>
-      <div class="almanac-table">
-        <div class="almanac-header-row" style="grid-template-columns: 1fr 1fr;">
-          <div class="col-header-box almanac-col-border">
-            <span class="col-time">Latitude</span>
-            <span class="col-sub">Deg / Min / N-S</span>
-          </div>
-          <div class="col-header-box">
-            <span class="col-time">Longitude</span>
-            <span class="col-sub">Deg / Min / E-W</span>
+      <div class="body-inline-row">
+        <div class="body-inline-col almanac-col-border">
+          <label>Latitude (Deg / Min / N-S)</label>
+          <div class="input-row input-row-3">
+            <input type="text" inputmode="decimal" class="deg-box" id="latDeg" placeholder="40" onfocus="this.select()">
+            <input type="text" inputmode="decimal" class="min-box" id="latMin" placeholder="32.2" onfocus="this.select()">
+            <select id="latNS" class="select-compact">
+              <option value="N">N</option>
+              <option value="S">S</option>
+            </select>
           </div>
         </div>
-        <div class="almanac-row-block">
-          <div class="almanac-inputs-grid">
-            <div class="almanac-col-border">
-              <div class="input-row input-row-3">
-                <input type="text" inputmode="decimal" class="deg-box" id="latDeg" placeholder="40" onfocus="this.select()">
-                <input type="text" inputmode="decimal" class="min-box" id="latMin" placeholder="32.2" onfocus="this.select()">
-                <select id="latNS" class="select-compact">
-                  <option value="N">N</option>
-                  <option value="S">S</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <div class="input-row input-row-3">
-                <input type="text" inputmode="decimal" class="deg-box" id="lonDeg" placeholder="073" onfocus="this.select()">
-                <input type="text" inputmode="decimal" class="min-box" id="lonMin" placeholder="56.3" onfocus="this.select()">
-                <select id="lonEW" class="select-compact">
-                  <option value="W">W</option>
-                  <option value="E">E</option>
-                </select>
-              </div>
-            </div>
+        <div class="body-inline-col">
+          <label>Longitude (Deg / Min / E-W)</label>
+          <div class="input-row input-row-3">
+            <input type="text" inputmode="decimal" class="deg-box" id="lonDeg" placeholder="073" onfocus="this.select()">
+            <input type="text" inputmode="decimal" class="min-box" id="lonMin" placeholder="56.3" onfocus="this.select()">
+            <select id="lonEW" class="select-compact">
+              <option value="W">W</option>
+              <option value="E">E</option>
+            </select>
           </div>
         </div>
       </div>
