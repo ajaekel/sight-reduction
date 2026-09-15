@@ -375,6 +375,7 @@ select {
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 0 6px;
+  margin-right: 8px;
 }
 /* The compact "HH:MM" / "HH:MM:SS" look: each digit-box keeps its existing
    behavior (numeric-only, auto-advance -- see wireDigitBox/autoFocusNext)
