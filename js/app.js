@@ -529,9 +529,19 @@ function addObservationLine(autoFocus) {
   refreshLiveCalculations();
 
   if (autoFocus) {
-    th.focus();
-    th.click();
-    th.select();
+    // Deferred to the next animation frame, not called synchronously right
+    // after appendChild -- on iOS Safari specifically, focusing an element
+    // immediately after inserting it can silently fail to bring up the
+    // keyboard if layout for the new content hasn't actually completed yet,
+    // even though the DOM's own focus state updates correctly (confirmed:
+    // document.activeElement does become this field synchronously -- the
+    // gap is real-device layout/paint timing, not the JS logic itself).
+    // .click() on a text input isn't a standard way to summon a mobile
+    // keyboard either way, so it's dropped rather than carried forward.
+    requestAnimationFrame(function () {
+      th.focus();
+      th.select();
+    });
   }
 }
 
