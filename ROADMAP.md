@@ -21,11 +21,16 @@
 * [X] Support multiple sightings in a session
 * [X] Add bisectors / multi-LOP fix
 * [X] Add DR Leg
-* [ ] Add running fix; accept inputs for SOG and bearing
+* [X] Add running fix; accept inputs for SOG and bearing
 
 ## Support passage
 
 * [ ] Chronological record of navigation
+
+## Add a page for managing data
+
+* [ ] User can see how many MBs per data type (Almanac Data, sightings, fixes, other?)
+* [ ] User can selectively delete cached data
 
 ## Miscellaneous
 
@@ -47,7 +52,7 @@
 
 ##  Bugs
 
-* [ ] Data fetch from USNO fails on cellular data, only works on wifi, should have option to download data over cellular
+* [X] Data fetch from USNO fails on cellular data, only works on wifi, should have option to download data over cellular
 
 * [X] If user loads a sighting and edit it and resaves with a new name, it overwrites the original sighting (User should be able to load a sighting to use as the base for another, e.g., avoid needing to manually enter the AP again and again for a multi-star stationary fix)
 Expected behavior, if a sighting is saved and renamed, it's saved as a new sighting

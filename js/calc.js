@@ -458,12 +458,22 @@
    * sightings: [{ lat, lon, zn, interceptNM, ...anything else the caller
    *               wants carried through untouched, e.g. label/color/id }]
    *
+   * A sighting that's been advanced for a Running Fix (see fixes.js) may
+   * also carry originalLat/originalLon -- its own as-observed AP, before
+   * the DR-Leg shift. When present, this also computes originalApPoint and
+   * originalInterceptPoint in the SAME shared frame, using the SAME
+   * lopDirection/azimuthUnit -- correct because advancing an LOP is a pure
+   * translation (see SightCalc.advancePositionByLeg's own comment), so the
+   * original and advanced LOPs are just two parallel lines through the same
+   * relative intercept offset, anchored at two different APs.
+   *
    * Returns {
    *   originLat, originLon,          -- the centroid AP (decimal degrees)
    *   maxExtentNM,                    -- farthest point from origin, for scale selection
    *   sightings: [{
    *     ...all original fields carried through,
-   *     apPoint, azimuthUnit, interceptPoint, lopDirection   -- all in shared nm frame
+   *     apPoint, azimuthUnit, interceptPoint, lopDirection,   -- all in shared nm frame
+   *     originalApPoint?, originalInterceptPoint?              -- only if originalLat/originalLon given
    *   }]
    * }
    */
@@ -501,6 +511,21 @@
       out.azimuthUnit = localGeo.azimuthUnit;
       out.interceptPoint = interceptPoint;
       out.lopDirection = localGeo.lopDirection;
+
+      if (typeof s.originalLat === 'number' && typeof s.originalLon === 'number') {
+        var originalApPoint = {
+          x: (s.originalLon - originLon) * 60 * cosOriginLat,
+          y: (s.originalLat - originLat) * 60
+        };
+        var originalInterceptPoint = {
+          x: originalApPoint.x + localGeo.interceptPoint.x,
+          y: originalApPoint.y + localGeo.interceptPoint.y
+        };
+        maxExtentNM = Math.max(maxExtentNM, Math.hypot(originalApPoint.x, originalApPoint.y), Math.hypot(originalInterceptPoint.x, originalInterceptPoint.y));
+        out.originalApPoint = originalApPoint;
+        out.originalInterceptPoint = originalInterceptPoint;
+      }
+
       return out;
     });
 

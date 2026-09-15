@@ -502,6 +502,9 @@ function autoPlotFix() {
         var id = currentFix.sightingIds[i];
         var pos = SightCalc.signedPositionFromRecord(record.position);
         var observationTime = record.results.observationTime;
+        var originalPos = null;
+        var transferLabel = null;
+        var drTrackLabel = null;
 
         var legId = advances[id];
         if (legId) {
@@ -513,9 +516,22 @@ function autoPlotFix() {
             // surfaces this same brokenness so it's not silent.
             skippedBrokenAdvance++;
           } else {
+            originalPos = pos;
             var advanced = SightCalc.advancePositionByLeg(pos.lat, pos.lon, leg);
             pos = advanced;
             observationTime = leg.endPosition.time;
+
+            // Both time labels use this sighting's OWN tzOffset (not the
+            // leg's) -- simplest honest choice for a single two-time label;
+            // the leg's own end time is used for the actual math above
+            // regardless of which offset is shown here.
+            var localOrig = SightCalc.utcMsToLocalDateTime(new Date(record.results.observationTime).getTime(), record.position.tzOffset);
+            var localAdv = SightCalc.utcMsToLocalDateTime(new Date(observationTime).getTime(), record.position.tzOffset);
+            var fmtHM = function (secOfDay) {
+              return String(Math.floor(secOfDay / 3600)).padStart(2, '0') + ':' + String(Math.floor((secOfDay % 3600) / 60)).padStart(2, '0');
+            };
+            transferLabel = fmtHM(localOrig.secOfDay) + ' \u2192 ' + fmtHM(localAdv.secOfDay);
+            drTrackLabel = leg.name;
           }
         }
 
@@ -524,6 +540,10 @@ function autoPlotFix() {
           id: id,
           lat: pos.lat,
           lon: pos.lon,
+          originalLat: originalPos ? originalPos.lat : undefined,
+          originalLon: originalPos ? originalPos.lon : undefined,
+          transferLabel: transferLabel,
+          drTrackLabel: drTrackLabel,
           zn: record.results.zn,
           interceptNM: record.results.interceptNM,
           observationTime: observationTime, // ISO UTC -- used to timestamp the Fix's cached resolvedPosition
@@ -682,7 +702,8 @@ function renderCurrentPlot() {
     row.innerHTML =
       '<input type="checkbox"' + (isActive ? ' checked' : '') + '>' +
       '<span class="chart-swatch" style="border-top-color: ' + item.color + '; border-top-style: solid;"></span> ' +
-      item.badgeNumber + '. ' + item.label + ' \u2014 Zn ' + formatZnBadge(item.zn) + ' (' + formatInterceptBadge(item.interceptNM) + ')';
+      item.badgeNumber + '. ' + item.label + ' \u2014 Zn ' + formatZnBadge(item.zn) + ' (' + formatInterceptBadge(item.interceptNM) + ')' +
+      (item.transferLabel ? ' \u2014 advanced ' + item.transferLabel : '');
 
     row.querySelector('input').addEventListener('change', function (e) {
       setSightingActive(currentFix, item.id, e.target.checked);
