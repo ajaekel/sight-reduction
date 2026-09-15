@@ -506,6 +506,29 @@ function autoPlotFix() {
         var transferLabel = null;
         var drTrackLabel = null;
 
+        // Standard USCG/commercial celestial-LOP plotting convention: every
+        // LOP is labeled with the body's name and the 4-digit observation
+        // time (e.g. "SUN 0915") -- never the time alone, since a multi-body
+        // fix needs to say which body each line belongs to. Uses this
+        // sight's own local time/tzOffset (not the leg's), matching how the
+        // rest of the app shows times.
+        var fmtHHMM = function (secOfDay) {
+          return String(Math.floor(secOfDay / 3600)).padStart(2, '0') + String(Math.floor((secOfDay % 3600) / 60)).padStart(2, '0');
+        };
+        var MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        var fmtDayMonth = function (dateStr) {
+          var parts = dateStr.split('-');
+          return parseInt(parts[2], 10) + ' ' + MONTH_ABBR[parseInt(parts[1], 10) - 1];
+        };
+        // Drops a trailing ".0" (10 -> "10", 10.5 -> "10.5") -- SOG is
+        // usually a whole number and the convention's own example shows it
+        // unadorned ("10 kn"), not "10.0 kn".
+        var trimNum = function (n) { return String(Math.round(n * 10) / 10); };
+
+        var bodyLabelChart = SightCalc.formatBodyLabelChart(record.body);
+        var localObs = SightCalc.utcMsToLocalDateTime(new Date(record.results.observationTime).getTime(), record.position.tzOffset);
+        var chartLabel = bodyLabelChart + ' ' + fmtHHMM(localObs.secOfDay);
+
         var legId = advances[id];
         if (legId) {
           var leg = legsById[legId];
@@ -521,17 +544,36 @@ function autoPlotFix() {
             pos = advanced;
             observationTime = leg.endPosition.time;
 
-            // Both time labels use this sight's OWN tzOffset (not the
-            // leg's) -- simplest honest choice for a single two-time label;
-            // the leg's own end time is used for the actual math above
-            // regardless of which offset is shown here.
-            var localOrig = SightCalc.utcMsToLocalDateTime(new Date(record.results.observationTime).getTime(), record.position.tzOffset);
+            // Advanced-LOP convention: "SUN 0915-1200" (same calendar day)
+            // or, spanning midnight, the more explicit "SUN 15 Sep 23:40 LOP
+            // advanced to 16 Sep 01:10" -- cramming two full dates into the
+            // terse dash format would be unreadable, so a plainer sentence
+            // is used instead specifically for that case. Both times use
+            // this sight's OWN tzOffset (not the leg's) -- simplest honest
+            // choice for a single label; the leg's own end time is what's
+            // actually used for the math above regardless of what's shown.
+            // 4-digit 24h time, no colon, throughout -- USCG convention.
             var localAdv = SightCalc.utcMsToLocalDateTime(new Date(observationTime).getTime(), record.position.tzOffset);
-            var fmtHM = function (secOfDay) {
-              return String(Math.floor(secOfDay / 3600)).padStart(2, '0') + ':' + String(Math.floor((secOfDay % 3600) / 60)).padStart(2, '0');
-            };
-            transferLabel = fmtHM(localOrig.secOfDay) + ' \u2192 ' + fmtHM(localAdv.secOfDay);
-            drTrackLabel = leg.name;
+            transferLabel = (localObs.dateStr !== localAdv.dateStr)
+              ? bodyLabelChart + ' ' + fmtDayMonth(localObs.dateStr) + ' ' + fmtHHMM(localObs.secOfDay) +
+                ' LOP advanced to ' + fmtDayMonth(localAdv.dateStr) + ' ' + fmtHHMM(localAdv.secOfDay)
+              : bodyLabelChart + ' ' + fmtHHMM(localObs.secOfDay) + '\u2013' + fmtHHMM(localAdv.secOfDay);
+
+            // DR track label: "DR 0934-1834 \u00b7 135\u00b0T @ 10 kn \u00b7 90.0 NM" (same day)
+            // or "DR 15 Sep 2340 \u2192 16 Sep 0110 \u00b7 135\u00b0T @ 10 kn \u00b7 15.0 NM"
+            // (spanning midnight). Uses the LEG's own start/end/tzOffset --
+            // this describes the leg itself, which is usually but not
+            // necessarily identical to the sight's own observation instant
+            // (see SightCalc.roundUpToMinuteMs: a leg started from a sight
+            // rounds the start UP to the next whole minute).
+            var legStart = SightCalc.utcMsToLocalDateTime(new Date(leg.startPosition.time).getTime(), leg.tzOffset);
+            var legEnd = SightCalc.utcMsToLocalDateTime(new Date(leg.endPosition.time).getTime(), leg.tzOffset);
+            var legTimeRange = (legStart.dateStr !== legEnd.dateStr)
+              ? fmtDayMonth(legStart.dateStr) + ' ' + fmtHHMM(legStart.secOfDay) + ' \u2192 ' + fmtDayMonth(legEnd.dateStr) + ' ' + fmtHHMM(legEnd.secOfDay)
+              : fmtHHMM(legStart.secOfDay) + '\u2013' + fmtHHMM(legEnd.secOfDay);
+            var legCourseStr = String(Math.round(leg.courseDegTrue)).padStart(3, '0') + '\u00B0T';
+            var legDistanceNM = leg.sog * leg.durationHours;
+            drTrackLabel = 'DR ' + legTimeRange + ' \u00B7 ' + legCourseStr + ' @ ' + trimNum(leg.sog) + ' kn \u00B7 ' + legDistanceNM.toFixed(1) + ' NM';
           }
         }
 
@@ -542,6 +584,7 @@ function autoPlotFix() {
           lon: pos.lon,
           originalLat: originalPos ? originalPos.lat : undefined,
           originalLon: originalPos ? originalPos.lon : undefined,
+          chartLabel: chartLabel,
           transferLabel: transferLabel,
           drTrackLabel: drTrackLabel,
           zn: record.results.zn,
@@ -683,9 +726,24 @@ function renderCurrentPlot() {
   methodBisectorsBtn.disabled = plotInput.length < 3;
   if (methodBisectorsBtn.disabled && bisectorMethodSelected) setFixMethodState(false);
 
+  // The fix marker's own label -- same "latest constituent time" convention
+  // used everywhere else a fix needs one instant (see cacheResolvedPosition),
+  // formatted as the bare 4-digit time standard plotting practice uses to
+  // label a fix circle (e.g. "0630", or "1200 R FIX" for a running fix).
+  var fixTimeLabel = null;
+  var latestForLabel = null;
+  plotInput.forEach(function (item) {
+    if (item.observationTime && (!latestForLabel || item.observationTime > latestForLabel.observationTime)) latestForLabel = item;
+  });
+  if (latestForLabel) {
+    var localFixTime = SightCalc.utcMsToLocalDateTime(new Date(latestForLabel.observationTime).getTime(), latestForLabel.tzOffset);
+    fixTimeLabel = String(Math.floor(localFixTime.secOfDay / 3600)).padStart(2, '0') + String(Math.floor((localFixTime.secOfDay % 3600) / 60)).padStart(2, '0');
+  }
+
   var opts = {
     showAzimuth: document.getElementById('toggleShowAzimuth').checked,
-    showBisectors: bisectorMethodSelected
+    showBisectors: bisectorMethodSelected,
+    fixTimeLabel: fixTimeLabel
   };
 
   var container = document.getElementById('fixChartContainer');

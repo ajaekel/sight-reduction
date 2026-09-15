@@ -705,6 +705,21 @@ details:not([open]) > summary.cache-summary-toggle {
   stroke-width: 3px;
   paint-order: stroke fill;
 }
+.chart-lop-label {
+  font-size: 9px;
+  font-weight: bold;
+  stroke: var(--card);
+  stroke-width: 3px;
+  paint-order: stroke fill;
+}
+.chart-fix-label {
+  font-size: 11px;
+  font-weight: bold;
+  fill: var(--chart-fix);
+  stroke: var(--card);
+  stroke-width: 3px;
+  paint-order: stroke fill;
+}
 .plot-controls {
   display: flex;
   align-items: center;

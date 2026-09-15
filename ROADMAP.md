@@ -25,7 +25,7 @@
 
 ## Support passage
 
-* [ ] Chronological record of navigation
+* [X] Chronological record of navigation
 
 ## Add a page for managing data
 

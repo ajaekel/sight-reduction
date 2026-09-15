@@ -154,12 +154,18 @@
   }
 
   /**
-   * sightsInput = [{ lat, lon, zn, interceptNM, label, color?, badgeNumber? }]
+   * sightsInput = [{ lat, lon, zn, interceptNM, label, color?, badgeNumber?,
+   *   chartLabel?, transferLabel?, drTrackLabel?, originalLat?, originalLon? }]
    *   color/badgeNumber optional -- default to a palette cycle / 1-based
    *   position if omitted. A caller (e.g. fixes.js) that wants a sight's
    *   plotted color to stay stable even when other sights are skipped
    *   should pass both explicitly, keyed off that sight's position in
    *   its own full list rather than the filtered/plotted subset.
+   *   chartLabel/transferLabel/drTrackLabel are pre-formatted strings (this
+   *   file only renders labels, never formats body names or times --
+   *   fixes.js does that, per standard USCG/commercial celestial-LOP
+   *   plotting convention: chartLabel for an ordinary LOP is "SUN 0915";
+   *   transferLabel for an advanced/running-fix LOP is "SUN 0915-1200").
    *
    * opts = {
    *   showAzimuth: boolean (default true)   -- dashed azimuth-to-body lines
@@ -168,14 +174,17 @@
    *     decides which candidate point is drawn/reported as "the Fix": the
    *     bisector incenter when true and resolvable, otherwise the
    *     least-squares point.
+   *   fixTimeLabel: string|null -- pre-formatted 4-digit time (e.g. "0630")
+   *     for the fix marker's own label, per convention. Omit/null to leave
+   *     the fix circle unlabeled.
    * }
    *
    * Returns {
    *   scaleNM,
-   *   legend: [{ index, color, label, znText, interceptText }],
+   *   legend: [{ index, color, label, znText, interceptText, advanced }],
    *   fix: { solvable: false, reason } | {
    *     solvable: true, source: 'bisector'|'least-squares', positionText,
-   *     lat, lon, bisectorMaxSideNM?, bisectorBadgeNumbers?
+   *     lat, lon, isRunningFix, bisectorMaxSideNM?, bisectorBadgeNumbers?
    *   }
    * }
    */
@@ -226,11 +235,71 @@
     var markers = '';
     var legend = [];
 
+    /**
+     * Standard plotting convention: labels stay horizontal (never rotated to
+     * match a line's angle) and connect back to the point they describe with
+     * a short leader line.
+     *
+     * normalUnitNm MUST be the true perpendicular of whatever's being
+     * labeled (an LOP's is exactly s.azimuthUnit, since an LOP is
+     * perpendicular to its azimuth by definition -- not derived from some
+     * other nearby point, which was the earlier bug: offsetting away from
+     * the AP isn't the same as offsetting away from the LINE, and for a
+     * large intercept those two directions can end up nowhere near
+     * perpendicular to each other).
+     *
+     * The offset itself is computed in PIXEL space with a fixed floor and
+     * cap, scaled up by the label's own text length in between -- also
+     * earlier bugs: an nm-space offset shrinks along with the chart's
+     * scale/zoom instead of staying a legible fixed size, and a
+     * fixed-but-small offset clears a line fine for a short label but not
+     * a long one, since text-anchor="middle" text extends in BOTH
+     * directions from the offset point regardless of which way the line
+     * runs -- a long label needs more clearance than a short one to avoid
+     * its own far edge swinging back across the line, especially for a
+     * steep/near-vertical line where the perpendicular offset is mostly
+     * horizontal, the same direction the text extends in. The cap plus the
+     * position clamp below exist because scaling the offset with text
+     * length alone isn't enough on its own: a long enough label (e.g. a
+     * midnight-spanning advanced-LOP caption) can end up offset clear
+     * outside the chart's fixed viewBox if an anchor point happens to sit
+     * near an edge already.
+     */
+    function placeLabel(anchorNm, normalUnitNm, text, colorHex, cssClass) {
+      var estimatedHalfWidthPx = text.length * 3; // ~9px bold sans average char width / 2, plus margin folded in below
+      var offsetPx = Math.min(70, Math.max(18, estimatedHalfWidthPx + 8));
+
+      var anchorPx = toPx(anchorNm, pxPerNm);
+      // toPx flips y (north-up nm space -> screen-down px space), so the
+      // direction vector needs the same flip to point the same way on screen.
+      var dirPx = { x: normalUnitNm.x, y: -normalUnitNm.y };
+      var dirLen = Math.hypot(dirPx.x, dirPx.y) || 1;
+      dirPx = { x: dirPx.x / dirLen, y: dirPx.y / dirLen };
+
+      var labelPx = { x: anchorPx.x + dirPx.x * offsetPx, y: anchorPx.y + dirPx.y * offsetPx };
+
+      // Clamp the label itself (not the leader line's start, which stays
+      // pinned to the true anchor on the line) to stay fully inside the
+      // viewBox -- text-anchor="middle" means the text extends roughly
+      // estimatedHalfWidthPx in BOTH x directions from labelPx.x, so the
+      // clamp margin has to account for that, not just pull labelPx.x
+      // itself inside the box.
+      var xMargin = Math.min(estimatedHalfWidthPx + 4, SIZE / 2 - 2);
+      labelPx.x = Math.max(xMargin, Math.min(SIZE - xMargin, labelPx.x));
+      labelPx.y = Math.max(14, Math.min(SIZE - 6, labelPx.y));
+
+      return (
+        '<line x1="' + anchorPx.x + '" y1="' + anchorPx.y + '" x2="' + labelPx.x + '" y2="' + labelPx.y + '" stroke="' + colorHex + '" stroke-width="1"/>' +
+        '<text x="' + labelPx.x + '" y="' + (labelPx.y - 4) + '" text-anchor="middle" class="' + cssClass + '" fill="' + colorHex + '">' + text + '</text>'
+      );
+    }
+
     multiGeo.sights.forEach(function (s) {
       var idx = s.badgeNumber;
       var apPx = toPx(s.apPoint, pxPerNm);
       var isAdvanced = !!s.originalApPoint;
       var lopExtendNm = scale * 2.2;
+      var labelAnchorNm = { x: s.interceptPoint.x + s.lopDirection.x * (scale * 0.55), y: s.interceptPoint.y + s.lopDirection.y * (scale * 0.55) };
 
       // The main LOP line -- as-observed if this sight hasn't been
       // advanced, or the transferred/advanced LOP if it has (s.interceptPoint
@@ -290,24 +359,37 @@
         // to the fix, i.e. the advanced one).
         markers += '<circle cx="' + origApPx.x + '" cy="' + origApPx.y + '" r="5" fill="none" stroke="' + s.color + '" stroke-width="2"/>';
 
-        // Labels: the transferred LOP gets both times it spans, placed near
-        // the advanced end since that's the end that matters for the fix;
-        // the DR track gets whatever caption fixes.js provided (course/
-        // speed or the leg's own name).
+        // Labels: the transferred LOP is labeled per convention (body name,
+        // original time, en dash, advanced time -- e.g. "SUN 0915-1200"),
+        // offset along the LOP's own normal (=azimuthUnit, guaranteed
+        // perpendicular to the line -- see placeLabel), away from the body
+        // direction so it doesn't collide with the azimuth arrow. The DR
+        // track gets its own caption from fixes.js, offset along the
+        // track's own normal instead, since the track isn't an LOP and has
+        // no azimuthUnit of its own.
         if (s.transferLabel) {
-          var labelAnchorPx = toPx({
-            x: s.interceptPoint.x + s.lopDirection.x * (scale * 0.55),
-            y: s.interceptPoint.y + s.lopDirection.y * (scale * 0.55)
-          }, pxPerNm);
-          clippedLines += '<text x="' + labelAnchorPx.x + '" y="' + (labelAnchorPx.y - 5) + '" text-anchor="middle" class="chart-transfer-label" fill="' + s.color + '">' + s.transferLabel + '</text>';
+          var lopNormal = { x: -s.azimuthUnit.x, y: -s.azimuthUnit.y };
+          clippedLines += placeLabel(labelAnchorNm, lopNormal, s.transferLabel, s.color, 'chart-transfer-label');
         }
         if (s.drTrackLabel) {
-          var midDrPx = { x: (origApPx.x + apPx.x) / 2, y: (origApPx.y + apPx.y) / 2 };
-          clippedLines += '<text x="' + midDrPx.x + '" y="' + (midDrPx.y - 6) + '" text-anchor="middle" class="chart-transfer-label" fill="' + s.color + '">' + s.drTrackLabel + '</text>';
+          var midDrNm = { x: (s.originalApPoint.x + s.apPoint.x) / 2, y: (s.originalApPoint.y + s.apPoint.y) / 2 };
+          var trackDx = s.apPoint.x - s.originalApPoint.x, trackDy = s.apPoint.y - s.originalApPoint.y;
+          var trackLen = Math.hypot(trackDx, trackDy) || 1;
+          var trackNormal = { x: -trackDy / trackLen, y: trackDx / trackLen };
+          clippedLines += placeLabel(midDrNm, trackNormal, s.drTrackLabel, s.color, 'chart-transfer-label');
         }
       } else {
         clippedLines +=
           '<line x1="' + lopP1Px.x + '" y1="' + lopP1Px.y + '" x2="' + lopP2Px.x + '" y2="' + lopP2Px.y + '" stroke="' + s.color + '" stroke-width="2.5"/>';
+
+        // Standard celestial-LOP label -- body name plus 4-digit time (e.g.
+        // "SUN 0915") -- never the time alone, so a multi-body fix stays
+        // legible. Offset along the LOP's own normal, away from the body
+        // direction, same reasoning as the advanced case above.
+        if (s.chartLabel) {
+          var ordinaryNormal = { x: -s.azimuthUnit.x, y: -s.azimuthUnit.y };
+          clippedLines += placeLabel(labelAnchorNm, ordinaryNormal, s.chartLabel, s.color, 'chart-lop-label');
+        }
       }
 
       if (showAzimuth) {
@@ -348,11 +430,18 @@
 
     if (activeFixPoint) {
       var fixPx = toPx(activeFixPoint, pxPerNm);
+      // Standard convention: circle the fix, label it horizontally with the
+      // time -- plus "R FIX" when it's a running fix (i.e. any plotted
+      // sight was advanced), distinguishing it from a simultaneous fix at a
+      // glance the same way a paper chart would.
+      var isRunningFix = multiGeo.sights.some(function (s) { return !!s.originalApPoint; });
+      var fixLabelText = opts.fixTimeLabel ? (opts.fixTimeLabel + (isRunningFix ? ' R FIX' : '')) : '';
       fixMarkup =
         '<g>' +
           '<circle cx="' + fixPx.x + '" cy="' + fixPx.y + '" r="6" fill="none" stroke="var(--chart-fix)" stroke-width="2"/>' +
           '<line x1="' + (fixPx.x - 9) + '" y1="' + fixPx.y + '" x2="' + (fixPx.x + 9) + '" y2="' + fixPx.y + '" stroke="var(--chart-fix)" stroke-width="1.5"/>' +
           '<line x1="' + fixPx.x + '" y1="' + (fixPx.y - 9) + '" x2="' + fixPx.x + '" y2="' + (fixPx.y + 9) + '" stroke="var(--chart-fix)" stroke-width="1.5"/>' +
+          (fixLabelText ? '<text x="' + (fixPx.x + 14) + '" y="' + (fixPx.y + 4) + '" text-anchor="start" class="chart-fix-label">' + fixLabelText + '</text>' : '') +
         '</g>';
 
       var pos = SightCalc.positionFromOffset(multiGeo.originLat, multiGeo.originLon, activeFixPoint);
@@ -360,6 +449,7 @@
       fix.lat = pos.lat;
       fix.lon = pos.lon;
       fix.positionText = formatLat(pos.lat) + ' ' + formatLon(pos.lon);
+      fix.isRunningFix = isRunningFix;
     }
 
     // Reported regardless of the toggle, if a triangle exists, so the caller

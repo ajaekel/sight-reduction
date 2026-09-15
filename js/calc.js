@@ -734,6 +734,23 @@
     return body.type.charAt(0).toUpperCase() + body.type.slice(1);
   }
 
+  /**
+   * Terse, uppercase body name for celestial LOP chart labels specifically
+   * -- "SUN", "MOON", "VEGA", "JUPITER" -- matching standard USCG/commercial
+   * plotting convention (a celestial LOP is labeled with the body's name
+   * plus the observation time, e.g. "SUN 0915"; a star or planet is
+   * labeled by its own name, not "Star Vega"). Distinct from
+   * formatBodyLabel(), which is for UI text (sight lists, legends) where
+   * the fuller "Star Vega" phrasing reads better.
+   */
+  function formatBodyLabelChart(body) {
+    if (!body) return 'BODY';
+    if ((body.type === 'star' || body.type === 'planet') && body.name) {
+      return body.name.toUpperCase();
+    }
+    return body.type.toUpperCase();
+  }
+
   var CHART_PALETTE = ['#00bcd4', '#ff9800', '#8bc34a', '#e91e63', '#9c27b0', '#ffeb3b', '#03a9f4', '#ff5722'];
 
   /** Stable color for a given sight index, cycling through CHART_PALETTE. Single source of truth so a sight's color is identical everywhere it's shown (a fix's sight list, its plot, its legend). */
@@ -984,6 +1001,7 @@
     resolveMultiLopFix: resolveMultiLopFix,
     positionFromOffset: positionFromOffset,
     formatBodyLabel: formatBodyLabel,
+    formatBodyLabelChart: formatBodyLabelChart,
     paletteColor: paletteColor
   };
 })(window);
