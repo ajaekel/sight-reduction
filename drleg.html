@@ -61,7 +61,7 @@
         </div>
         <div class="body-inline-col" style="flex: 1;">
           <label>Timezone Offset (UTC Offset in Hours)</label>
-          <input type="text" inputmode="decimal" id="drTzOffset" placeholder="-4" value="-4" onfocus="this.select()">
+          <input type="number" step="any" id="drTzOffset" placeholder="-4" value="-4" onfocus="this.select()">
         </div>
       </div>
     </div>
@@ -69,7 +69,7 @@
     <div class="form-group">
       <div class="body-inline-row">
         <div class="body-inline-col almanac-col-border">
-          <label>Latitude (Deg / Min / N-S)</label>
+          <label>Lat (Deg / Min / N-S)</label>
           <div class="input-row input-row-3">
             <input type="text" inputmode="decimal" class="deg-box" id="drLatDeg" placeholder="40" onfocus="this.select()">
             <input type="text" inputmode="decimal" class="min-box" id="drLatMin" placeholder="32.2" onfocus="this.select()">
@@ -80,7 +80,7 @@
           </div>
         </div>
         <div class="body-inline-col">
-          <label>Longitude (Deg / Min / E-W)</label>
+          <label>Lon (Deg / Min / E-W)</label>
           <div class="input-row input-row-3">
             <input type="text" inputmode="decimal" class="deg-box" id="drLonDeg" placeholder="073" onfocus="this.select()">
             <input type="text" inputmode="decimal" class="min-box" id="drLonMin" placeholder="56.3" onfocus="this.select()">

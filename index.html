@@ -95,10 +95,10 @@
     <div class="form-group">
       <div class="body-inline-row">
         <div class="body-inline-col almanac-col-border">
-          <label>Latitude (Deg / Min / N-S)</label>
+          <label>Lat (Deg / Min / N-S)</label>
           <div class="input-row input-row-3">
-            <input type="text" inputmode="decimal" class="deg-box" id="latDeg" placeholder="40" onfocus="this.select()">
-            <input type="text" inputmode="decimal" class="min-box" id="latMin" placeholder="32.2" onfocus="this.select()">
+            <input type="text" inputmode="decimal" class="deg-box" id="latDeg" placeholder="40" value="40" onfocus="this.select()">
+            <input type="text" inputmode="decimal" class="min-box" id="latMin" placeholder="32.2" value="32.2" onfocus="this.select()">
             <select id="latNS" class="select-compact">
               <option value="N">N</option>
               <option value="S">S</option>
@@ -106,10 +106,10 @@
           </div>
         </div>
         <div class="body-inline-col">
-          <label>Longitude (Deg / Min / E-W)</label>
+          <label>Lon (Deg / Min / E-W)</label>
           <div class="input-row input-row-3">
-            <input type="text" inputmode="decimal" class="deg-box" id="lonDeg" placeholder="073" onfocus="this.select()">
-            <input type="text" inputmode="decimal" class="min-box" id="lonMin" placeholder="56.3" onfocus="this.select()">
+            <input type="text" inputmode="decimal" class="deg-box" id="lonDeg" placeholder="073" value="073" onfocus="this.select()">
+            <input type="text" inputmode="decimal" class="min-box" id="lonMin" placeholder="56.3" value="56.3" onfocus="this.select()">
             <select id="lonEW" class="select-compact">
               <option value="W">W</option>
               <option value="E">E</option>
@@ -124,7 +124,7 @@
     <div class="form-group">
       <label>Timezone Offset (UTC Offset in Hours)</label>
       <div class="input-row">
-        <input type="text" inputmode="decimal" id="tzOffset" placeholder="-4" value="-4">
+        <input type="number" step="any" id="tzOffset" placeholder="-4" value="-4">
       </div>
       <label style="font-size: 0.75rem; margin-top:2px;">e.g., -4 for EDT, -5 for EST, +0 for UTC</label>
     </div>

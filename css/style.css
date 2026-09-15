@@ -326,6 +326,20 @@ input, select {
   box-sizing: border-box;
   -webkit-appearance: none;
 }
+/* type="number" is used specifically (and only) where a field needs a
+   minus sign typeable directly -- e.g. Timezone Offset -- since iOS only
+   shows a "-" key on the number-style keypad, not on inputmode="decimal"'s.
+   The spin-button arrows that come with type="number" don't match this
+   app's plain custom-styled inputs anywhere else, so they're suppressed
+   here rather than left inconsistent on just these few fields. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
 input[type="checkbox"] {
   width: auto;
   height: auto;
