@@ -16,9 +16,9 @@
 * [ ] Add tooltip explanations for each field
 * [ ] Add option to expose the formulas behind calculated fields
 
-## Support multiple sightings
+## Support multiple sights
 
-* [X] Support multiple sightings in a session
+* [X] Support multiple sights in a session
 * [X] Add bisectors / multi-LOP fix
 * [X] Add DR Leg
 * [X] Add running fix; accept inputs for SOG and bearing
@@ -29,14 +29,14 @@
 
 ## Add a page for managing data
 
-* [ ] User can see how many MBs per data type (Almanac Data, sightings, fixes, other?)
+* [ ] User can see how many MBs per data type (Almanac Data, sights, fixes, other?)
 * [ ] User can selectively delete cached data
 
 ## Miscellaneous
 
 * [X] Calculate sunset for the AP
 
-  * [ ] Add a data point to Sightings, how many minutes after/before sunset/sunrise/meridian passage of Sun/Moon
+  * [ ] Add a data point to Sights, how many minutes after/before sunset/sunrise/meridian passage of Sun/Moon
   * [ ] For the Moon, include it's percentage, i.e., from "new" to "full"
 
 * [X] Change “Label / Notes (optional, helps you find this sight later)” to “Notes (observed bearing, visibility, etc...)”
@@ -54,8 +54,8 @@
 
 * [X] Data fetch from USNO fails on cellular data, only works on wifi, should have option to download data over cellular
 
-* [X] If user loads a sighting and edit it and resaves with a new name, it overwrites the original sighting (User should be able to load a sighting to use as the base for another, e.g., avoid needing to manually enter the AP again and again for a multi-star stationary fix)
-Expected behavior, if a sighting is saved and renamed, it's saved as a new sighting
+* [X] If user loads a sight and edit it and resaves with a new name, it overwrites the original sight (User should be able to load a sight to use as the base for another, e.g., avoid needing to manually enter the AP again and again for a multi-star stationary fix)
+Expected behavior, if a sight is saved and renamed, it's saved as a new sight
 
 # Completed
 
