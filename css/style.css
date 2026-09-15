@@ -393,6 +393,19 @@ select {
   padding: 8px 1px;
   width: 20px;
 }
+/* Without the box's own border (removed above so the group reads as one
+   field), there's otherwise no visible cue for WHICH digit position is
+   active -- most noticeable right when a new observation row auto-focuses
+   its Hour box (see addObservationLine's autoFocus), where the focus move
+   is real (confirmed: document.activeElement does update correctly) but
+   was easy to read as "didn't happen" with nothing to see. A background
+   highlight on just the focused box restores that visible cue without
+   touching any of the underlying focus/auto-advance logic. */
+.time-hm .time-box:focus {
+  outline: none;
+  background: rgba(0, 188, 212, 0.18);
+  border-radius: 3px;
+}
 .time-hm:focus-within {
   border-color: var(--accent);
 }
