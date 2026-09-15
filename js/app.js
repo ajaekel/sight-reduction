@@ -329,6 +329,16 @@ function handleBodyTypeChange() {
     if (!limbSelect.value) limbSelect.value = 'lower';
   }
 
+  // Forces the browser to actually apply the display changes above right
+  // now, synchronously, rather than potentially leaving them pending until
+  // some later reflow -- reading a layout-triggering property is the
+  // standard way to force this. Belt-and-suspenders: every test I can run
+  // already shows the DOM state ending up correct, so this targets a
+  // *rendering* timing gap rather than a logic bug, on the chance that's
+  // what's actually happening in a real browser but not in a test
+  // environment without a full layout engine.
+  void nameContainer.offsetHeight;
+
   updateHeaders();
 }
 
