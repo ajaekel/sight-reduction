@@ -1,11 +1,5 @@
 # Roadmap
 
-## Add a page for managing data
-
-* [ ] User can see how many MBs per data type (Almanac Data, sightings, fixes, other?)
-* [ ] User can selectively delete cached data
-
-
 ## Add autofill
 
 * [X] Add button to retrieve data with USNO API call
@@ -22,37 +16,46 @@
 * [ ] Add tooltip explanations for each field
 * [ ] Add option to expose the formulas behind calculated fields
 
-## Support multiple sightings
+## Support multiple sights
 
-* [X] Support multiple sightings in a session
+* [X] Support multiple sights in a session
 * [X] Add bisectors / multi-LOP fix
-* [ ] Add running fix; accept inputs for SOG and bearing
+* [X] Add DR Leg
+* [X] Add running fix; accept inputs for SOG and bearing
+
+## Support passage
+
+* [X] Chronological record of navigation
+
+## Add a page for managing data
+
+* [ ] User can see how many MBs per data type (Almanac Data, sights, fixes, other?)
+* [ ] User can selectively delete cached data
 
 ## Miscellaneous
 
-* [ ] Add a clock error correction
+* [X] Calculate sunset for the AP
 
-* [ ] Calculate sunset for the AP
+  * [ ] Add a data point to Sights, how many minutes after/before sunset/sunrise/meridian passage of Sun/Moon
+  * [ ] For the Moon, include it's percentage, i.e., from "new" to "full"
 
-  * [ ] Include a note indicating how many minutes after sunset the sighting occurred
+* [X] Change “Label / Notes (optional, helps you find this sight later)” to “Notes (observed bearing, visibility, etc...)”
 
-* [ ] Change “Label / Notes (optional, helps you find this sight later)” to “Notes (observed bearing, visibility, etc...)”
+  * [X] This field should no longer factor into the filename upon saving Stop notes from replacing the default name upon “Save to Device”
+  * [X] Refactor code for clarity; rename `label` to `notes`, `sightLabel` to `sightNotes`, etc...
 
-  * [ ] This field should no longer factor into the filename upon saving Stop notes from replacing the default name upon “Save to Device”
-  * [ ] Refactor code for clarity; rename `label` to `notes`, `sightLabel` to `sightNotes`, etc...
+* [X] If Celestial Body is `Sun` or `Moon`, add new field `Limb` (dropdown options: `lower` (default), `upper`)
 
-* [ ] If Celestial Body is `Sun` or `Moon`, add new field `Limb` (dropdown options: `lower` (default), `upper`)
-
-  * [ ] Make the placement/size of "Celestial Body" steady. Make "Date (local)" just wide enought to comfortably display the selected date and keep it at that size. There should be blank space to the right of "Celestial Body" which will get populated with either `Limb` or `Name`.
+  * [X] Make the placement/size of "Celestial Body" steady. Make "Date (local)" just wide enought to comfortably display the selected date and keep it at that size. There should be blank space to the right of "Celestial Body" which will get populated with either `Limb` or `Name`.
 
 * [ ] Restructure the Assumed Postion section to occupy less realestate. Add a label "Assumed Position" below which the screen is split into two columns each "column" has its own header "Latitude" and "Longitude", each with fields for "Deg / Min / N-S" (similar to how Sun > Declination is rendered in section "3. Nautical Almanac Data").
 
 ##  Bugs
 
-* [ ] Data fetch from USNO fails on cellular data, only works on wifi, should have option to download data over cellular
+* [X] Data fetch from USNO fails on cellular data, only works on wifi, should have option to download data over cellular
 
-* [ ] If user loads a sighting and edit it and resaves with a new name, it overwrites the original sighting (User should be able to load a sighting to use as the base for another, e.g., avoid needing to manually enter the AP again and again for a multi-star stationary fix)
-Expected behavior, if a sighting is saved and renamed, it's saved as a new sighting
+* [X] If user loads a sight and edit it and resaves with a new name, it overwrites the original sight (User should be able to load a sight to use as the base for another, e.g., avoid needing to manually enter the AP again and again for a multi-star stationary fix)
+Expected behavior, if a sight is saved and renamed, it's saved as a new sight
 
 # Completed
 

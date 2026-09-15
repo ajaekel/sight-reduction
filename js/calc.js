@@ -107,6 +107,192 @@
   }
 
   /**
+   * UTC seconds-of-day -> local (zone) seconds-of-day. Also returns how many
+   * calendar days the conversion crossed (-1, 0, or +1) relative to the UTC
+   * date, since a local time can land on the day before or after.
+   */
+  function localFromUtcSeconds(utcSec, tzOffsetHours) {
+    var raw = utcSec + (tzOffsetHours || 0) * 3600;
+    return { sec: ((raw % 86400) + 86400) % 86400, dayOffset: Math.floor(raw / 86400) };
+  }
+
+  /**
+   * Interpolates a rise/set/transit time between two latitude bands, the way
+   * a Nautical Almanac's tables are read: given the tabulated time at a
+   * latitude below the AP and one above it (signed decimal degrees, either
+   * order), linearly interpolate for the AP's actual latitude. Times are
+   * seconds-of-day (LMT, as tabulated); the result is not wrapped, since
+   * that's handled consistently later by utcFromLmtSeconds/localFromUtcSeconds.
+   */
+  function interpolateByLatitude(latBelow, timeBelowSec, latAbove, timeAboveSec, apLat) {
+    if (latAbove === latBelow) return timeBelowSec; // degenerate: nothing to interpolate
+    var fraction = (apLat - latBelow) / (latAbove - latBelow);
+    return timeBelowSec + fraction * (timeAboveSec - timeBelowSec);
+  }
+
+  /**
+   * Converts a Local Mean Time (as tabulated in a Nautical Almanac -- local
+   * to the observer's OWN meridian) to UTC, via the standard longitude/15
+   * conversion (East longitude positive). This is a distinct step from
+   * converting UTC to the observer's zone/clock time: LMT tracks true
+   * longitude continuously, while zone time is a discrete administrative
+   * offset (tzOffset) that may not exactly match it. Deliberately does not
+   * apply the day-to-day-drift refinement some almanacs' explanatory notes
+   * describe -- for rise/set/transit timing this is normally well under a
+   * minute of additional error.
+   */
+  function utcFromLmtSeconds(lmtSec, lonSignedDecimal) {
+    var raw = lmtSec - (lonSignedDecimal / 15) * 3600;
+    return { sec: ((raw % 86400) + 86400) % 86400, dayOffset: Math.floor(raw / 86400) };
+  }
+
+  /**
+   * Full manual-mode pipeline for one rise/set/transit event: LMT (already
+   * latitude-interpolated, or read directly off the almanac for transit,
+   * which doesn't depend on latitude) -> UTC -> the observer's zone time.
+   * dayOffset is the zone-time date's offset (in days) from the nominal
+   * date the LMT was tabulated for -- e.g. a moonrise just after midnight
+   * zone time, tabulated for the evening before.
+   */
+  function manualEventToZoneTime(lmtSec, lonSignedDecimal, tzOffsetHours) {
+    var utc = utcFromLmtSeconds(lmtSec, lonSignedDecimal);
+    var zone = localFromUtcSeconds(utc.sec, tzOffsetHours);
+    return { zoneSec: zone.sec, dayOffset: utc.dayOffset + zone.dayOffset };
+  }
+
+  /**
+   * Nautical Almanac "Table II" longitude correction for Moonrise, Moonset,
+   * and Moon Meridian Passage. Unlike the Sun (which drifts under a minute a
+   * day and is fine to ignore), the Moon's rise/set/transit LMT drifts by an
+   * average of ~50 minutes a day, so an observer far from Greenwich needs to
+   * interpolate between the tabulated LMT for their own date and the LMT for
+   * the adjacent Greenwich date -- the FOLLOWING date if in west longitude,
+   * or the PRECEDING date if in east longitude (see Bowditch/American
+   * Practical Navigator Vol. 1, Ch. 19, "Longitude Correction", and the
+   * Nautical Almanac's own "Tables for Interpolating Sunrise, Moonrise,
+   * etc.", Table II). This function is agnostic to which calendar day
+   * adjacentLmtSec actually represents -- the caller must supply the correct
+   * one for the observer's hemisphere; only the sign of lonSignedDecimal
+   * determines whether the correction is added (west) or subtracted (east),
+   * matching the almanac's own sign convention.
+   *
+   * todayLmtSec should already be latitude-interpolated for rise/set (via
+   * interpolateByLatitude), or the transit LMT directly (no latitude
+   * dependence there); adjacentLmtSec is the equivalent quantity for the
+   * adjacent date. Returns todayLmtSec unchanged if adjacentLmtSec is not
+   * supplied, so the correction is opt-in.
+   */
+  function applyMoonLongitudeCorrection(lonSignedDecimal, todayLmtSec, adjacentLmtSec) {
+    if (adjacentLmtSec === null || adjacentLmtSec === undefined || isNaN(adjacentLmtSec)) return todayLmtSec;
+    var diff = adjacentLmtSec - todayLmtSec;
+    // The daily drift is well under an hour, so a raw difference bigger than
+    // half a day means the two tabulated times straddle midnight (e.g. today
+    // at 23:52, adjacent day at 00:41) rather than a real ~24h jump.
+    if (diff > 12 * 3600) diff -= 24 * 3600;
+    if (diff < -12 * 3600) diff += 24 * 3600;
+    var fraction = Math.abs(lonSignedDecimal) / 360;
+    var corr = fraction * diff;
+    return todayLmtSec + (lonSignedDecimal < 0 ? corr : -corr);
+  }
+
+  /** Standard altitudes (decimal degrees) that define each event, center of body. */
+  var STANDARD_ALTITUDE_DEG = {
+    sunRiseSet: -50 / 60,     // -0.8333 deg: -34' refraction, -16' semidiameter
+    civilTwilight: -6,
+    nauticalTwilight: -12
+  };
+
+  /**
+   * Derives the Sun's declination (signed decimal degrees) implied by a known
+   * Sunrise or Sunset time relative to Meridian Passage, at a known latitude
+   * -- by inverting the standard altitude formula
+   *   sin(h) = sin(lat)*sin(dec) + cos(lat)*cos(dec)*cos(H)
+   * for h = the standard rise/set altitude and H = the hour angle implied by
+   * the time gap from transit. transitSec and riseOrSetSec must be on the
+   * same time base (both LMT, or both zone time, or both UTC -- doesn't
+   * matter which, since only their difference is used), and can cross
+   * midnight (the gap is normalized to under 12h either way).
+   *
+   * This lets twilight be computed directly from data already on screen
+   * (Sunrise/Sunset/Meridian Passage) instead of requiring a separate
+   * almanac lookup. Returns null if the geometry doesn't resolve to a real
+   * declination (shouldn't happen for real sun data, but guards against
+   * bad/inconsistent input).
+   */
+  function deriveSunDeclination(apLatDeg, transitSec, riseOrSetSec) {
+    var gap = riseOrSetSec - transitSec;
+    if (gap > 12 * 3600) gap -= 24 * 3600;
+    if (gap < -12 * 3600) gap += 24 * 3600;
+    if (gap === 0) return null;
+
+    var H = rad(Math.abs(gap) / 3600 * 15);
+    var lat = rad(apLatDeg);
+    var h0 = rad(STANDARD_ALTITUDE_DEG.sunRiseSet);
+
+    var P = Math.sin(lat);
+    var Q = Math.cos(lat) * Math.cos(H);
+    var R = Math.sqrt(P * P + Q * Q);
+    if (R === 0) return null;
+    var ratio = Math.sin(h0) / R;
+    if (ratio < -1 || ratio > 1) return null;
+    var phi = Math.atan2(Q, P);
+    return deg(Math.asin(ratio) - phi);
+  }
+
+  /**
+   * Hour angle (seconds, always non-negative) at which the Sun reaches the
+   * given altitude, for a known latitude/declination. Returns null if the
+   * Sun never reaches that altitude that day (continuous daylight/twilight/
+   * darkness, which happens at high latitude depending on season).
+   */
+  function sunHourAngleForAltitude(apLatDeg, decDeg, altitudeDeg) {
+    var lat = rad(apLatDeg);
+    var dec = rad(decDeg);
+    var h = rad(altitudeDeg);
+    var cosH = (Math.sin(h) - Math.sin(lat) * Math.sin(dec)) / (Math.cos(lat) * Math.cos(dec));
+    if (cosH < -1 || cosH > 1) return null;
+    return Math.acos(cosH) * (180 / Math.PI) / 15 * 3600;
+  }
+
+  /**
+   * Computes Civil and Nautical Twilight (begin/end) from the Sun's already-
+   * known Meridian Passage time plus at least one of Sunrise/Sunset -- no
+   * separate twilight almanac entry needed. transitSec/sunriseSec/sunsetSec
+   * must all be on the same time base (see deriveSunDeclination); the
+   * returned civil/nautical values are on that same base, ready to run
+   * through whatever conversion the caller already applies to transit.
+   *
+   * If both sunrise and sunset are supplied, their implied declinations are
+   * averaged for a little extra robustness against rounding in the source
+   * data. Pass null for whichever of sunriseSec/sunsetSec isn't available.
+   * Returns null only if neither is available; individual civil/nautical
+   * fields are null if the Sun doesn't reach that altitude that day.
+   */
+  function computeTwilightTimes(apLatDeg, transitSec, sunriseSec, sunsetSec) {
+    var decs = [];
+    if (sunriseSec !== null && sunriseSec !== undefined) {
+      var d1 = deriveSunDeclination(apLatDeg, transitSec, sunriseSec);
+      if (d1 !== null) decs.push(d1);
+    }
+    if (sunsetSec !== null && sunsetSec !== undefined) {
+      var d2 = deriveSunDeclination(apLatDeg, transitSec, sunsetSec);
+      if (d2 !== null) decs.push(d2);
+    }
+    if (decs.length === 0) return null;
+    var dec = decs.reduce(function (a, b) { return a + b; }, 0) / decs.length;
+
+    var civilH = sunHourAngleForAltitude(apLatDeg, dec, STANDARD_ALTITUDE_DEG.civilTwilight);
+    var nauticalH = sunHourAngleForAltitude(apLatDeg, dec, STANDARD_ALTITUDE_DEG.nauticalTwilight);
+
+    return {
+      civilAM: civilH === null ? null : transitSec - civilH,
+      civilPM: civilH === null ? null : transitSec + civilH,
+      nauticalAM: nauticalH === null ? null : transitSec - nauticalH,
+      nauticalPM: nauticalH === null ? null : transitSec + nauticalH
+    };
+  }
+
+  /**
    * Interpolate a GHA-like value (0-360, wraps at the hour boundary) across the
    * fraction of the hour that has elapsed.
    */
@@ -240,11 +426,11 @@
   }
 
   /**
-   * Pure: given a stored sighting's "position" sub-object (the shape
+   * Pure: given a stored sight's "position" sub-object (the shape
    * collectFormState() produces: latDeg/latMin/latNS/lonDeg/lonMin/lonEW),
    * returns signed decimal degrees (S/W negative). This is the non-DOM
    * counterpart to app.js's getAssumedPositionSigned() -- used when reading
-   * a saved sighting record directly (e.g. for a Fix plot) rather than
+   * a saved sight record directly (e.g. for a Fix plot) rather than
    * live form fields.
    */
   function signedPositionFromRecord(position) {
@@ -258,42 +444,52 @@
   }
 
   /**
-   * Pure: lays out multiple sightings' AP + LOP geometry in one shared
+   * Pure: lays out multiple sights' AP + LOP geometry in one shared
    * North-up, nm-based plane, so they can be overlaid on a single chart.
    *
-   * Each sighting's AP may differ slightly (e.g. a 3-star fix taken over a
+   * Each sight's AP may differ slightly (e.g. a 3-star fix taken over a
    * few minutes, or genuinely different APs) -- the shared origin is the
-   * centroid of all APs, and each sighting's own AP is placed at its offset
+   * centroid of all APs, and each sight's own AP is placed at its offset
    * from that centroid (flat-earth approximation: dx = dLon*60*cos(refLat),
    * dy = dLat*60, both in nm -- entirely adequate at chart-plotting scale).
-   * A sighting's own LOP geometry (computeLopGeometry, relative to ITS OWN
+   * A sight's own LOP geometry (computeLopGeometry, relative to ITS OWN
    * AP) is then translated by that same offset into the shared frame.
    *
-   * sightings: [{ lat, lon, zn, interceptNM, ...anything else the caller
+   * sights: [{ lat, lon, zn, interceptNM, ...anything else the caller
    *               wants carried through untouched, e.g. label/color/id }]
+   *
+   * A sight that's been advanced for a Running Fix (see fixes.js) may
+   * also carry originalLat/originalLon -- its own as-observed AP, before
+   * the DR-Leg shift. When present, this also computes originalApPoint and
+   * originalInterceptPoint in the SAME shared frame, using the SAME
+   * lopDirection/azimuthUnit -- correct because advancing an LOP is a pure
+   * translation (see SightCalc.advancePositionByLeg's own comment), so the
+   * original and advanced LOPs are just two parallel lines through the same
+   * relative intercept offset, anchored at two different APs.
    *
    * Returns {
    *   originLat, originLon,          -- the centroid AP (decimal degrees)
    *   maxExtentNM,                    -- farthest point from origin, for scale selection
-   *   sightings: [{
+   *   sights: [{
    *     ...all original fields carried through,
-   *     apPoint, azimuthUnit, interceptPoint, lopDirection   -- all in shared nm frame
+   *     apPoint, azimuthUnit, interceptPoint, lopDirection,   -- all in shared nm frame
+   *     originalApPoint?, originalInterceptPoint?              -- only if originalLat/originalLon given
    *   }]
    * }
    */
-  function computeMultiLopGeometry(sightings) {
-    if (!sightings || sightings.length === 0) {
-      return { originLat: 0, originLon: 0, maxExtentNM: 0, sightings: [] };
+  function computeMultiLopGeometry(sights) {
+    if (!sights || sights.length === 0) {
+      return { originLat: 0, originLon: 0, maxExtentNM: 0, sights: [] };
     }
 
-    var n = sightings.length;
-    var originLat = sightings.reduce(function (sum, s) { return sum + s.lat; }, 0) / n;
-    var originLon = sightings.reduce(function (sum, s) { return sum + s.lon; }, 0) / n;
+    var n = sights.length;
+    var originLat = sights.reduce(function (sum, s) { return sum + s.lat; }, 0) / n;
+    var originLon = sights.reduce(function (sum, s) { return sum + s.lon; }, 0) / n;
     var originLatRad = rad(originLat);
     var cosOriginLat = Math.cos(originLatRad);
 
     var maxExtentNM = 0;
-    var results = sightings.map(function (s) {
+    var results = sights.map(function (s) {
       var dLat = s.lat - originLat;
       var dLon = s.lon - originLon;
       var apPoint = {
@@ -301,7 +497,7 @@
         y: dLat * 60                // North nm
       };
 
-      var localGeo = computeLopGeometry(s.zn, s.interceptNM); // relative to this sighting's own AP
+      var localGeo = computeLopGeometry(s.zn, s.interceptNM); // relative to this sight's own AP
       var interceptPoint = {
         x: apPoint.x + localGeo.interceptPoint.x,
         y: apPoint.y + localGeo.interceptPoint.y
@@ -315,10 +511,25 @@
       out.azimuthUnit = localGeo.azimuthUnit;
       out.interceptPoint = interceptPoint;
       out.lopDirection = localGeo.lopDirection;
+
+      if (typeof s.originalLat === 'number' && typeof s.originalLon === 'number') {
+        var originalApPoint = {
+          x: (s.originalLon - originLon) * 60 * cosOriginLat,
+          y: (s.originalLat - originLat) * 60
+        };
+        var originalInterceptPoint = {
+          x: originalApPoint.x + localGeo.interceptPoint.x,
+          y: originalApPoint.y + localGeo.interceptPoint.y
+        };
+        maxExtentNM = Math.max(maxExtentNM, Math.hypot(originalApPoint.x, originalApPoint.y), Math.hypot(originalInterceptPoint.x, originalInterceptPoint.y));
+        out.originalApPoint = originalApPoint;
+        out.originalInterceptPoint = originalInterceptPoint;
+      }
+
       return out;
     });
 
-    return { originLat: originLat, originLon: originLon, maxExtentNM: maxExtentNM, sightings: results };
+    return { originLat: originLat, originLon: originLon, maxExtentNM: maxExtentNM, sights: results };
   }
 
   /**
@@ -329,24 +540,24 @@
   }
 
   /**
-   * Pure: out of 3+ sightings, picks the 3 whose azimuths are most evenly
+   * Pure: out of 3+ sights, picks the 3 whose azimuths are most evenly
    * spread around the compass -- specifically, the triple that maximizes the
    * smallest of the three gaps between them. A narrow gap between any two
    * means those two LOPs cross at a shallow angle, which is exactly what
    * makes both a plain intersection AND the bisector construction below
    * unreliable (small altitude errors swing the crossing point a long way).
-   * Returns [i, j, k] (indices into `sightings`), or null if fewer than 3.
+   * Returns [i, j, k] (indices into `sights`), or null if fewer than 3.
    */
-  function selectWidestAzimuthSpreadTriple(sightings) {
-    if (!sightings || sightings.length < 3) return null;
+  function selectWidestAzimuthSpreadTriple(sights) {
+    if (!sights || sights.length < 3) return null;
 
-    var azimuths = sightings.map(function (s) { return azimuthDegFromUnit(s.azimuthUnit); });
+    var azimuths = sights.map(function (s) { return azimuthDegFromUnit(s.azimuthUnit); });
     var best = null;
     var bestScore = -1;
 
-    for (var i = 0; i < sightings.length; i++) {
-      for (var j = i + 1; j < sightings.length; j++) {
-        for (var k = j + 1; k < sightings.length; k++) {
+    for (var i = 0; i < sights.length; i++) {
+      for (var j = i + 1; j < sights.length; j++) {
+        for (var k = j + 1; k < sights.length; k++) {
           var sorted = [azimuths[i], azimuths[j], azimuths[k]].sort(function (a, b) { return a - b; });
           var gapA = sorted[1] - sorted[0];
           var gapB = sorted[2] - sorted[1];
@@ -365,7 +576,7 @@
 
   /**
    * Pure: intersection of two LOPs, each given as a point + its normal
-   * (a LOP's normal is exactly its sighting's azimuthUnit -- the LOP is
+   * (a LOP's normal is exactly its sight's azimuthUnit -- the LOP is
    * defined by azimuthUnit . (P - interceptPoint) = 0). Returns null if the
    * two azimuths are too nearly parallel to intersect reliably.
    */
@@ -398,7 +609,7 @@
    * one sight is known to be better than the others, the incenter has no
    * way to reflect that and should be treated skeptically.
    *
-   * triple: exactly 3 sightings, each { azimuthUnit: {x,y}, interceptPoint: {x,y} }
+   * triple: exactly 3 sights, each { azimuthUnit: {x,y}, interceptPoint: {x,y} }
    * Returns { vertices: [v0, v1, v2], incenter: {x,y}, maxSideNM } or null if
    * any pair is too nearly parallel, or the "triangle" has ~zero perimeter.
    * vertices[0] = LOP1 x LOP2 (opposite LOP0), and so on -- standard
@@ -452,18 +663,18 @@
    *    degrades the same way a plain intersection does when LOPs cross at a
    *    shallow angle.
    *
-   * sightings: [{ azimuthUnit: {x,y}, interceptPoint: {x,y} }, ...]
+   * sights: [{ azimuthUnit: {x,y}, interceptPoint: {x,y} }, ...]
    *
    * Returns { solvable: false, reason } or
    *         { solvable: true, leastSquaresPoint: {x,y}, bisector?: {...} }
    */
-  function resolveMultiLopFix(sightings) {
-    if (!sightings || sightings.length < 2) {
+  function resolveMultiLopFix(sights) {
+    if (!sights || sights.length < 2) {
       return { solvable: false, reason: 'Need at least 2 plotted LOPs to resolve a fix.' };
     }
 
     var Sxx = 0, Sxy = 0, Syy = 0, Sxc = 0, Syc = 0;
-    sightings.forEach(function (s) {
+    sights.forEach(function (s) {
       var a = s.azimuthUnit.x, b = s.azimuthUnit.y;
       var c = a * s.interceptPoint.x + b * s.interceptPoint.y;
       Sxx += a * a; Sxy += a * b; Syy += b * b;
@@ -483,9 +694,9 @@
       }
     };
 
-    if (sightings.length >= 3) {
-      var tripleIndices = sightings.length === 3 ? [0, 1, 2] : selectWidestAzimuthSpreadTriple(sightings);
-      var triple = tripleIndices.map(function (idx) { return sightings[idx]; });
+    if (sights.length >= 3) {
+      var tripleIndices = sights.length === 3 ? [0, 1, 2] : selectWidestAzimuthSpreadTriple(sights);
+      var triple = tripleIndices.map(function (idx) { return sights[idx]; });
       var bisectors = resolveCockedHatBisectors(triple);
       if (bisectors) {
         result.bisector = {
@@ -523,12 +734,228 @@
     return body.type.charAt(0).toUpperCase() + body.type.slice(1);
   }
 
+  /**
+   * Terse, uppercase body name for celestial LOP chart labels specifically
+   * -- "SUN", "MOON", "VEGA", "JUPITER" -- matching standard USCG/commercial
+   * plotting convention (a celestial LOP is labeled with the body's name
+   * plus the observation time, e.g. "SUN 0915"; a star or planet is
+   * labeled by its own name, not "Star Vega"). Distinct from
+   * formatBodyLabel(), which is for UI text (sight lists, legends) where
+   * the fuller "Star Vega" phrasing reads better.
+   */
+  function formatBodyLabelChart(body) {
+    if (!body) return 'BODY';
+    if ((body.type === 'star' || body.type === 'planet') && body.name) {
+      return body.name.toUpperCase();
+    }
+    return body.type.toUpperCase();
+  }
+
   var CHART_PALETTE = ['#00bcd4', '#ff9800', '#8bc34a', '#e91e63', '#9c27b0', '#ffeb3b', '#03a9f4', '#ff5722'];
 
-  /** Stable color for a given sighting index, cycling through CHART_PALETTE. Single source of truth so a sighting's color is identical everywhere it's shown (a fix's sighting list, its plot, its legend). */
+  /** Stable color for a given sight index, cycling through CHART_PALETTE. Single source of truth so a sight's color is identical everywhere it's shown (a fix's sight list, its plot, its legend). */
   function paletteColor(index) {
     var i = ((index % CHART_PALETTE.length) + CHART_PALETTE.length) % CHART_PALETTE.length;
     return CHART_PALETTE[i];
+  }
+
+  /** Format signed decimal latitude as "D° MM.M' N" (or S). */
+  function formatLat(signedDeg) {
+    return formatDegMin(Math.abs(signedDeg)) + ' ' + (signedDeg < 0 ? 'S' : 'N');
+  }
+
+  /** Format signed decimal longitude as "D° MM.M' E" (or W). */
+  function formatLon(signedDeg) {
+    return formatDegMin(Math.abs(signedDeg)) + ' ' + (signedDeg < 0 ? 'W' : 'E');
+  }
+
+  /**
+   * Combines a local calendar date ("yyyy-mm-dd"), a local time-of-day
+   * (seconds since local midnight), and a UTC offset (hours, e.g. -4 for
+   * EDT) into the true UTC instant, in milliseconds since the epoch.
+   *
+   * This is genuine multi-day date arithmetic using a real JS Date -- unlike
+   * the Sun/Moon rise-set helpers above (which only ever need to reason
+   * about a single calendar day and wrap seconds-of-day into [0, 86400)),
+   * DR Leg runs can span many hours or cross into following days, so the
+   * calendar date itself has to move, not just wrap.
+   */
+  function localDateTimeToUtcMs(dateStr, localSecOfDay, tzOffsetHours) {
+    var p = dateStr.split('-');
+    var y = parseInt(p[0], 10), mo = parseInt(p[1], 10) - 1, d = parseInt(p[2], 10);
+    var localMs = Date.UTC(y, mo, d, 0, 0, 0) + localSecOfDay * 1000;
+    return localMs - tzOffsetHours * 3600 * 1000;
+  }
+
+  /**
+   * Inverse of localDateTimeToUtcMs: given a true UTC instant (ms since
+   * epoch) and a UTC offset, returns the local calendar date + time of day
+   * it corresponds to.
+   */
+  function utcMsToLocalDateTime(utcMs, tzOffsetHours) {
+    var localMs = utcMs + tzOffsetHours * 3600 * 1000;
+    var d = new Date(localMs);
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    return {
+      dateStr: d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()),
+      secOfDay: d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds()
+    };
+  }
+
+  /**
+   * Rounds a UTC instant (ms since epoch) UP to the next whole minute --
+   * a no-op if it's already exact. For writing a precise instant (which may
+   * carry seconds, e.g. a Fix's resolvedPosition.time, timestamped from a
+   * Sight's own observation seconds) into a field that can only represent
+   * whole minutes (DR Leg's start time has no seconds input, matching how a
+   * DR leg is actually logged in practice). Rounds UP, deliberately never
+   * down: flooring would make the derived time appear to precede the exact
+   * instant it was derived from -- e.g. a Fix resolved at 21:17:40 flooring
+   * to a DR Leg start of 21:17 would make the leg look like it began before
+   * the very fix that established its starting position, which can't be
+   * right. Operates on milliseconds (not a local date/secOfDay pair) so a
+   * rollover into the next minute, hour, day, or even month/year is just
+   * ordinary arithmetic -- no calendar logic needed here at all.
+   */
+  function roundUpToMinuteMs(utcMs) {
+    var minuteMs = 60000;
+    return Math.ceil(utcMs / minuteMs) * minuteMs;
+  }
+
+  /**
+   * Position { time, lat, lon, sourceType, sourceId } -- the one shared shape
+   * for "a place at a moment, and how we know it" used across DR Leg, Fix,
+   * Passage, and the handoffs between pages. Before this existed as one
+   * type, the same concept was scattered in three incompatible partial
+   * forms: a Sight's AP had no time attached to it at all, a Fix's resolved
+   * point had neither a stored time nor a persisted value in the first
+   * place (recomputed live and thrown away), and a DR Leg's result had a
+   * time but no record of where it came from.
+   *
+   * time: ISO 8601 UTC string, or null if only a date (no specific instant)
+   *       is meaningful -- e.g. Planning's AP isn't tied to one instant.
+   * lat/lon: signed decimal degrees (N/E positive).
+   * sourceType: one of POSITION_SOURCE_TYPES -- how much to trust this
+   *       position. KNOWN is exact (GPS, a charted mark, hand-verified);
+   *       FIX is the best current celestial/other estimate; DR is
+   *       provisional and accumulates uncertainty the longer it's been
+   *       projected without a new fix.
+   * sourceId: the id of the specific record this position came from (a Fix
+   *       id, a DR Leg id), or null if it isn't backed by one -- e.g. a
+   *       hand-typed KNOWN position, or a DR Leg's own live result before
+   *       it's been saved (it can't reference a record that doesn't exist
+   *       yet). This is what lets a UI eventually say "current position:
+   *       DR, derived from DR Leg #7" instead of just "DR" with no way to
+   *       go look at the leg that produced it. Set by whichever code is
+   *       handing this position to another record, at the moment of
+   *       handoff -- not necessarily by whoever first computed it (e.g. a
+   *       Fix's resolvedPosition gets its own id stamped on save, but a
+   *       live/unsaved DR Leg's endPosition stays null until that leg is
+   *       actually saved, since only then does it have a stable id to
+   *       point back to).
+   */
+  var POSITION_SOURCE_TYPES = { KNOWN: 'KNOWN', FIX: 'FIX', DR: 'DR' };
+
+  function makePosition(time, lat, lon, sourceType, sourceId) {
+    return { time: time || null, lat: lat, lon: lon, sourceType: sourceType, sourceId: sourceId || null };
+  }
+
+  /**
+   * Dead Reckoning position via Mid-Latitude Sailing (Bowditch/Dutton's
+   * standard method for exactly this: given a start position, a true
+   * course, and a distance run, find the resulting position). Accurate for
+   * the leg lengths DR is normally used for; a genuinely long leg (ocean-
+   * crossing scale) would call for full Mercator or great-circle sailing,
+   * but mid-latitude sailing is what's conventionally used for DR between
+   * fixes.
+   *
+   * startLatDeg/startLonDeg: signed decimal degrees (N/E positive).
+   * courseDegTrue: true course, 0-360 (0 = North, 90 = East, measured clockwise).
+   * distanceNM: nautical miles run (1 NM = 1 minute of latitude, by definition).
+   *
+   * Returns signed decimal degrees, longitude normalized into (-180, 180],
+   * plus the intermediate departure (east-west distance run, NM) since
+   * that's often worth showing alongside the result.
+   */
+  function drPosition(startLatDeg, startLonDeg, courseDegTrue, distanceNM) {
+    var C = rad(courseDegTrue);
+    var dLatMin = distanceNM * Math.cos(C);
+    var newLatDeg = startLatDeg + dLatMin / 60;
+
+    var meanLatDeg = (startLatDeg + newLatDeg) / 2;
+    var cosMeanLat = Math.cos(rad(meanLatDeg));
+    var departureNM = distanceNM * Math.sin(C);
+
+    // A course running due north/south right at the pole has no meaningful
+    // departure/longitude-change -- there's no real DR leg this applies to,
+    // but guard the division rather than blow up on it.
+    var dLonDeg = (Math.abs(cosMeanLat) < 1e-9) ? 0 : (departureNM / 60) / cosMeanLat;
+    var newLonDeg = startLonDeg + dLonDeg;
+    while (newLonDeg > 180) newLonDeg -= 360;
+    while (newLonDeg <= -180) newLonDeg += 360;
+
+    return { latDeg: newLatDeg, lonDeg: newLonDeg, departureNM: departureNM };
+  }
+
+  /**
+   * A full DR leg: start position + instant, course, speed, and EITHER a
+   * duration or an end instant (pass exactly one of durationHours/endUtcMs
+   * as a number; leave the other null/undefined -- it's the one being
+   * solved for). Returns the DR position plus both the duration and end
+   * instant either way, so the caller never has to branch on which one was
+   * the input.
+   */
+  function computeDrLeg(input) {
+    var durationHours = input.durationHours;
+    var endUtcMs = input.endUtcMs;
+
+    if (durationHours === null || durationHours === undefined) {
+      durationHours = (endUtcMs - input.startUtcMs) / 3600000;
+    } else {
+      endUtcMs = input.startUtcMs + durationHours * 3600000;
+    }
+
+    var distanceNM = input.sog * durationHours;
+    var pos = drPosition(input.startLatDeg, input.startLonDeg, input.courseDegTrue, distanceNM);
+
+    return {
+      latDeg: pos.latDeg,
+      lonDeg: pos.lonDeg,
+      departureNM: pos.departureNM,
+      distanceNM: distanceNM,
+      durationHours: durationHours,
+      endUtcMs: endUtcMs
+    };
+  }
+
+  /**
+   * Advances a point by a DR Leg's course and distance -- the core geometry
+   * of a Running Fix, and deliberately just this: given an assumed position
+   * (usually a Sight's own AP) and a saved DrLeg record, returns where that
+   * point ends up after the SAME run the leg represents.
+   *
+   * Why this is all a Running Fix actually needs: an LOP is a line through
+   * (AP, offset by intercept along Zn). Advancing that LOP by a DR run is a
+   * pure parallel translation of the whole line -- which is exactly the
+   * same as leaving Zn and intercept untouched and moving the AP itself by
+   * the run's vector. So "advance this LOP" reduces to "advance this AP,"
+   * and the result feeds into the EXACT SAME multi-LOP solver
+   * (resolveMultiLopFix, in chart.js) used for any ordinary fix -- it
+   * already tolerates each LOP having its own AP, which was the whole
+   * reason a Running Fix doesn't need its own separate geometry solver.
+   *
+   * Uses the leg's course and (sog * durationHours) distance -- not its
+   * own recorded start/end lat/lon -- so this works correctly even when
+   * the leg's start position doesn't exactly match the AP being advanced
+   * (e.g. rounding differences between how the AP and the leg were each
+   * entered); real running fixes are worked the same way, by applying
+   * course and distance run, not by requiring two positions to coincide
+   * exactly.
+   */
+  function advancePositionByLeg(latDeg, lonDeg, leg) {
+    var distanceNM = leg.sog * leg.durationHours;
+    var pos = drPosition(latDeg, lonDeg, leg.courseDegTrue, distanceNM);
+    return { lat: pos.latDeg, lon: pos.lonDeg };
   }
 
   global.SightCalc = {
@@ -536,11 +963,29 @@
     deg: deg,
     dmToDecimal: dmToDecimal,
     formatDegMin: formatDegMin,
+    formatLat: formatLat,
+    formatLon: formatLon,
     secondsToTimeString: secondsToTimeString,
     averageObservations: averageObservations,
     computeHa: computeHa,
     computeHo: computeHo,
     utcSecondsFromLocal: utcSecondsFromLocal,
+    localFromUtcSeconds: localFromUtcSeconds,
+    interpolateByLatitude: interpolateByLatitude,
+    utcFromLmtSeconds: utcFromLmtSeconds,
+    manualEventToZoneTime: manualEventToZoneTime,
+    applyMoonLongitudeCorrection: applyMoonLongitudeCorrection,
+    deriveSunDeclination: deriveSunDeclination,
+    sunHourAngleForAltitude: sunHourAngleForAltitude,
+    computeTwilightTimes: computeTwilightTimes,
+    localDateTimeToUtcMs: localDateTimeToUtcMs,
+    utcMsToLocalDateTime: utcMsToLocalDateTime,
+    roundUpToMinuteMs: roundUpToMinuteMs,
+    POSITION_SOURCE_TYPES: POSITION_SOURCE_TYPES,
+    makePosition: makePosition,
+    drPosition: drPosition,
+    computeDrLeg: computeDrLeg,
+    advancePositionByLeg: advancePositionByLeg,
     interpolateGha: interpolateGha,
     interpolateLinear: interpolateLinear,
     reduceSight: reduceSight,
@@ -556,6 +1001,7 @@
     resolveMultiLopFix: resolveMultiLopFix,
     positionFromOffset: positionFromOffset,
     formatBodyLabel: formatBodyLabel,
+    formatBodyLabelChart: formatBodyLabelChart,
     paletteColor: paletteColor
   };
 })(window);

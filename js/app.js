@@ -10,7 +10,7 @@
  * never on the DOM directly.
  */
 
-var sightingCount = 0;
+var observationCount = 0;
 
 document.addEventListener('DOMContentLoaded', initApp);
 
@@ -18,13 +18,132 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('swVersion').textContent = APP_VERSION;
 });
 
+/**
+ * Consumes a one-time AP handoff via sessionStorage key 'ocsrApHandoff'.
+ * Two producers, two shapes, both supported:
+ *  - planning.html's "Start a Sight with this AP" sends the older simple
+ *    shape (date/tzOffset/latDeg/etc directly) -- Planning has no specific
+ *    time-of-day to offer, only a date, so this shape has none either.
+ *  - drleg.html sends the newer { position: {time,lat,lon,sourceType,sourceId}, tzOffset }
+ *    shape (calc.js's Position type -- see makePosition's own comment)
+ *    which carries an exact arrival instant, used below to pre-fill the
+ *    first observation line's observation time as a starting guess. This is a
+ *    convenience, not a correctness fix -- the AP itself doesn't need a
+ *    time (reduceSight only ever reads the observation's own clock time),
+ *    it just saves a little typing on the common "DR to an event, then
+ *    observe" workflow.
+ */
+function applyPendingHandoff() {
+  var raw;
+  try {
+    raw = sessionStorage.getItem('ocsrApHandoff');
+  } catch (e) {
+    return false;
+  }
+  if (!raw) return false;
+  sessionStorage.removeItem('ocsrApHandoff'); // one-time consume, even if parsing fails below
+
+  var h;
+  try {
+    h = JSON.parse(raw);
+  } catch (e) {
+    return false;
+  }
+
+  if (h.position) {
+    // Newer Position-aware shape (currently: DR Leg).
+    var tzOffset = h.tzOffset;
+    var local = SightCalc.utcMsToLocalDateTime(new Date(h.position.time).getTime(), tzOffset);
+    var latDM = SightCalc.decimalToDM(Math.abs(h.position.lat));
+    var lonDM = SightCalc.decimalToDM(Math.abs(h.position.lon));
+
+    document.getElementById('sightDate').value = local.dateStr;
+    document.getElementById('tzOffset').value = tzOffset;
+    document.getElementById('latDeg').value = latDM.deg;
+    document.getElementById('latMin').value = latDM.min.toFixed(1);
+    document.getElementById('latNS').value = h.position.lat < 0 ? 'S' : 'N';
+    document.getElementById('lonDeg').value = lonDM.deg;
+    document.getElementById('lonMin').value = lonDM.min.toFixed(1);
+    document.getElementById('lonEW').value = h.position.lon < 0 ? 'W' : 'E';
+
+    var firstRow = document.querySelector('.observation-item');
+    if (firstRow) {
+      var pad2 = function (n) { return String(n).padStart(2, '0'); };
+      var hh = Math.floor(local.secOfDay / 3600);
+      var mm = Math.floor((local.secOfDay % 3600) / 60);
+      var ss = local.secOfDay % 60;
+      firstRow.querySelector('.t-h').value = pad2(hh);
+      firstRow.querySelector('.t-m').value = pad2(mm);
+      firstRow.querySelector('.t-s').value = pad2(ss);
+    } else {
+      // Called early in initApp(), before addObservationLine(false) has created
+      // the first row yet -- stash it and apply once that row exists (see
+      // initApp(), right after addObservationLine(false)).
+      var pad2b = function (n) { return String(n).padStart(2, '0'); };
+      window._pendingObservationTime = {
+        h: pad2b(Math.floor(local.secOfDay / 3600)),
+        m: pad2b(Math.floor((local.secOfDay % 3600) / 60)),
+        s: pad2b(local.secOfDay % 60)
+      };
+    }
+
+    showToast('Date, time, time zone, and AP filled in from DR Leg.');
+    return true;
+  }
+
+  // Older simple shape (Planning) -- unchanged behavior.
+  if (h.date) document.getElementById('sightDate').value = h.date;
+  if (h.tzOffset !== undefined) document.getElementById('tzOffset').value = h.tzOffset;
+  if (h.latDeg !== undefined) document.getElementById('latDeg').value = h.latDeg;
+  if (h.latMin !== undefined) document.getElementById('latMin').value = h.latMin;
+  if (h.latNS) document.getElementById('latNS').value = h.latNS;
+  if (h.lonDeg !== undefined) document.getElementById('lonDeg').value = h.lonDeg;
+  if (h.lonMin !== undefined) document.getElementById('lonMin').value = h.lonMin;
+  if (h.lonEW) document.getElementById('lonEW').value = h.lonEW;
+
+  showToast('Date, time zone, and AP filled in from Planning.');
+  return true;
+}
+
+/**
+ * Consumes a one-time "load this saved sight" handoff from sights.html's
+ * "Load" button (see sessionStorage key 'ocsrLoadSightId' in js/sights.js).
+ * Sights.html can't apply the record itself (it doesn't have the sight
+ * reduction form), so it hands the id off here instead.
+ */
+function applyPendingSightLoad() {
+  var id;
+  try {
+    id = sessionStorage.getItem('ocsrLoadSightId');
+  } catch (e) {
+    return;
+  }
+  if (!id) return;
+  sessionStorage.removeItem('ocsrLoadSightId'); // one-time consume
+
+  SightStorage.get(id).then(function (record) {
+    if (!record) { showToast('Could not find that saved sight.', true); return; }
+    applyFormState(record);
+    window._currentRecordId = record.id;
+    window._currentTitle = record.title || '';
+    showToast('Loaded "' + (record.title || 'sight') + '".');
+  }).catch(function (err) {
+    console.error(err);
+    showToast('Could not load that saved sight.', true);
+  });
+}
+
 function initApp() {
   try {
     document.getElementById('sightDate').value = new Date().toISOString().split('T')[0];
   } catch (e) {}
 
+  applyPendingHandoff(); // overrides the date above if Planning just sent one
+  applyPendingSightLoad(); // may override the AP/date further if Sights just sent one
+
   document.getElementById('bodyType').addEventListener('change', function () {
     handleBodyTypeChange();
+    focusFieldForBodyType(); // only on a real user selection, not when Load/Import calls handleBodyTypeChange() directly
     refreshLiveCalculations();
   });
   initStarCombo();
@@ -35,13 +154,33 @@ function initApp() {
   });
 
   document.getElementById('btnAddSight').addEventListener('click', function () {
-    addSightingLine(true);
+    addObservationLine(true);
   });
-  document.getElementById('btnClearAll').addEventListener('click', clearAllData);
+  ['btnClearAll', 'btnClearAllBottom'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', clearAllData);
+  });
 
-  document.getElementById('btnSaveSight').addEventListener('click', onSaveSight);
-  document.getElementById('btnExportJson').addEventListener('click', onExportJson);
+  ['btnSaveSightTop', 'btnSaveSightBottom'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', onSaveSight);
+  });
+  ['btnExportJsonTop', 'btnExportJsonBottom'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', onExportJson);
+  });
+  ['btnImportTop', 'btnImportBottom'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', function () {
+      document.getElementById('fileImportJson').click();
+    });
+  });
   document.getElementById('fileImportJson').addEventListener('change', onImportJson);
+  ['btnAddToFixTop', 'btnAddToFixBottom'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', openAddToFixPanel);
+  });
+  ['btnSendToDrLegTop', 'btnSendToDrLegBottom'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', onSendToDrLeg);
+  });
+  document.getElementById('addToFixSelect').addEventListener('change', updateAddToFixPanel);
+  document.getElementById('btnConfirmAddToFix').addEventListener('click', onConfirmAddToFix);
+  document.getElementById('btnCancelAddToFix').addEventListener('click', closeAddToFixPanel);
   document.getElementById('btnFetchUsno').addEventListener('click', onFetchUsno);
   document.getElementById('btnCacheRange').addEventListener('click', onCacheRange);
   document.getElementById('btnClearCache').addEventListener('click', onClearCache);
@@ -118,10 +257,18 @@ function initApp() {
     document.getElementById(id).addEventListener('change', function () { markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); });
   });
 
-  addSightingLine(false);
+  addObservationLine(false);
+  if (window._pendingObservationTime) {
+    var firstRowNow = document.querySelector('.observation-item');
+    if (firstRowNow) {
+      firstRowNow.querySelector('.t-h').value = window._pendingObservationTime.h;
+      firstRowNow.querySelector('.t-m').value = window._pendingObservationTime.m;
+      firstRowNow.querySelector('.t-s').value = window._pendingObservationTime.s;
+    }
+    window._pendingObservationTime = null;
+  }
   handleBodyTypeChange();
   refreshLiveCalculations();
-  refreshSavedList();
   refreshCacheSummary();
 
   try {
@@ -147,11 +294,13 @@ function handleBodyTypeChange() {
   var nameLabel = document.getElementById('bodyNameLabel');
   var nameInput = document.getElementById('bodyName');
   var planetSelect = document.getElementById('planetSelect');
+  var limbSelect = document.getElementById('limbSelect');
   var starFields = document.getElementById('starFields');
   var nonStarFields = document.getElementById('nonStarFields');
 
   nameInput.style.display = 'none';
   planetSelect.style.display = 'none';
+  limbSelect.style.display = 'none';
   nameContainer.style.display = 'none';
 
   if (type === 'star') {
@@ -167,12 +316,43 @@ function handleBodyTypeChange() {
     starFields.style.display = 'none';
     nonStarFields.style.display = 'block';
   } else {
+    // Sun or Moon: no name to enter, but which limb was brought to the
+    // horizon/AP does matter (semi-diameter correction, someday automatic --
+    // see ROADMAP -- is manual for now, but the choice is still worth
+    // recording), so the same slot shows a Limb picker instead.
     nameInput.value = '';
     starFields.style.display = 'none';
     nonStarFields.style.display = 'block';
+    nameContainer.style.display = 'block';
+    nameLabel.innerText = 'Limb';
+    limbSelect.style.display = 'block';
+    if (!limbSelect.value) limbSelect.value = 'lower';
   }
 
   updateHeaders();
+}
+
+/**
+ * The field that should receive focus after Body Type changes, so picking a
+ * type is the only tap/click needed -- but only for Star/Planet, where a name
+ * still needs to be entered. For Sun/Moon, Limb defaults to "Lower" (correct
+ * more often than not), so auto-opening that dropdown would force an extra
+ * dismissal on the common case where the default is already right; leave
+ * focus alone and let the person tap it only if they actually need "Upper".
+ */
+function focusFieldForBodyType() {
+  var type = document.getElementById('bodyType').value;
+  var field = (type === 'star') ? document.getElementById('bodyName')
+            : (type === 'planet') ? document.getElementById('planetSelect')
+            : null;
+  if (!field) return;
+  field.focus();
+  // showPicker() opens a <select>'s (or other supported input's) native picker
+  // immediately, without a second click -- supported in most current browsers,
+  // and a plain focus() is still a fine, harmless fallback where it isn't.
+  if (typeof field.showPicker === 'function') {
+    try { field.showPicker(); } catch (e) { /* not from a direct user gesture, or unsupported here -- ignore */ }
+  }
 }
 
 function updateHeaders() {
@@ -277,16 +457,16 @@ function initStarCombo() {
   });
 }
 
-function addSightingLine(autoFocus) {
-  sightingCount++;
-  var container = document.getElementById('sightingsContainer');
+function addObservationLine(autoFocus) {
+  observationCount++;
+  var container = document.getElementById('observationsContainer');
   var div = document.createElement('div');
-  div.className = 'sighting-item';
-  div.id = 'sightLine_' + sightingCount;
+  div.className = 'observation-item';
+  div.id = 'observationLine_' + observationCount;
 
   div.innerHTML =
     '<div class="input-row">' +
-      '<div class="sighting-side-label">' + sightingCount + '</div>' +
+      '<div class="observation-side-label">' + observationCount + '</div>' +
       '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-h" placeholder="12" maxlength="2">' +
       '<span>:</span>' +
       '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-m" placeholder="00" maxlength="2">' +
@@ -294,7 +474,7 @@ function addSightingLine(autoFocus) {
       '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-s" placeholder="00" maxlength="2">' +
       '<input type="text" inputmode="decimal" class="s-deg" placeholder="31">' +
       '<input type="text" inputmode="decimal" class="s-min" placeholder="08.1">' +
-      (sightingCount > 1 ? '<button class="btn-del" type="button">\u2715</button>' : '') +
+      (observationCount > 1 ? '<button class="btn-del" type="button">\u2715</button>' : '') +
     '</div>' +
     '<div class="error-msg"></div>';
 
@@ -336,7 +516,7 @@ function addSightingLine(autoFocus) {
     input.addEventListener('focus', function () { this.select(); });
   });
 
-  if (sightingCount > 1) {
+  if (observationCount > 1) {
     var delBtn = div.querySelector('.btn-del');
     delBtn.addEventListener('click', function () {
       div.remove();
@@ -425,15 +605,31 @@ function autoFocusNext(el, maxChars, nextEl) {
 // ---------------------------------------------------------------------
 
 function collectObservations() {
-  var rows = document.querySelectorAll('.sighting-item');
+  var rows = document.querySelectorAll('.observation-item');
   var observations = [];
   rows.forEach(function (row) {
+    var hVal = row.querySelector('.t-h').value;
+    var mVal = row.querySelector('.t-m').value;
+    var sVal = row.querySelector('.t-s').value;
+    var degVal = row.querySelector('.s-deg').value;
+    var minVal = row.querySelector('.s-min').value;
+
+    // A brand-new/untouched observation line (e.g. right after "+ Add Another
+    // Sight") shouldn't drag the average toward 00:00:00 / 0deg as a phantom
+    // zero-value data point -- skip it entirely until at least one of its
+    // fields has something in it, at which point it's included right away
+    // (missing sub-fields within that row still default to 0, same as
+    // before -- there's no way to average a genuinely incomplete time/height
+    // otherwise).
+    var isBlank = hVal === '' && mVal === '' && sVal === '' && degVal === '' && minVal === '';
+    if (isBlank) return;
+
     observations.push({
-      h: parseInt(row.querySelector('.t-h').value, 10) || 0,
-      m: parseInt(row.querySelector('.t-m').value, 10) || 0,
-      s: parseInt(row.querySelector('.t-s').value, 10) || 0,
-      heightDeg: parseFloat(row.querySelector('.s-deg').value) || 0,
-      heightMin: parseFloat(row.querySelector('.s-min').value) || 0
+      h: parseInt(hVal, 10) || 0,
+      m: parseInt(mVal, 10) || 0,
+      s: parseInt(sVal, 10) || 0,
+      heightDeg: parseFloat(degVal) || 0,
+      heightMin: parseFloat(minVal) || 0
     });
   });
   return observations;
@@ -449,13 +645,16 @@ function collectFormState() {
   return {
     id: null,
     schemaVersion: 1,
-    label: g('sightLabel').value.trim(),
+    notes: g('sightNotes').value.trim(),
     date: g('sightDate').value,
     body: {
       type: bodyType,
       name: bodyType === 'star' ? g('bodyName').value.trim()
           : bodyType === 'planet' ? g('planetSelect').value
-          : ''
+          : null,
+      // Limb only means anything for Sun/Moon (which limb crossed the horizon);
+      // for a star or planet (point sources) it's not a meaningful concept.
+      limb: (bodyType === 'sun' || bodyType === 'moon') ? (g('limbSelect').value || 'lower') : null
     },
     position: {
       latDeg: num('latDeg'), latMin: num('latMin'), latNS: g('latNS').value,
@@ -492,11 +691,15 @@ function applyFormState(state) {
   var g = function (id) { return document.getElementById(id); };
   var setVal = function (id, v) { g(id).value = (v === undefined || v === null) ? '' : v; };
 
-  setVal('sightLabel', state.label || '');
+  setVal('sightNotes', state.notes || '');
   setVal('sightDate', state.date || '');
   setVal('bodyType', (state.body && state.body.type) || 'sun');
   handleBodyTypeChange();
 
+  // limb is independent of name/type -- collectFormState always includes it,
+  // regardless of body type, so it must always be restored too, or loading a
+  // star/planet record would leave a stale value in place from before the load.
+  setVal('limbSelect', (state.body && state.body.limb) || 'lower');
   if (state.body && state.body.type === 'star') {
     setVal('bodyName', state.body.name || '');
   } else if (state.body && state.body.type === 'planet') {
@@ -529,13 +732,13 @@ function applyFormState(state) {
   setVal('decBaseDeg', ns.decBaseDeg); setVal('decBaseMin', ns.decBaseMin); setVal('decBaseNS', ns.decBaseNS || 'N');
   setVal('decNextDeg', ns.decNextDeg); setVal('decNextMin', ns.decNextMin); setVal('decNextNS', ns.decNextNS || 'N');
 
-  // Rebuild sighting rows to match the loaded observation count.
-  document.getElementById('sightingsContainer').innerHTML = '';
-  sightingCount = 0;
+  // Rebuild observation rows to match the loaded observation count.
+  document.getElementById('observationsContainer').innerHTML = '';
+  observationCount = 0;
   var obs = (state.observations && state.observations.length) ? state.observations : [{}];
-  obs.forEach(function () { addSightingLine(false); });
+  obs.forEach(function () { addObservationLine(false); });
 
-  var rows = document.querySelectorAll('.sighting-item');
+  var rows = document.querySelectorAll('.observation-item');
   rows.forEach(function (row, i) {
     var o = obs[i] || {};
     row.querySelector('.t-h').value = (o.h !== undefined) ? String(o.h).padStart(2, '0') : '';
@@ -603,7 +806,10 @@ function getClockErrorCorrectedLocalSec(avgLocalSec) {
 function updateAverages() {
   var observations = collectObservations();
   var avg = SightCalc.averageObservations(observations);
-  if (!avg) return;
+  if (!avg) {
+    resetAveragesDisplay();
+    return;
+  }
 
   var corrections = {
     ieMin: parseFloat(document.getElementById('ieMin').value) || 0,
@@ -633,6 +839,16 @@ function updateAverages() {
   baseUtcDate.setUTCSeconds(baseUtcDate.getUTCSeconds() + avgUtcSec);
 
   updateAlmanacHourLabels(baseUtcDate);
+}
+
+/** Placeholder state for "Average of Observations" -- no observation line has any data yet. */
+function resetAveragesDisplay() {
+  document.getElementById('avgLocalTime').innerText = '--:--:--';
+  document.getElementById('avgLocalTimeCorrected').innerText = '--:--:--';
+  document.getElementById('avgUtcTime').innerText = '--:--:-- UTC';
+  document.getElementById('avgHs').innerText = "--\u00B0 --.-'";
+  document.getElementById('computedHa').innerText = "--\u00B0 --.-'";
+  document.getElementById('computedHo').innerText = "--\u00B0 --.-'";
 }
 
 /** Converts a collected form-state object into the plain input shape calc.js expects. */
@@ -713,7 +929,7 @@ function almanacFieldsAnyFilled(bodyType) {
  * A key representing "the date/body/hour Section 3's values should
  * currently reflect" -- used to detect when previously-filled (or
  * manually-edited) almanac fields have gone stale because the date, body,
- * or average sighting time changed underneath them. Returns null if there
+ * or average observation time changed underneath them. Returns null if there
  * isn't yet enough info to compute it.
  */
 function currentAlmanacContextKey() {
@@ -737,7 +953,7 @@ function currentAlmanacContextKey() {
 }
 
 function hasCompleteTimeAllRows() {
-  var rows = document.querySelectorAll('.sighting-item');
+  var rows = document.querySelectorAll('.observation-item');
   return rows.length > 0 && Array.prototype.every.call(rows, function (row) {
     return row.querySelector('.t-h').value.trim() !== '' &&
            row.querySelector('.t-m').value.trim() !== '' &&
@@ -840,7 +1056,7 @@ function tryAutoFillAlmanacFromCache() {
 
   if (hasAnyValue && _almanacFieldsContext === null) {
     // First time this session we're tracking context -- treat whatever's
-    // already there (e.g. a freshly-loaded sighting) as the established
+    // already there (e.g. a freshly-loaded sight) as the established
     // baseline rather than immediately flagging it stale.
     _almanacFieldsContext = currentContext;
   }
@@ -982,7 +1198,7 @@ function tryAutoCalculateReduction() {
 
   renderChart(state, result, apString, built);
 
-  // The exact UTC instant the averaged sighting corresponds to (same
+  // The exact UTC instant the averaged observation corresponds to (same
   // construction used elsewhere to bracket the almanac hour).
   var obsUtcDate = state.date ? new Date(state.date + 'T00:00:00Z') : new Date();
   obsUtcDate.setUTCSeconds(obsUtcDate.getUTCSeconds() + avgUtcSec);
@@ -1010,6 +1226,7 @@ function refreshLiveCalculations() {
   updateAverages();
   tryAutoFillAlmanacFromCache();
   tryAutoCalculateReduction();
+  updateAutoNamePreview();
 }
 
 function formatBodyLabel(body) {
@@ -1049,10 +1266,11 @@ function clearAllData() {
   document.getElementById('addAltCorrMin').value = '0.0';
   document.getElementById('clockErrorSec').value = '0';
   document.getElementById('tzOffset').value = '-4';
-  document.getElementById('sightingsContainer').innerHTML = '';
-  sightingCount = 0;
-  addSightingLine(false);
+  document.getElementById('observationsContainer').innerHTML = '';
+  observationCount = 0;
+  addObservationLine(false);
   window._currentRecordId = null;
+  window._currentTitle = null;
   _almanacFieldsContext = null;
   _autoFillLoopGuard = { signature: null, count: 0 };
   setClockErrorDirection('fast');
@@ -1149,14 +1367,14 @@ function onFetchUsno() {
   if (state.body.type === 'planet' && !state.body.name) missing.push('a planet selection (Section 2)');
   if (state.body.type === 'star' && !state.body.name) missing.push('the star name (Section 2)');
 
-  var rows = document.querySelectorAll('.sighting-item');
+  var rows = document.querySelectorAll('.observation-item');
   var hasCompleteTime = rows.length > 0 && Array.prototype.every.call(rows, function (row) {
     return row.querySelector('.t-h').value.trim() !== '' &&
            row.querySelector('.t-m').value.trim() !== '' &&
            row.querySelector('.t-s').value.trim() !== '';
   });
   var avg = SightCalc.averageObservations(state.observations);
-  if (!avg || !hasCompleteTime) missing.push('a complete sighting time \u2014 Hours, Minutes, and Seconds (Section 2)');
+  if (!avg || !hasCompleteTime) missing.push('a complete observation time \u2014 Hours, Minutes, and Seconds (Section 2)');
 
   if (document.querySelectorAll('.input-error').length > 0) missing.push('valid values for the field(s) currently outlined in red');
 
@@ -1263,6 +1481,26 @@ function onCacheRange() {
     return;
   }
 
+  // Surfaces the real cost of a large range before committing to it --
+  // USNO's celnav endpoint has no bulk/date-range query, so this is
+  // genuinely one HTTP request per hour. Small ranges (a day or so) just
+  // proceed; anything bigger asks first.
+  var hourCount;
+  try {
+    hourCount = SightUsno.eachUtcHourInRange(from, to).length;
+  } catch (e) {
+    hourCount = null;
+  }
+  if (hourCount && hourCount > 24) {
+    var days = Math.round(hourCount / 24);
+    if (!confirm(
+      'This will make about ' + hourCount + ' requests to the USNO server (roughly one per hour across ~' + days + ' days). ' +
+      'It\u2019ll take a little while and is paced to be polite to their free service. Continue?'
+    )) {
+      return;
+    }
+  }
+
   var position = getAssumedPositionSigned();
 
   btn.disabled = true;
@@ -1314,40 +1552,144 @@ function showToast(message, isError) {
   showToast._t = setTimeout(function () { toast.classList.remove('show'); }, 2200);
 }
 
+/**
+ * The sight's "name" is fully derived, never typed: "yyyy-mm-dd HH.mm.ss <type>
+ * <name>", from the observation date, the clock-error-corrected AVERAGE local
+ * time across all observation lines (the same "Average of Observations -> Local
+ * Time corrected" value shown on the form -- it's what the reduction math
+ * itself treats as the moment of the sight, and unlike UT it's immediately
+ * meaningful to the person who took it: a dusk sight, a daytime sight, a
+ * dawn sight), and the body type/name. It's used as both the Save-to-Device
+ * record's title and the Export filename base, and updates live on screen
+ * (see updateAutoNamePreview) as those fields change -- no prompt, ever.
+ */
+function computeAutoName(state) {
+  var pad2 = function (n) { return String(n).padStart(2, '0'); };
+  var now = new Date();
+
+  var dateStr = state.date || now.toISOString().split('T')[0];
+
+  var avg = SightCalc.averageObservations(state.observations);
+  var timeStr;
+  if (avg) {
+    var corr = state.corrections || {};
+    var sign = (corr.clockErrorDirection === 'fast') ? -1 : 1;
+    var correctedSec = ((avg.avgLocalSec + sign * (corr.clockErrorSec || 0)) % 86400 + 86400) % 86400;
+    var h = Math.floor(correctedSec / 3600);
+    var m = Math.floor((correctedSec % 3600) / 60);
+    var s = Math.floor(correctedSec % 60);
+    timeStr = pad2(h) + '.' + pad2(m) + '.' + pad2(s);
+  } else {
+    timeStr = pad2(now.getHours()) + '.' + pad2(now.getMinutes()) + '.' + pad2(now.getSeconds());
+  }
+
+  // Sun/Moon are themselves proper nouns and get capitalized; "star"/"planet"
+  // are just category words, so they stay lowercase -- only the actual name
+  // that follows (Arcturus, Venus, etc.) is the proper noun there.
+  var rawType = (state.body && state.body.type) || 'sight';
+  var properTypeNames = { sun: 'Sun', moon: 'Moon' };
+  var typeStr = properTypeNames[rawType] || rawType;
+  var nameStr = ((state.body && state.body.name) || '').trim();
+
+  var parts = [dateStr, timeStr, typeStr];
+  if (nameStr) parts.push(nameStr);
+
+  // Strip characters that are illegal (or awkward) in filenames on common filesystems.
+  return parts.join(' ').replace(/[\\/:*?"<>|]/g, '_');
+}
+
+/** Keeps the on-screen "Save name" preview (next to the Save/Export buttons) in sync. */
+function updateAutoNamePreview() {
+  var el = document.getElementById('autoNamePreview');
+  if (!el) return;
+  el.textContent = computeAutoName(collectFormState());
+}
+
 function onSaveSight() {
   var state = collectFormState();
-  var existingLabel = state.label || '';
-  var suggested = existingLabel || (formatBodyLabel(state.body) + (state.date ? ' - ' + state.date : ''));
+  var autoName = computeAutoName(state);
 
-  var name = prompt('Save this sight as:', suggested);
-  if (name === null) return; // user cancelled
+  var name = prompt('Save sight as:', autoName);
+  if (name === null) return; // cancelled
+  name = name.trim() || autoName;
 
-  state.label = name.trim() || suggested;
-  document.getElementById('sightLabel').value = state.label; // keep the form in sync
+  SightStorage.list().then(function (existing) {
+    resolveSaveName(existing, name, autoName, function (finalName, targetId) {
+      if (finalName === null) return; // backed out of the whole save
 
-  // If we're editing a sight we just loaded/saved this session, update that
-  // same record instead of creating a duplicate.
-  if (window._currentRecordId) state.id = window._currentRecordId;
+      var toSave = collectFormState(); // re-collect: form hasn't changed, but keeps this self-contained
+      toSave.title = finalName;
+      if (targetId) toSave.id = targetId;
+      if (window._lastResult) toSave.results = window._lastResult;
 
-  if (window._lastResult) state.results = window._lastResult;
+      var isNewRecord = !targetId;
 
-  SightStorage.save(state).then(function (saved) {
-    window._currentRecordId = saved.id;
-    showToast('Saved as "' + state.label + '".');
-    refreshSavedList();
+      SightStorage.save(toSave).then(function (saved) {
+        window._currentRecordId = saved.id;
+        window._currentTitle = saved.title;
+        showToast((isNewRecord ? 'Saved as new sight "' : 'Saved as "') + finalName + '".');
+      }).catch(function (err) {
+        console.error(err);
+        showToast('Could not save sight (storage may be full or unavailable).', true);
+      });
+    });
   }).catch(function (err) {
     console.error(err);
-    showToast('Could not save sight (storage may be full or unavailable).', true);
+    showToast('Could not check existing saved sights.', true);
   });
+}
+
+/**
+ * Standard "Save As" overwrite-or-rename flow: every time the chosen name
+ * matches an EXISTING saved sight -- including the one currently loaded and
+ * otherwise unchanged -- ask whether to overwrite it or pick a different
+ * name, looping until resolved. This deliberately does not special-case
+ * "it's the same record you already have open": once Save always goes
+ * through a name prompt, it should behave like a real Save As dialog every
+ * time, exactly the way overwriting a file you have open still asks first.
+ * Calls back with (null, null) if the user backs out entirely, or
+ * (name, idToSaveUnderOrNull) once resolved -- a null id means "create a
+ * new record".
+ */
+function resolveSaveName(existing, name, autoName, callback) {
+  var collision = null;
+  for (var i = 0; i < existing.length; i++) {
+    if (existing[i].title === name) { collision = existing[i]; break; }
+  }
+
+  if (!collision) {
+    callback(name, null);
+    return;
+  }
+
+  var overwrite = confirm(
+    'A sight named "' + name + '" already exists.\n\n' +
+    'OK: save over it.\n' +
+    'Cancel: change the name.'
+  );
+  if (overwrite) {
+    callback(name, collision.id);
+    return;
+  }
+
+  var retry = prompt('Save sight as:', name);
+  if (retry === null) { callback(null, null); return; }
+  resolveSaveName(existing, retry.trim() || autoName, autoName, callback);
 }
 
 function onExportJson() {
   var state = collectFormState();
   if (window._lastResult) state.results = window._lastResult;
 
-  var filenameDate = state.date || new Date().toISOString().split('T')[0];
-  var filenameBody = (state.body.name || state.body.type || 'sight').replace(/\s+/g, '_');
-  var filename = 'sight_' + filenameDate + '_' + filenameBody + '.json';
+  var autoName = computeAutoName(state);
+  var name = prompt('Export sight as:', autoName);
+  if (name === null) return; // cancelled
+  name = name.trim() || autoName;
+
+  // A real file-save destination (browser download, not our own storage), so
+  // collision handling is the browser's job -- same as any other download,
+  // it'll auto-suffix ("(1)") or ask, per the user's own browser settings.
+  var filename = name + '.json';
 
   var blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
   var url = URL.createObjectURL(blob);
@@ -1362,6 +1704,7 @@ function onExportJson() {
   showToast('Exported ' + filename);
 }
 
+
 function onImportJson(evt) {
   var file = evt.target.files && evt.target.files[0];
   if (!file) return;
@@ -1375,6 +1718,7 @@ function onImportJson(evt) {
       }
       applyFormState(parsed);
       window._currentRecordId = null; // imported sight is treated as new/unsaved until user hits Save
+      window._currentTitle = parsed.title || null;
       showToast('Imported sight from ' + file.name);
     } catch (err) {
       console.error(err);
@@ -1390,59 +1734,112 @@ function onImportJson(evt) {
   reader.readAsText(file);
 }
 
-function refreshSavedList() {
-  SightStorage.list().then(function (entries) {
-    var listEl = document.getElementById('savedList');
-    var emptyEl = document.getElementById('savedListEmpty');
-    listEl.innerHTML = '';
+/**
+ * "Add to a Fix" opens a small inline panel (not a blocking prompt) to pick
+ * an existing Fix or name a new one. Operates on the sight this page
+ * currently has open -- it must already be saved (Fix references sights
+ * by id, so there has to be one) -- and reuses the exact same
+ * "push sight id, save" mutation fixes.js's own add-sight flow uses.
+ */
+function openAddToFixPanel() {
+  if (!window._currentRecordId) {
+    showToast('Save this sight first, then add it to a Fix.', true);
+    return;
+  }
 
-    if (!entries.length) {
-      emptyEl.style.display = 'block';
-      return;
-    }
-    emptyEl.style.display = 'none';
+  var select = document.getElementById('addToFixSelect');
+  select.innerHTML = '<option value="__new__">+ Create a new fix</option>';
 
+  FixStorage.list().then(function (entries) {
     entries.forEach(function (entry) {
-      var item = document.createElement('div');
-      item.className = 'saved-item';
-
-      var title = entry.label ? entry.label : (entry.bodyLabel + ' \u2014 ' + (entry.date || ''));
-      var meta = entry.bodyLabel + ' \u2014 ' + (entry.date || 'no date') +
-                 ' \u00B7 saved ' + new Date(entry.savedAt).toLocaleString();
-
-      item.innerHTML =
-        '<div class="saved-item-info">' +
-          '<div class="saved-item-title"></div>' +
-          '<div class="saved-item-meta"></div>' +
-        '</div>' +
-        '<div class="saved-item-actions">' +
-          '<button class="btn-mini btn-mini-load">Load</button>' +
-          '<button class="btn-mini btn-mini-del">Delete</button>' +
-        '</div>';
-
-      item.querySelector('.saved-item-title').textContent = title;
-      item.querySelector('.saved-item-meta').textContent = meta;
-
-      item.querySelector('.btn-mini-load').addEventListener('click', function () {
-        SightStorage.get(entry.id).then(function (record) {
-          if (!record) { showToast('Could not find that saved sight.', true); return; }
-          applyFormState(record);
-          window._currentRecordId = record.id;
-          showToast('Loaded "' + title + '"');
-        });
-      });
-
-      item.querySelector('.btn-mini-del').addEventListener('click', function () {
-        if (!confirm('Delete this saved sight? This cannot be undone.')) return;
-        SightStorage.remove(entry.id).then(function () {
-          showToast('Deleted.');
-          refreshSavedList();
-        });
-      });
-
-      listEl.appendChild(item);
+      var opt = document.createElement('option');
+      opt.value = entry.id;
+      opt.textContent = entry.name || 'Untitled Fix';
+      select.appendChild(opt);
     });
-  }).catch(function (err) {
-    console.error(err);
+    var panel = document.getElementById('addToFixPanel');
+    panel.style.display = 'block';
+    updateAddToFixPanel();
+    if (panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
   });
 }
+
+function updateAddToFixPanel() {
+  var isNew = document.getElementById('addToFixSelect').value === '__new__';
+  document.getElementById('newFixNameGroup').style.display = isNew ? 'block' : 'none';
+  if (isNew && !document.getElementById('newFixNameInput').value) {
+    var d = new Date();
+    document.getElementById('newFixNameInput').value = 'Fix - ' + (d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0') + '/' + d.getFullYear();
+  }
+}
+
+function closeAddToFixPanel() {
+  document.getElementById('addToFixPanel').style.display = 'none';
+}
+
+function onConfirmAddToFix() {
+  var select = document.getElementById('addToFixSelect');
+  var sightId = window._currentRecordId;
+  if (!sightId) { closeAddToFixPanel(); return; }
+
+  var fixPromise;
+  if (select.value === '__new__') {
+    var name = document.getElementById('newFixNameInput').value.trim() || 'Untitled Fix';
+    fixPromise = FixStorage.save({ name: name, sightIds: [] });
+  } else {
+    fixPromise = FixStorage.get(select.value);
+  }
+
+  fixPromise.then(function (fix) {
+    if (!fix) throw new Error('Fix not found');
+    if (fix.sightIds.indexOf(sightId) === -1) fix.sightIds.push(sightId);
+    if (fix.activeSightIds && fix.activeSightIds.indexOf(sightId) === -1) fix.activeSightIds.push(sightId);
+    return FixStorage.save(fix);
+  }).then(function (fix) {
+    showToast('Added to "' + fix.name + '".');
+    closeAddToFixPanel();
+  }).catch(function (err) {
+    console.error(err);
+    showToast('Could not add to that fix.', true);
+  });
+}
+
+/**
+ * Sends this sight's own position and observation time to DR Leg as its
+ * start -- the missing piece for building a Running Fix from scratch: take
+ * a sight, start a DR Leg from exactly where and when it was taken, run it
+ * forward to a second sight hours later, then advance the first sight by
+ * that leg on the Fix page. Requires the sight to already be saved, same
+ * precondition and reasoning as "Add to a Fix" above (there has to be a
+ * stable record to read position/time back off of).
+ *
+ * sourceType is KNOWN, same as Planning's own AP handoff -- a single
+ * sight's AP is an assumed position, not a resolved fix, so it doesn't
+ * warrant the FIX category even though it's headed to the same field.
+ * Unlike Planning, though, this DOES have a stable record behind it, so
+ * sourceId is set to the sight's own id -- still worth being able to say
+ * "derived from this Sight" later even though the trust category is the
+ * same as Planning's.
+ */
+function onSendToDrLeg() {
+  if (!window._currentRecordId) {
+    showToast('Save this sight first, then send it to DR Leg.', true);
+    return;
+  }
+
+  SightStorage.get(window._currentRecordId).then(function (record) {
+    if (!record || !record.results || !record.results.observationTime) {
+      showToast('This sight has no calculated observation time yet.', true);
+      return;
+    }
+    var pos = SightCalc.signedPositionFromRecord(record.position);
+    var position = SightCalc.makePosition(record.results.observationTime, pos.lat, pos.lon, SightCalc.POSITION_SOURCE_TYPES.KNOWN, record.id);
+    sessionStorage.setItem('ocsrDrLegStartHandoff', JSON.stringify({ position: position, tzOffset: record.position.tzOffset, sentFrom: 'Sight' }));
+    location.href = 'drleg.html';
+  }).catch(function (err) {
+    console.error(err);
+    showToast('Could not send this sight to DR Leg.', true);
+  });
+}
+
+

@@ -17,14 +17,18 @@
         Version: loading...
       </div>
       <div class="header-buttons">
-        <a href="index.html" class="btn-clear-all" style="text-decoration: none; display: inline-block; border-color: var(--accent); color: var(--accent);">Sight Reduction</a>
         <div class="nav-menu-wrap">
           <button class="btn-hamburger" id="btnNavMenu" aria-label="Menu" aria-haspopup="true" aria-expanded="false" type="button">
             <span></span><span></span><span></span>
           </button>
           <div class="nav-menu" id="navMenu">
-            <a href="index.html#savedSightingsSection" class="nav-menu-item">Sightings</a>
+            <div class="nav-menu-header">Sights</div>
+            <a href="index.html" class="nav-menu-item nav-menu-sub">New sight</a>
+            <a href="sights.html" class="nav-menu-item nav-menu-sub">Sights</a>
             <a href="fixes.html" class="nav-menu-item">Fixes</a>
+            <a href="planning.html" class="nav-menu-item">Planning</a>
+            <a href="drleg.html" class="nav-menu-item">DR Leg</a>
+            <a href="passages.html" class="nav-menu-item">Passages</a>
           </div>
         </div>
       </div>
@@ -35,7 +39,7 @@
   <div id="fixListView">
     <div class="fix-list-header">
       <p class="cache-blurb" style="margin: 0; flex: 1;">
-        A Fix is a named collection of saved Sightings (e.g. a 3-star fix, or a running fix),
+        A Fix is a named collection of saved Sights (e.g. a 3-star fix, or a running fix),
         plotted together as overlaid Lines of Position.
       </p>
       <button class="btn-new-fix" id="btnNewFix" type="button">+ New</button>
@@ -60,16 +64,35 @@
     </div>
 
     <div class="card">
-      <div class="section-title">Sightings in this Fix</div>
-      <div class="saved-list" id="fixSightingsList"></div>
-      <div class="empty-note" id="fixSightingsEmpty">No sightings in this fix yet. Add one below.</div>
+      <div class="section-title">Sights in this Fix</div>
+      <p class="cache-blurb" style="margin-top:0;">
+        A sight can be "advanced" -- shifted by a saved DR Leg's course and distance run -- to
+        combine it with a later sight as a Running Fix. This isn't a different kind of fix,
+        just an ordinary one where a sight's line-of-position has been moved forward in time
+        before being crossed with the others.
+      </p>
+      <div class="saved-list" id="fixSightsList"></div>
+      <div class="empty-note" id="fixSightsEmpty">No sights in this fix yet. Add one below.</div>
+    </div>
+
+    <!-- RUNNING FIX: advance-via-DR-Leg panel -->
+    <div class="card" id="advanceLegPanel" style="display: none;">
+      <div class="section-title">Advance <span id="advanceLegTargetLabel"></span> via DR Leg</div>
+      <div class="saved-list" id="advanceLegList"></div>
+      <div class="empty-note" id="advanceLegEmpty">
+        No saved DR Legs yet. Log the run between this sight and the one you want to combine
+        it with on the DR Leg page first.
+      </div>
+      <div class="save-export-row">
+        <button class="btn-secondary" id="btnCancelAdvance">Cancel</button>
+      </div>
     </div>
 
     <div class="card">
-      <div class="section-title">Add a Saved Sighting</div>
-      <div class="saved-list" id="availableSightingsList"></div>
-      <div class="empty-note" id="availableSightingsEmpty">
-        No other saved sightings available. Reduce and save a sighting on the Sight Reduction page first.
+      <div class="section-title">Add a Saved Sight</div>
+      <div class="saved-list" id="availableSightsList"></div>
+      <div class="empty-note" id="availableSightsEmpty">
+        No other saved sights available. Reduce and save a sight on the Sight Reduction page first.
       </div>
     </div>
 
@@ -94,6 +117,22 @@
         <div class="chart-caption" id="fixResultCaption"></div>
       </div>
     </div>
+
+    <div class="card" id="fixPositionCard" style="display: none;">
+      <div class="section-title">Use This Fix</div>
+      <p class="cache-blurb" style="margin-top:0;">
+        Uses whichever method (least-squares or bisectors) is currently selected above. "Save
+        Position" is a deliberate action -- toggling methods doesn't save anything on its own,
+        so switching to compare doesn't silently change what's stored for this fix.
+      </p>
+      <div class="save-export-row">
+        <button class="btn-secondary" id="btnSaveFixPosition" disabled>Save Position</button>
+      </div>
+      <div class="save-export-row">
+        <button class="btn-secondary" id="btnFixToSight" disabled>New Sight from Fix Position</button>
+        <button class="btn-secondary" id="btnFixToDrLeg" disabled>Send to DR Leg</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -104,6 +143,7 @@
 <script src="js/storage.js"></script>
 <script src="js/chart.js"></script>
 <script src="js/fixStorage.js"></script>
+<script src="js/drlegStorage.js"></script>
 <script src="js/nav.js"></script>
 <script src="js/version.js"></script>
 <script src="js/fixes.js"></script>

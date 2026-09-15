@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#121212">
+  <title>DR Leg - Offline Sight Reduction</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app-container">
+  <div class="header-row">
+    <h1 style="margin-bottom: 2px;">DR Leg</h1>
+    <div class="header-controls">
+      <div id="swVersion" style="font-size: 0.75rem; color: var(--accent, #888); font-family: monospace;">
+        Version: loading...
+      </div>
+      <div class="header-buttons">
+        <div class="nav-menu-wrap">
+          <button class="btn-hamburger" id="btnNavMenu" aria-label="Menu" aria-haspopup="true" aria-expanded="false" type="button">
+            <span></span><span></span><span></span>
+          </button>
+          <div class="nav-menu" id="navMenu">
+            <div class="nav-menu-header">Sights</div>
+            <a href="index.html" class="nav-menu-item nav-menu-sub">New Sight</a>
+            <a href="sights.html" class="nav-menu-item nav-menu-sub">Sights</a>
+            <a href="fixes.html" class="nav-menu-item">Fixes</a>
+            <a href="planning.html" class="nav-menu-item">Planning</a>
+            <a href="drleg.html" class="nav-menu-item">DR Leg</a>
+            <a href="passages.html" class="nav-menu-item">Passages</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="cache-blurb">
+    Dead reckoning by Mid-Latitude Sailing: from a start position/time, course, and speed, run
+    either a known duration or to a known arrival time, and get the resulting DR position. Carry
+    the result on to a new sight, to Planning, or as the start of the next leg.
+  </p>
+
+  <!-- START -->
+  <div class="card">
+    <div class="section-title">Start Position &amp; Time</div>
+
+    <div class="form-group">
+      <div class="body-inline-row">
+        <div class="body-inline-col" style="flex: 1.1;">
+          <label>Start Date (local)</label>
+          <input type="date" id="drStartDate">
+        </div>
+        <div class="body-inline-col">
+          <label>Start Time (24h)</label>
+          <span class="time-hm">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="drStartTimeH" placeholder="14">
+            <span>:</span>
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="drStartTimeM" placeholder="00">
+          </span>
+        </div>
+        <div class="body-inline-col" style="flex: 1;">
+          <label>Timezone Offset (UTC Offset in Hours)</label>
+          <input type="text" inputmode="decimal" id="drTzOffset" placeholder="-4" value="-4" onfocus="this.select()">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <div class="input-row">
+        <div style="width: 140px; flex-shrink: 0; font-size: 0.85rem; color: #aaa;">
+          Latitude<br><span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span>
+        </div>
+        <input type="text" inputmode="decimal" id="drLatDeg" placeholder="40" onfocus="this.select()">
+        <input type="text" inputmode="decimal" id="drLatMin" placeholder="32.2" onfocus="this.select()">
+        <select id="drLatNS">
+          <option value="N">N</option>
+          <option value="S">S</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <div class="input-row">
+        <div style="width: 140px; flex-shrink: 0; font-size: 0.85rem; color: #aaa;">
+          Longitude<br><span style="font-size:0.75rem; color:#888;">(Deg / Min / E-W)</span>
+        </div>
+        <input type="text" inputmode="decimal" id="drLonDeg" placeholder="073" onfocus="this.select()">
+        <input type="text" inputmode="decimal" id="drLonMin" placeholder="56.3" onfocus="this.select()">
+        <select id="drLonEW">
+          <option value="W">W</option>
+          <option value="E">E</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- COURSE & SPEED -->
+  <div class="card">
+    <div class="section-title">Course &amp; Speed</div>
+    <div class="form-group">
+      <div class="body-inline-row">
+        <div class="body-inline-col" style="flex: 1;">
+          <label>SOG (knots)</label>
+          <input type="text" inputmode="decimal" id="drSog" placeholder="6.0" onfocus="this.select()">
+        </div>
+        <div class="body-inline-col" style="flex: 1;">
+          <label>Course (&deg; True)</label>
+          <input type="text" inputmode="decimal" id="drCourse" placeholder="090" onfocus="this.select()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODE: DURATION OR ARRIVAL TIME -->
+  <div class="card">
+    <div class="section-title">Run For...</div>
+    <div class="method-picker" role="group" aria-label="DR leg run mode">
+      <button type="button" class="method-btn" id="modeDuration" aria-pressed="true">Duration</button>
+      <button type="button" class="method-btn" id="modeEndTime" aria-pressed="false">End Date &amp; Time</button>
+    </div>
+
+    <div class="form-group" id="durationCard" style="margin-top: 14px;">
+      <div class="body-inline-row">
+        <div class="body-inline-col" style="flex: 1;">
+          <label>Hours</label>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="drDurationHours" placeholder="2" onfocus="this.select()">
+        </div>
+        <div class="body-inline-col" style="flex: 1;">
+          <label>Minutes</label>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" id="drDurationMinutes" placeholder="30" onfocus="this.select()">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group" id="endTimeCard" style="margin-top: 14px; display: none;">
+      <div class="body-inline-row">
+        <div class="body-inline-col" style="flex: 1.1;">
+          <label>End Date (local)</label>
+          <input type="date" id="drEndDate">
+        </div>
+        <div class="body-inline-col">
+          <label>End Time (24h)</label>
+          <span class="time-hm">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="drEndTimeH" placeholder="16">
+            <span>:</span>
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="drEndTimeM" placeholder="30">
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="usno-status" id="drStatus"></div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="summary-box" id="drResults" style="margin-top: 16px;">
+    <div style="font-size: 0.75rem; font-weight: bold; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">DR Result</div>
+    <div><strong>DR Position:</strong> <span id="resDrLat">--&deg; --.-'</span>, <span id="resDrLon">--&deg; --.-'</span></div>
+    <div><strong>Distance Run:</strong> <span id="resDistance">--.- nm</span></div>
+    <div><strong>Duration:</strong> <span id="resDuration">--h --m</span></div>
+    <div><strong>Arrival (local):</strong> <span id="resArrival">----‑--‑-- --:--</span></div>
+  </div>
+
+  <div class="save-export-row" style="margin-top: 16px;">
+    <button class="btn-secondary" id="btnToSight" disabled>New Sight from DR Position</button>
+  </div>
+  <div class="save-export-row">
+    <button class="btn-secondary" id="btnToPlanning" disabled>Send to Planning</button>
+    <button class="btn-secondary" id="btnChainLeg" disabled>Start New Leg from Here</button>
+  </div>
+  <div class="save-export-row">
+    <button class="btn-secondary" id="btnSaveLeg" disabled>Save This Leg</button>
+  </div>
+
+  <!-- SAVED LEGS -->
+  <div class="card" style="margin-top: 16px;">
+    <div class="section-title">Saved DR Legs (this device)</div>
+    <p class="cache-blurb" style="margin-top:0;">
+      A logged leg is historical record -- once saved it isn't edited in place; log a new one
+      instead if a leg needs correcting.
+    </p>
+    <div class="saved-list" id="savedLegsList"></div>
+    <div class="empty-note" id="savedLegsEmpty">No DR legs saved on this device yet.</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/calc.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/version.js"></script>
+<script src="js/drlegStorage.js"></script>
+<script src="js/drleg.js"></script>
+</body>
+</html>

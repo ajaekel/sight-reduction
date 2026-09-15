@@ -37,6 +37,20 @@ h1 {
   color: var(--accent);
   margin: 0;
 }
+.header-title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.header-version {
+  font-size: 0.68rem;
+  color: var(--accent);
+  font-family: monospace;
+  opacity: 0.75;
+  white-space: nowrap;
+}
 .header-controls {
   display: flex;
   flex-direction: column;
@@ -117,6 +131,18 @@ h1 {
   background: var(--accent);
   color: #000;
 }
+.nav-menu-header {
+  display: block;
+  padding: 9px 14px 3px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #888;
+}
+.nav-menu-item.nav-menu-sub {
+  padding-left: 26px;
+}
 .card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -156,11 +182,11 @@ label {
   min-width: 0;
 }
 
-/* Section 2 Sightings Layout */
-.sighting-item {
+/* Section 2 Observations Layout */
+.observation-item {
   margin-bottom: 8px;
 }
-.sighting-side-label {
+.observation-side-label {
   width: 16px;
   flex-shrink: 0;
   font-size: 0.85rem;
@@ -328,6 +354,30 @@ select {
   text-align: center;
   padding: 8px 2px;
 }
+.time-hm {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.planning-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.planning-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.planning-cell label {
+  font-size: 0.72rem;
+  color: #aaa;
+}
+.planning-cell-lat {
+  width: 44px;
+}
 .btn-add {
   background: transparent;
   border: 1px dashed var(--accent);
@@ -372,6 +422,20 @@ select {
   font-size: 0.9rem;
   cursor: pointer;
   margin-top: 8px;
+}
+.save-export-row {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+.save-export-row .btn-secondary,
+.save-export-row .btn-clear-all {
+  width: auto;
+  flex: 1;
+  margin-top: 0;
+  padding: 7px 4px;
+  font-size: 0.85rem;
+  text-align: center;
 }
 .summary-box {
   background: #252525;
@@ -454,6 +518,16 @@ select {
   margin: 0 0 12px 0;
   line-height: 1.45;
 }
+.planning-manual-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+}
+@media (max-width: 480px) {
+  .planning-manual-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .cache-progress {
   font-size: 0.8rem;
   margin-top: 6px;
@@ -509,7 +583,7 @@ select {
   flex-shrink: 0;
   white-space: nowrap;
 }
-.sighting-color-dot {
+.sight-color-dot {
   display: inline-block;
   width: 18px;
   height: 18px;
@@ -624,6 +698,28 @@ details:not([open]) > summary.cache-summary-toggle {
   font-weight: bold;
   fill: #000;
 }
+.chart-transfer-label {
+  font-size: 9px;
+  font-weight: bold;
+  stroke: var(--card);
+  stroke-width: 3px;
+  paint-order: stroke fill;
+}
+.chart-lop-label {
+  font-size: 9px;
+  font-weight: bold;
+  stroke: var(--card);
+  stroke-width: 3px;
+  paint-order: stroke fill;
+}
+.chart-fix-label {
+  font-size: 11px;
+  font-weight: bold;
+  fill: var(--chart-fix);
+  stroke: var(--card);
+  stroke-width: 3px;
+  paint-order: stroke fill;
+}
 .plot-controls {
   display: flex;
   align-items: center;
@@ -721,7 +817,7 @@ details:not([open]) > summary.cache-summary-toggle {
   line-height: 1.5;
 }
 
-/* --- Section 4: Save / Export / Saved Sightings --- */
+/* --- Section 4: Save / Export / Saved Sights --- */
 .file-import-label {
   display: block;
   text-align: center;
@@ -754,6 +850,10 @@ details:not([open]) > summary.cache-summary-toggle {
   align-items: center;
   gap: 8px;
 }
+.saved-item-highlight {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
 .saved-item-info {
   font-size: 0.85rem;
   line-height: 1.3;
@@ -782,6 +882,12 @@ details:not([open]) > summary.cache-summary-toggle {
 .btn-mini-load {
   background: var(--accent);
   color: #000;
+}
+.btn-mini-fix,
+.btn-mini-drleg {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
 }
 .btn-mini-del {
   background: var(--danger);

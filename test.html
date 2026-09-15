@@ -225,16 +225,16 @@
       ];
       var multi = SightCalc.computeMultiLopGeometry(sameAP);
       assertClose('multi-LOP: centroid lat with identical APs', multi.originLat, 40.5, 0.0001);
-      assertClose('multi-LOP: sighting apPoint.x ~0 when APs identical', multi.sightings[0].apPoint.x, 0, 1e-6);
+      assertClose('multi-LOP: sight apPoint.x ~0 when APs identical', multi.sights[0].apPoint.x, 0, 1e-6);
       var single = SightCalc.computeLopGeometry(90, 5);
-      assertClose('multi-LOP: intercept matches single-sight geometry', multi.sightings[0].interceptPoint.x, single.interceptPoint.x, 1e-6);
+      assertClose('multi-LOP: intercept matches single-sight geometry', multi.sights[0].interceptPoint.x, single.interceptPoint.x, 1e-6);
 
       var diffAP = [
         { lat: 40.0, lon: -74.0, zn: 0, interceptNM: 10 },
         { lat: 41.0, lon: -74.0, zn: 90, interceptNM: 10 }
       ];
       var multiDiff = SightCalc.computeMultiLopGeometry(diffAP);
-      assertClose('multi-LOP: differing-AP offset (nm)', multiDiff.sightings[0].apPoint.y, -30, 0.01);
+      assertClose('multi-LOP: differing-AP offset (nm)', multiDiff.sights[0].apPoint.y, -30, 0.01);
     })();
 
     // --- signedPositionFromRecord ---
@@ -267,13 +267,13 @@
     // point should resolve both methods back to that point, with ~0 spread ---
     (function testResolveMultiLopFixThreeLopsConcurrent() {
       var truePoint = { x: 3, y: 4 };
-      function sightingThrough(zn) {
+      function sightThrough(zn) {
         var geo = SightCalc.computeLopGeometry(zn, 0);
         var interceptNM = geo.azimuthUnit.x * truePoint.x + geo.azimuthUnit.y * truePoint.y;
         return SightCalc.computeLopGeometry(zn, interceptNM);
       }
-      var sightings = [10, 130, 250].map(sightingThrough);
-      var fix = SightCalc.resolveMultiLopFix(sightings);
+      var sights = [10, 130, 250].map(sightThrough);
+      var fix = SightCalc.resolveMultiLopFix(sights);
       assertClose('3-LOP concurrent: least-squares x', fix.leastSquaresPoint.x, 3, 0.001);
       assertClose('3-LOP concurrent: least-squares y', fix.leastSquaresPoint.y, 4, 0.001);
       // Exact concurrency is a degenerate (zero-area) triangle -- the incenter
@@ -287,17 +287,17 @@
     // should genuinely differ for an asymmetric error ---
     (function testResolveMultiLopFixCockedHat() {
       var truePoint = { x: 3, y: 4 };
-      function sightingThrough(zn, extraNM) {
+      function sightThrough(zn, extraNM) {
         var geo0 = SightCalc.computeLopGeometry(zn, 0);
         var interceptNM = geo0.azimuthUnit.x * truePoint.x + geo0.azimuthUnit.y * truePoint.y + (extraNM || 0);
         return SightCalc.computeLopGeometry(zn, interceptNM);
       }
-      var sightings = [
-        sightingThrough(15, 1),
-        sightingThrough(60, -0.4),
-        sightingThrough(260, 0.3)
+      var sights = [
+        sightThrough(15, 1),
+        sightThrough(60, -0.4),
+        sightThrough(260, 0.3)
       ];
-      var fix = SightCalc.resolveMultiLopFix(sightings);
+      var fix = SightCalc.resolveMultiLopFix(sights);
       assertClose('cocked hat produced (non-degenerate)', fix.bisector ? 1 : 0, 1, 0);
       assertClose('cocked hat maxSideNM is positive', fix.bisector.maxSideNM > 0 ? 1 : 0, 1, 0);
       var distApart = Math.hypot(
@@ -309,12 +309,58 @@
 
     // --- selectWidestAzimuthSpreadTriple: avoids pairing two close azimuths ---
     (function testSelectWidestAzimuthSpreadTriple() {
-      var sightings = [0, 5, 130, 250].map(function (zn) { return SightCalc.computeLopGeometry(zn, 10); });
-      var triple = SightCalc.selectWidestAzimuthSpreadTriple(sightings);
+      var sights = [0, 5, 130, 250].map(function (zn) { return SightCalc.computeLopGeometry(zn, 10); });
+      var triple = SightCalc.selectWidestAzimuthSpreadTriple(sights);
       assertClose('widest-spread triple excludes index 0 (too close to index 1)', triple.indexOf(0), -1, 0);
       assertClose('widest-spread triple includes index 1', triple.indexOf(1) !== -1 ? 1 : 0, 1, 0);
       assertClose('widest-spread triple includes index 2', triple.indexOf(2) !== -1 ? 1 : 0, 1, 0);
       assertClose('widest-spread triple includes index 3', triple.indexOf(3) !== -1 ? 1 : 0, 1, 0);
+    })();
+
+    // --- Planning page: LMT -> UTC longitude conversion ---
+    (function testUtcFromLmtSeconds() {
+      // 75W, LMT 06:00 -> UT 11:00 (west longitude adds time).
+      var a = SightCalc.utcFromLmtSeconds(6 * 3600, -75);
+      assertClose('utcFromLmtSeconds 75W LMT 06:00 -> UT seconds', a.sec, 11 * 3600, 0.01);
+      assertClose('utcFromLmtSeconds 75W dayOffset', a.dayOffset, 0, 0);
+
+      // 0 longitude: LMT and UT are identical.
+      var b = SightCalc.utcFromLmtSeconds(6 * 3600, 0);
+      assertClose('utcFromLmtSeconds 0 longitude is a no-op', b.sec, 6 * 3600, 0.01);
+
+      // 60E, LMT 18:00 -> UT 14:00 (east longitude subtracts time).
+      var c = SightCalc.utcFromLmtSeconds(18 * 3600, 60);
+      assertClose('utcFromLmtSeconds 60E LMT 18:00 -> UT seconds', c.sec, 14 * 3600, 0.01);
+    })();
+
+    // --- Planning page: latitude interpolation between two tabulated times ---
+    (function testInterpolateByLatitude() {
+      // AP at 37N, between tabulated 35N (06:10) and 40N (06:20) -> 06:14.
+      var lmt = SightCalc.interpolateByLatitude(35, 6 * 3600 + 10 * 60, 40, 6 * 3600 + 20 * 60, 37);
+      assertClose('interpolateByLatitude AP 37N between 35N/40N', lmt, 6 * 3600 + 14 * 60, 0.01);
+
+      // Degenerate case (same latitude given twice) shouldn't divide by zero.
+      var lmt2 = SightCalc.interpolateByLatitude(35, 100, 35, 999, 35);
+      assertClose('interpolateByLatitude degenerate (latAbove === latBelow)', lmt2, 100, 0.01);
+    })();
+
+    // --- Planning page: full manual pipeline (latitude interpolation already
+    // folded in via the LMT passed here) -> UTC -> zone time ---
+    (function testManualEventToZoneTime() {
+      // AP at 75W, zone -5 (nearly matches its own longitude): LMT 06:14
+      // should come back very close to the same clock reading in zone time.
+      var r1 = SightCalc.manualEventToZoneTime(6 * 3600 + 14 * 60, -75, -5);
+      assertClose('manualEventToZoneTime AP-matching zone stays close to LMT', r1.zoneSec, 6 * 3600 + 14 * 60, 0.01);
+
+      // Same LMT and longitude, but a mismatched zone (-8) -- confirms zone
+      // and longitude are applied as genuinely independent corrections.
+      var r2 = SightCalc.manualEventToZoneTime(6 * 3600 + 14 * 60, -75, -8);
+      assertClose('manualEventToZoneTime mismatched zone shifts independently', r2.zoneSec, 3 * 3600 + 14 * 60, 0.01);
+
+      // Midnight wrap: LMT 00:00:05, 170W -> UT rolls forward, but zone -11
+      // (close to 170W) should land back near local midnight, same/next day.
+      var r3 = SightCalc.manualEventToZoneTime(5, -170, -11);
+      assertClose('manualEventToZoneTime near-midnight wrap stays sane', r3.zoneSec, 20 * 60 + 5, 0.01);
     })();
 
     console.log('--- ' + pass + ' passed, ' + fail + ' failed ---');
