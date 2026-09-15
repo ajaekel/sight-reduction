@@ -529,19 +529,17 @@ function addObservationLine(autoFocus) {
   refreshLiveCalculations();
 
   if (autoFocus) {
-    // Deferred to the next animation frame, not called synchronously right
-    // after appendChild -- on iOS Safari specifically, focusing an element
-    // immediately after inserting it can silently fail to bring up the
-    // keyboard if layout for the new content hasn't actually completed yet,
-    // even though the DOM's own focus state updates correctly (confirmed:
-    // document.activeElement does become this field synchronously -- the
-    // gap is real-device layout/paint timing, not the JS logic itself).
-    // .click() on a text input isn't a standard way to summon a mobile
-    // keyboard either way, so it's dropped rather than carried forward.
-    requestAnimationFrame(function () {
-      th.focus();
-      th.select();
-    });
+    // Synchronous, not deferred -- correcting my own earlier change here.
+    // iOS Safari's rule for actually summoning the keyboard on .focus() is
+    // roughly the OPPOSITE of what a requestAnimationFrame deferral
+    // assumed: the LESS delay between the user's tap and the .focus() call,
+    // the MORE likely iOS is to treat it as part of that same trusted user
+    // gesture and honor it. Deferring to the next frame moves the call
+    // outside that window instead of inside it. .click() on a text input
+    // was never a real mechanism for summoning a mobile keyboard either, so
+    // it's still dropped.
+    th.focus();
+    th.select();
   }
 }
 
