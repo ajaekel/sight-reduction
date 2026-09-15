@@ -219,15 +219,6 @@ label {
   padding-left: 10px;
 }
 
-/* Matches .btn-del's own rendered width (padding + glyph) plus the row's
-   own gap before it, so the first observation row -- which never shows a
-   delete button -- doesn't end up with wider fields than every row after
-   it. Invisible, just reserves the same horizontal space. */
-.row-del-spacer {
-  flex-shrink: 0;
-  width: 34px;
-}
-
 /* Inline layout for Section 1 Date, Celestial Body & Name */
 .body-inline-row {
   display: flex;
@@ -414,7 +405,7 @@ select {
   border: none;
   border-radius: 0;
   padding: 8px 1px;
-  width: 20px;
+  width: 24px;
 }
 /* Without the box's own border (removed above so the group reads as one
    field), there's otherwise no visible cue for WHICH digit position is
