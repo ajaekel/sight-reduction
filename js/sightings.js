@@ -94,6 +94,28 @@ function onDeleteSighting(entryId) {
   });
 }
 
+/**
+ * Sends a saved sight's own position and observation time to DR Leg as its
+ * start -- see app.js's onSendToDrLeg for the full reasoning (same
+ * function, just working from a saved record's id here instead of the
+ * live form on index.html).
+ */
+function onSendToDrLeg(sightId) {
+  SightStorage.get(sightId).then(function (record) {
+    if (!record || !record.results || !record.results.observationTime) {
+      showToast('This sight has no calculated observation time yet.', true);
+      return;
+    }
+    var pos = SightCalc.signedPositionFromRecord(record.position);
+    var position = SightCalc.makePosition(record.results.observationTime, pos.lat, pos.lon, SightCalc.POSITION_SOURCE_TYPES.KNOWN, record.id);
+    sessionStorage.setItem('ocsrDrLegStartHandoff', JSON.stringify({ position: position, tzOffset: record.position.tzOffset, sentFrom: 'Sight' }));
+    location.href = 'drleg.html';
+  }).catch(function (err) {
+    console.error(err);
+    showToast('Could not send this sight to DR Leg.', true);
+  });
+}
+
 function refreshSavedList() {
   SightStorage.list().then(function (entries) {
     var listEl = document.getElementById('savedList');
@@ -122,6 +144,7 @@ function refreshSavedList() {
         '<div class="saved-item-actions">' +
           '<button class="btn-mini btn-mini-load">Load</button>' +
           '<button class="btn-mini btn-mini-fix">Add to Fix</button>' +
+          '<button class="btn-mini btn-mini-drleg">Send to DR Leg</button>' +
           '<button class="btn-mini btn-mini-del">Delete</button>' +
         '</div>';
 
@@ -129,6 +152,7 @@ function refreshSavedList() {
       item.querySelector('.saved-item-meta').textContent = meta;
       item.querySelector('.btn-mini-load').addEventListener('click', function () { onLoadSighting(entry.id); });
       item.querySelector('.btn-mini-fix').addEventListener('click', function () { openAddToFixPanel(entry.id); });
+      item.querySelector('.btn-mini-drleg').addEventListener('click', function () { onSendToDrLeg(entry.id); });
       item.querySelector('.btn-mini-del').addEventListener('click', function () { onDeleteSighting(entry.id); });
 
       listEl.appendChild(item);

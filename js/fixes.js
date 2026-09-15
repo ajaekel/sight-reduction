@@ -642,7 +642,7 @@ function onFixToSighting() {
 
 function onFixToDrLeg() {
   if (!currentFix.resolvedPosition) return;
-  var handoff = { position: currentFix.resolvedPosition, tzOffset: currentFix.resolvedPositionTzOffset };
+  var handoff = { position: currentFix.resolvedPosition, tzOffset: currentFix.resolvedPositionTzOffset, sentFrom: 'Fix' };
   sessionStorage.setItem('ocsrDrLegStartHandoff', JSON.stringify(handoff));
   location.href = 'drleg.html';
 }

@@ -861,7 +861,8 @@ details:not([open]) > summary.cache-summary-toggle {
   background: var(--accent);
   color: #000;
 }
-.btn-mini-fix {
+.btn-mini-fix,
+.btn-mini-drleg {
   background: transparent;
   border: 1px solid var(--accent);
   color: var(--accent);
