@@ -886,6 +886,36 @@
     };
   }
 
+  /**
+   * Advances a point by a DR Leg's course and distance -- the core geometry
+   * of a Running Fix, and deliberately just this: given an assumed position
+   * (usually a Sight's own AP) and a saved DrLeg record, returns where that
+   * point ends up after the SAME run the leg represents.
+   *
+   * Why this is all a Running Fix actually needs: an LOP is a line through
+   * (AP, offset by intercept along Zn). Advancing that LOP by a DR run is a
+   * pure parallel translation of the whole line -- which is exactly the
+   * same as leaving Zn and intercept untouched and moving the AP itself by
+   * the run's vector. So "advance this LOP" reduces to "advance this AP,"
+   * and the result feeds into the EXACT SAME multi-LOP solver
+   * (resolveMultiLopFix, in chart.js) used for any ordinary fix -- it
+   * already tolerates each LOP having its own AP, which was the whole
+   * reason a Running Fix doesn't need its own separate geometry solver.
+   *
+   * Uses the leg's course and (sog * durationHours) distance -- not its
+   * own recorded start/end lat/lon -- so this works correctly even when
+   * the leg's start position doesn't exactly match the AP being advanced
+   * (e.g. rounding differences between how the AP and the leg were each
+   * entered); real running fixes are worked the same way, by applying
+   * course and distance run, not by requiring two positions to coincide
+   * exactly.
+   */
+  function advancePositionByLeg(latDeg, lonDeg, leg) {
+    var distanceNM = leg.sog * leg.durationHours;
+    var pos = drPosition(latDeg, lonDeg, leg.courseDegTrue, distanceNM);
+    return { lat: pos.latDeg, lon: pos.lonDeg };
+  }
+
   global.SightCalc = {
     rad: rad,
     deg: deg,
@@ -913,6 +943,7 @@
     makePosition: makePosition,
     drPosition: drPosition,
     computeDrLeg: computeDrLeg,
+    advancePositionByLeg: advancePositionByLeg,
     interpolateGha: interpolateGha,
     interpolateLinear: interpolateLinear,
     reduceSight: reduceSight,

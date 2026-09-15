@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('btnSaveFixPosition').addEventListener('click', onSaveFixPosition);
   document.getElementById('btnFixToSighting').addEventListener('click', onFixToSighting);
   document.getElementById('btnFixToDrLeg').addEventListener('click', onFixToDrLeg);
+  document.getElementById('btnCancelAdvance').addEventListener('click', closeAdvancePanel);
 
   window.addEventListener('hashchange', routeFromHash);
   routeFromHash();
@@ -155,6 +156,7 @@ function openFix(id) {
     }
     currentFix = fix;
     showDetailView();
+    closeAdvancePanel();
 
     document.getElementById('fixDetailName').textContent = fix.name;
     document.getElementById('fixDetailMeta').textContent =
@@ -227,10 +229,17 @@ function renderFixSightings(token) {
   emptyEl.style.display = 'none';
 
   var idsAtRenderTime = currentFix.sightingIds.slice();
+  var advances = currentFix.advances || {};
+  var legIdsNeeded = idsAtRenderTime.map(function (id) { return advances[id]; }).filter(function (legId) { return !!legId; });
 
-  Promise.all(idsAtRenderTime.map(function (id) { return SightStorage.get(id); }))
-    .then(function (records) {
+  Promise.all([
+    Promise.all(idsAtRenderTime.map(function (id) { return SightStorage.get(id); })),
+    Promise.all(legIdsNeeded.map(function (legId) { return DrLegStorage.get(legId); }))
+  ]).then(function (results) {
       if (token !== fixRenderToken) return; // a newer render superseded this one
+      var records = results[0];
+      var legsById = {};
+      legIdsNeeded.forEach(function (legId, i) { legsById[legId] = results[1][i]; });
       listEl.innerHTML = '';
 
       records.forEach(function (record, i) {
@@ -248,14 +257,39 @@ function renderFixSightings(token) {
             '<div class="saved-item-actions"><button class="btn-mini btn-mini-del">Remove</button></div>';
         } else {
           var labels = sightingRowLabel(record);
+          var legId = advances[id];
+          var advanceLine = '';
+          if (legId) {
+            var leg = legsById[legId];
+            advanceLine = leg
+              ? 'Advanced via "' + leg.name + '" \u2192 ' + new Date(leg.endPosition.time).toLocaleString()
+              : 'Advanced via a DR Leg that no longer exists (using as-observed instead)';
+          }
           item.innerHTML =
             '<div class="saved-item-info">' +
               '<div class="saved-item-info-row"><span class="sighting-color-dot" style="background:' + swatchColor + '"></span>' +
-              '<div><div class="saved-item-title"></div><div class="saved-item-meta"></div></div></div>' +
+              '<div><div class="saved-item-title"></div><div class="saved-item-meta"></div><div class="saved-item-meta advance-line" style="display:none;"></div></div></div>' +
             '</div>' +
-            '<div class="saved-item-actions"><button class="btn-mini btn-mini-del">Remove</button></div>';
+            '<div class="saved-item-actions">' +
+              '<button class="btn-mini btn-mini-fix btn-advance"></button>' +
+              '<button class="btn-mini btn-mini-del">Remove</button>' +
+            '</div>';
           item.querySelector('.saved-item-title').textContent = labels.title;
           item.querySelector('.saved-item-meta').textContent = labels.meta;
+          if (advanceLine) {
+            var advanceLineEl = item.querySelector('.advance-line');
+            advanceLineEl.textContent = advanceLine;
+            advanceLineEl.style.display = 'block';
+          }
+          var advanceBtn = item.querySelector('.btn-advance');
+          advanceBtn.textContent = legId ? 'Un-advance' : 'Advance\u2026';
+          advanceBtn.addEventListener('click', function () {
+            if (legId) {
+              onClearAdvance(id);
+            } else {
+              openAdvancePanel(id, record);
+            }
+          });
         }
 
         item.querySelector('.btn-mini-del').addEventListener('click', function () {
@@ -263,6 +297,7 @@ function renderFixSightings(token) {
           if (currentFix.activeSightingIds) {
             currentFix.activeSightingIds = currentFix.activeSightingIds.filter(function (sid) { return sid !== id; });
           }
+          if (currentFix.advances) delete currentFix.advances[id]; // don't leave a stale advance pointing at a sighting no longer in this fix
           FixStorage.save(currentFix).then(function () { openFix(currentFix.id); });
         });
 
@@ -312,6 +347,70 @@ function renderAvailableSightings(token) {
   });
 }
 
+// ---------------------------------------------------------------------
+// RUNNING FIX: advancing a sighting's LOP via a saved DR Leg
+// ---------------------------------------------------------------------
+
+var _advanceTargetId = null;
+
+/**
+ * Opens the shared "Advance via DR Leg" panel for one sighting. Lists every
+ * saved DR Leg (not filtered by proximity to this sighting's own time --
+ * simplest correct behavior for now: the person can see each leg's own
+ * start/end times right in the list and judge for themselves which one
+ * applies, rather than the app guessing at a "close enough" heuristic).
+ */
+function openAdvancePanel(sightingId, sightRecord) {
+  _advanceTargetId = sightingId;
+
+  DrLegStorage.list().then(function (legs) {
+    var listEl = document.getElementById('advanceLegList');
+    var emptyEl = document.getElementById('advanceLegEmpty');
+    listEl.innerHTML = '';
+
+    if (!legs.length) {
+      emptyEl.style.display = 'block';
+    } else {
+      emptyEl.style.display = 'none';
+      legs.forEach(function (entry) {
+        var item = document.createElement('div');
+        item.className = 'saved-item';
+        item.innerHTML =
+          '<div class="saved-item-info"><div class="saved-item-title"></div><div class="saved-item-meta"></div></div>' +
+          '<div class="saved-item-actions"><button class="btn-mini btn-mini-load">Use</button></div>';
+        item.querySelector('.saved-item-title').textContent = entry.name;
+        item.querySelector('.saved-item-meta').textContent =
+          new Date(entry.startTime).toLocaleString() + ' \u2192 ' + new Date(entry.endTime).toLocaleString();
+        item.querySelector('.btn-mini-load').addEventListener('click', function () { onConfirmAdvance(entry.id); });
+        listEl.appendChild(item);
+      });
+    }
+
+    document.getElementById('advanceLegTargetLabel').textContent = sightingRowLabel(sightRecord).title;
+    var panel = document.getElementById('advanceLegPanel');
+    panel.style.display = 'block';
+    if (panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
+
+function closeAdvancePanel() {
+  document.getElementById('advanceLegPanel').style.display = 'none';
+  _advanceTargetId = null;
+}
+
+function onConfirmAdvance(legId) {
+  if (!_advanceTargetId) { closeAdvancePanel(); return; }
+  if (!currentFix.advances) currentFix.advances = {};
+  currentFix.advances[_advanceTargetId] = legId;
+  closeAdvancePanel();
+  FixStorage.save(currentFix).then(function () { openFix(currentFix.id); });
+}
+
+function onClearAdvance(sightingId) {
+  if (currentFix.advances) delete currentFix.advances[sightingId];
+  FixStorage.save(currentFix).then(function () { openFix(currentFix.id); });
+}
+
 function onDeleteFix() {
   if (!currentFix) return;
   if (!confirm('Delete the fix "' + currentFix.name + '"? Its sightings are not affected, only the fix itself.')) return;
@@ -351,6 +450,18 @@ function setFixMethod(useBisectors) {
 }
 
 /** Plots automatically whenever the fix's sightings change -- called from openFix(). */
+/**
+ * A Running Fix isn't a different kind of Fix -- it's this same function,
+ * given a sighting that has an entry in currentFix.advances. For those,
+ * the AP fed into the solver is shifted by the referenced DR Leg
+ * (SightCalc.advancePositionByLeg -- see its own comment for why this is
+ * ALL a Running Fix needs: Zn/interceptNM stay exactly as observed, only
+ * the AP moves, and resolveMultiLopFix already handles a mix of APs across
+ * LOPs). The "time" contributed for cacheResolvedPosition's latest-time
+ * calc is likewise the leg's endPosition.time, not the sighting's own
+ * observation time -- an advanced LOP is being treated as current as of
+ * when it was advanced TO, not when it was actually observed.
+ */
 function autoPlotFix() {
   if (!currentFix || !currentFix.sightingIds.length) {
     document.getElementById('fixChartCard').style.display = 'none';
@@ -360,10 +471,22 @@ function autoPlotFix() {
 
   setFixPlotStatus('Loading sightings\u2026', 'loading');
 
-  Promise.all(currentFix.sightingIds.map(function (id) { return SightStorage.get(id); }))
-    .then(function (records) {
+  var advances = currentFix.advances || {};
+  var legIdsNeeded = currentFix.sightingIds
+    .map(function (id) { return advances[id]; })
+    .filter(function (legId) { return !!legId; });
+
+  Promise.all([
+    Promise.all(currentFix.sightingIds.map(function (id) { return SightStorage.get(id); })),
+    Promise.all(legIdsNeeded.map(function (legId) { return DrLegStorage.get(legId); }))
+  ]).then(function (results) {
+      var records = results[0];
+      var legsById = {};
+      legIdsNeeded.forEach(function (legId, i) { legsById[legId] = results[1][i]; });
+
       var skippedMissing = 0;
       var skippedNoResults = 0;
+      var skippedBrokenAdvance = 0;
       var chartInput = [];
 
       // Color and badge number are keyed to each sighting's position in the
@@ -376,15 +499,34 @@ function autoPlotFix() {
           skippedNoResults++;
           return;
         }
+        var id = currentFix.sightingIds[i];
         var pos = SightCalc.signedPositionFromRecord(record.position);
+        var observationTime = record.results.observationTime;
+
+        var legId = advances[id];
+        if (legId) {
+          var leg = legsById[legId];
+          if (!leg) {
+            // The referenced leg was deleted out from under this advance --
+            // fail safe to the as-observed LOP rather than silently
+            // dropping the sighting or crashing the plot; renderFixSightings()
+            // surfaces this same brokenness so it's not silent.
+            skippedBrokenAdvance++;
+          } else {
+            var advanced = SightCalc.advancePositionByLeg(pos.lat, pos.lon, leg);
+            pos = advanced;
+            observationTime = leg.endPosition.time;
+          }
+        }
+
         var labels = sightingRowLabel(record);
         chartInput.push({
-          id: currentFix.sightingIds[i],
+          id: id,
           lat: pos.lat,
           lon: pos.lon,
           zn: record.results.zn,
           interceptNM: record.results.interceptNM,
-          observationTime: record.results.observationTime, // ISO UTC -- used to timestamp the Fix's cached resolvedPosition
+          observationTime: observationTime, // ISO UTC -- used to timestamp the Fix's cached resolvedPosition
           tzOffset: record.position.tzOffset, // carried alongside, for handoffs built from the resolved position (see onFixToSighting/onFixToDrLeg)
           label: labels.title,
           color: SightCalc.paletteColor(i),
@@ -404,10 +546,14 @@ function autoPlotFix() {
       renderCurrentPlot();
 
       var msg = 'Plotted ' + chartInput.length + ' of ' + currentFix.sightingIds.length + ' sighting' + (currentFix.sightingIds.length === 1 ? '' : 's') + '.';
-      if (skippedMissing || skippedNoResults) {
-        msg += ' Skipped ' + (skippedMissing + skippedNoResults) + ' (missing or not yet calculated).';
+      var skipped = skippedMissing + skippedNoResults;
+      if (skipped) {
+        msg += ' Skipped ' + skipped + ' (missing or not yet calculated).';
       }
-      setFixPlotStatus(msg, (skippedMissing || skippedNoResults) ? 'error' : 'ok');
+      if (skippedBrokenAdvance) {
+        msg += ' ' + skippedBrokenAdvance + ' advanced sighting' + (skippedBrokenAdvance === 1 ? '' : 's') + ' fell back to as-observed (the DR Leg it referenced no longer exists).';
+      }
+      setFixPlotStatus(msg, (skipped || skippedBrokenAdvance) ? 'error' : 'ok');
     })
     .catch(function (err) {
       console.error(err);

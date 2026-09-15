@@ -65,8 +65,27 @@
 
     <div class="card">
       <div class="section-title">Sightings in this Fix</div>
+      <p class="cache-blurb" style="margin-top:0;">
+        A sighting can be "advanced" -- shifted by a saved DR Leg's course and distance run -- to
+        combine it with a later sighting as a Running Fix. This isn't a different kind of fix,
+        just an ordinary one where a sighting's line-of-position has been moved forward in time
+        before being crossed with the others.
+      </p>
       <div class="saved-list" id="fixSightingsList"></div>
       <div class="empty-note" id="fixSightingsEmpty">No sightings in this fix yet. Add one below.</div>
+    </div>
+
+    <!-- RUNNING FIX: advance-via-DR-Leg panel -->
+    <div class="card" id="advanceLegPanel" style="display: none;">
+      <div class="section-title">Advance <span id="advanceLegTargetLabel"></span> via DR Leg</div>
+      <div class="saved-list" id="advanceLegList"></div>
+      <div class="empty-note" id="advanceLegEmpty">
+        No saved DR Legs yet. Log the run between this sighting and the one you want to combine
+        it with on the DR Leg page first.
+      </div>
+      <div class="save-export-row">
+        <button class="btn-secondary" id="btnCancelAdvance">Cancel</button>
+      </div>
     </div>
 
     <div class="card">
@@ -124,6 +143,7 @@
 <script src="js/storage.js"></script>
 <script src="js/chart.js"></script>
 <script src="js/fixStorage.js"></script>
+<script src="js/drlegStorage.js"></script>
 <script src="js/nav.js"></script>
 <script src="js/version.js"></script>
 <script src="js/fixes.js"></script>
