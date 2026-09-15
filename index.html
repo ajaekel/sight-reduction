@@ -26,6 +26,7 @@
         <a href="fixes.html" class="nav-menu-item">Fixes</a>
         <a href="planning.html" class="nav-menu-item">Planning</a>
         <a href="drleg.html" class="nav-menu-item">DR Leg</a>
+        <a href="passages.html" class="nav-menu-item">Passages</a>
       </div>
     </div>
   </div>
@@ -38,6 +39,9 @@
   </div>
   <div style="font-size: 0.75rem; color: #aaa; margin: -6px 0 4px;">
     Save name: <span id="autoNamePreview" style="color: var(--accent); font-family: monospace;">-</span>
+  </div>
+  <div class="save-export-row">
+    <button class="btn-secondary" id="btnAddToFixTop">Add to a Fix</button>
   </div>
 
   <!-- SECTION 1: HEADER & AP POSITION -->
@@ -431,7 +435,31 @@
     <button class="btn-secondary" id="btnSaveSightBottom">Save</button>
     <button class="btn-secondary" id="btnExportJsonBottom">Export</button>
     <button class="btn-secondary" id="btnImportBottom">Import</button>
+    <button class="btn-clear-all" id="btnClearAllBottom">Clear</button>
   </div>
+  <div class="save-export-row">
+    <button class="btn-secondary" id="btnAddToFixBottom">Add to a Fix</button>
+  </div>
+
+  <!-- ADD TO FIX -->
+  <div class="card" id="addToFixPanel" style="display: none;">
+    <div class="section-title">Add to a Fix</div>
+    <div class="form-group">
+      <label>Fix</label>
+      <select id="addToFixSelect">
+        <option value="__new__">+ Create a new fix</option>
+      </select>
+    </div>
+    <div class="form-group" id="newFixNameGroup">
+      <label>New fix name</label>
+      <input type="text" id="newFixNameInput" placeholder="e.g. Morning stars">
+    </div>
+    <div class="save-export-row">
+      <button class="btn-secondary" id="btnConfirmAddToFix">Add</button>
+      <button class="btn-secondary" id="btnCancelAddToFix">Cancel</button>
+    </div>
+  </div>
+
   <p class="cache-blurb" style="margin-top: 12px;">
     To view, load, or delete previously saved sightings, see the
     <a href="sightings.html" style="color: var(--accent);">Sightings</a> page.

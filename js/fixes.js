@@ -24,6 +24,9 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('toggleShowAzimuth').addEventListener('change', renderCurrentPlot);
   document.getElementById('methodLeastSquares').addEventListener('click', function () { setFixMethod(false); });
   document.getElementById('methodBisectors').addEventListener('click', function () { setFixMethod(true); });
+  document.getElementById('btnSaveFixPosition').addEventListener('click', onSaveFixPosition);
+  document.getElementById('btnFixToSighting').addEventListener('click', onFixToSighting);
+  document.getElementById('btnFixToDrLeg').addEventListener('click', onFixToDrLeg);
 
   window.addEventListener('hashchange', routeFromHash);
   routeFromHash();
@@ -161,7 +164,19 @@ function openFix(id) {
     document.getElementById('fixChartCard').style.display = 'none';
     document.getElementById('fixPlotStatus').textContent = '';
     lastChartInput = null;
-    setFixMethodState(false); // fresh fix: always start on least-squares
+    // Reflect whatever was last saved (if anything) immediately, before the
+    // plot even loads -- renderCurrentPlot() below will refresh this to the
+    // live-computed value once sightings are fetched, which may differ if
+    // anything's changed since the last Save.
+    document.getElementById('fixPositionCard').style.display = fix.sightingIds.length ? 'block' : 'none';
+    updateFixPositionButtons();
+    // Reflect whichever method was actually saved (if any) -- not just
+    // always defaulting to least-squares. renderCurrentPlot() below will
+    // fall back to least-squares on its own if this fix no longer has
+    // enough active sightings to support bisectors (see its own guard),
+    // so this only needs to express what was last explicitly saved, not
+    // re-validate it.
+    setFixMethodState(fix.resolvedPositionMethod === 'bisector');
 
     renderFixSightings(myToken);
     renderAvailableSightings(myToken);
@@ -369,6 +384,8 @@ function autoPlotFix() {
           lon: pos.lon,
           zn: record.results.zn,
           interceptNM: record.results.interceptNM,
+          observationTime: record.results.observationTime, // ISO UTC -- used to timestamp the Fix's cached resolvedPosition
+          tzOffset: record.position.tzOffset, // carried alongside, for handoffs built from the resolved position (see onFixToSighting/onFixToDrLeg)
           label: labels.title,
           color: SightCalc.paletteColor(i),
           badgeNumber: i + 1
@@ -409,6 +426,82 @@ function formatInterceptBadge(interceptNM) {
 }
 
 /**
+ * Tracks the Fix's resolved position IN MEMORY on every render (so it's
+ * always available to the "Use This Fix" actions below), but deliberately
+ * does NOT persist it automatically -- see onSaveFixPosition(). Previously
+ * FixStorage never stored a position at all (it was recomputed live on
+ * every view and discarded); toggling between least-squares and bisectors
+ * to compare them also shouldn't silently change what's saved, so caching
+ * here is memory-only and persisting is a separate, deliberate choice of
+ * which method's answer to commit to.
+ *
+ * Timestamped with the LATEST observation time among the actively-plotted
+ * sightings, matching the usual convention that a fix's time is the time of
+ * its most recent constituent sight. sourceId is stamped as this Fix's own
+ * id right away (unlike a DR Leg's live endPosition, a Fix always has a
+ * stable id already -- FixStorage.save() assigns one the moment the fix is
+ * first created, before any sightings are even added), so anything that
+ * later copies this position elsewhere (a new Sight's AP, a DR Leg's start)
+ * can say which Fix it came from. tzOffset/method are tracked alongside,
+ * not inside the Position itself (Position is intentionally tz- and
+ * method-agnostic), so the handoffs below can reconstruct a local
+ * date/time and the Save button can report which method was used.
+ */
+function cacheResolvedPosition(fixResult, activeSightings) {
+  document.getElementById('fixPositionCard').style.display = activeSightings.length ? 'block' : 'none';
+
+  if (!fixResult.solvable || typeof fixResult.lat !== 'number' || typeof fixResult.lon !== 'number') {
+    currentFix.resolvedPosition = null;
+    updateFixPositionButtons();
+    return;
+  }
+
+  var latest = null;
+  activeSightings.forEach(function (s) {
+    if (s.observationTime && (!latest || s.observationTime > latest.observationTime)) latest = s;
+  });
+  if (!latest) { currentFix.resolvedPosition = null; updateFixPositionButtons(); return; }
+
+  currentFix.resolvedPosition = SightCalc.makePosition(latest.observationTime, fixResult.lat, fixResult.lon, SightCalc.POSITION_SOURCE_TYPES.FIX, currentFix.id);
+  currentFix.resolvedPositionTzOffset = latest.tzOffset;
+  currentFix.resolvedPositionMethod = fixResult.source; // 'bisector' | 'least-squares'
+  updateFixPositionButtons();
+}
+
+function updateFixPositionButtons() {
+  var ready = !!currentFix.resolvedPosition;
+  document.getElementById('btnSaveFixPosition').disabled = !ready;
+  document.getElementById('btnFixToSighting').disabled = !ready;
+  document.getElementById('btnFixToDrLeg').disabled = !ready;
+}
+
+/** Explicit, deliberate persistence of the currently-displayed resolved position -- see cacheResolvedPosition's comment on why this isn't automatic. */
+function onSaveFixPosition() {
+  if (!currentFix.resolvedPosition) return;
+  var methodLabel = currentFix.resolvedPositionMethod === 'bisector' ? 'bisectors' : 'least-squares';
+  FixStorage.save(currentFix).then(function () {
+    showToast('Saved fix position (' + methodLabel + ').');
+  }).catch(function (err) {
+    console.error(err);
+    showToast('Could not save (storage may be full or unavailable).', true);
+  });
+}
+
+function onFixToSighting() {
+  if (!currentFix.resolvedPosition) return;
+  var handoff = { position: currentFix.resolvedPosition, tzOffset: currentFix.resolvedPositionTzOffset };
+  sessionStorage.setItem('ocsrApHandoff', JSON.stringify(handoff));
+  location.href = 'index.html';
+}
+
+function onFixToDrLeg() {
+  if (!currentFix.resolvedPosition) return;
+  var handoff = { position: currentFix.resolvedPosition, tzOffset: currentFix.resolvedPositionTzOffset };
+  sessionStorage.setItem('ocsrDrLegStartHandoff', JSON.stringify(handoff));
+  location.href = 'drleg.html';
+}
+
+/**
  * Re-renders the already-fetched plot using the current toggle/method/active
  * states -- no re-fetch needed. The legend always lists every plottable
  * sighting (so a deselected one can be switched back on); only the ones in
@@ -431,6 +524,7 @@ function renderCurrentPlot() {
 
   var container = document.getElementById('fixChartContainer');
   var result = SightChart.renderMultiSightChart(container, plotInput, opts);
+  cacheResolvedPosition(result.fix, plotInput);
 
   var legendEl = document.getElementById('fixChartLegend');
   legendEl.innerHTML = '';

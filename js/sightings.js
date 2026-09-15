@@ -20,6 +20,9 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('fileImportJson').click();
   });
   document.getElementById('fileImportJson').addEventListener('change', onImportJson);
+  document.getElementById('addToFixSelect').addEventListener('change', updateAddToFixPanel);
+  document.getElementById('btnConfirmAddToFix').addEventListener('click', onConfirmAddToFix);
+  document.getElementById('btnCancelAddToFix').addEventListener('click', closeAddToFixPanel);
 });
 
 /**
@@ -118,12 +121,14 @@ function refreshSavedList() {
         '</div>' +
         '<div class="saved-item-actions">' +
           '<button class="btn-mini btn-mini-load">Load</button>' +
+          '<button class="btn-mini btn-mini-fix">Add to Fix</button>' +
           '<button class="btn-mini btn-mini-del">Delete</button>' +
         '</div>';
 
       item.querySelector('.saved-item-title').textContent = title;
       item.querySelector('.saved-item-meta').textContent = meta;
       item.querySelector('.btn-mini-load').addEventListener('click', function () { onLoadSighting(entry.id); });
+      item.querySelector('.btn-mini-fix').addEventListener('click', function () { openAddToFixPanel(entry.id); });
       item.querySelector('.btn-mini-del').addEventListener('click', function () { onDeleteSighting(entry.id); });
 
       listEl.appendChild(item);
@@ -131,5 +136,74 @@ function refreshSavedList() {
   }).catch(function (err) {
     console.error(err);
     showToast('Could not load saved sightings.', true);
+  });
+}
+
+/**
+ * "Add to a Fix" for a specific saved sighting (per-row, this page). Same
+ * shared inline-panel pattern as index.html's version (see app.js), just
+ * tracking WHICH sighting the panel currently targets, since this page
+ * lists many.
+ */
+var _addToFixTargetId = null;
+
+function openAddToFixPanel(sightId) {
+  _addToFixTargetId = sightId;
+
+  var select = document.getElementById('addToFixSelect');
+  select.innerHTML = '<option value="__new__">+ Create a new fix</option>';
+
+  FixStorage.list().then(function (entries) {
+    entries.forEach(function (entry) {
+      var opt = document.createElement('option');
+      opt.value = entry.id;
+      opt.textContent = entry.name || 'Untitled Fix';
+      select.appendChild(opt);
+    });
+    var panel = document.getElementById('addToFixPanel');
+    panel.style.display = 'block';
+    updateAddToFixPanel();
+    if (panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
+
+function updateAddToFixPanel() {
+  var isNew = document.getElementById('addToFixSelect').value === '__new__';
+  document.getElementById('newFixNameGroup').style.display = isNew ? 'block' : 'none';
+  if (isNew && !document.getElementById('newFixNameInput').value) {
+    var d = new Date();
+    document.getElementById('newFixNameInput').value = 'Fix - ' + (d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0') + '/' + d.getFullYear();
+  }
+}
+
+function closeAddToFixPanel() {
+  document.getElementById('addToFixPanel').style.display = 'none';
+  _addToFixTargetId = null;
+}
+
+function onConfirmAddToFix() {
+  var select = document.getElementById('addToFixSelect');
+  var sightId = _addToFixTargetId;
+  if (!sightId) { closeAddToFixPanel(); return; }
+
+  var fixPromise;
+  if (select.value === '__new__') {
+    var name = document.getElementById('newFixNameInput').value.trim() || 'Untitled Fix';
+    fixPromise = FixStorage.save({ name: name, sightingIds: [] });
+  } else {
+    fixPromise = FixStorage.get(select.value);
+  }
+
+  fixPromise.then(function (fix) {
+    if (!fix) throw new Error('Fix not found');
+    if (fix.sightingIds.indexOf(sightId) === -1) fix.sightingIds.push(sightId);
+    if (fix.activeSightingIds && fix.activeSightingIds.indexOf(sightId) === -1) fix.activeSightingIds.push(sightId);
+    return FixStorage.save(fix);
+  }).then(function (fix) {
+    showToast('Added to "' + fix.name + '".');
+    closeAddToFixPanel();
+  }).catch(function (err) {
+    console.error(err);
+    showToast('Could not add to that fix.', true);
   });
 }

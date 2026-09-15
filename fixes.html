@@ -28,6 +28,7 @@
             <a href="fixes.html" class="nav-menu-item">Fixes</a>
             <a href="planning.html" class="nav-menu-item">Planning</a>
             <a href="drleg.html" class="nav-menu-item">DR Leg</a>
+            <a href="passages.html" class="nav-menu-item">Passages</a>
           </div>
         </div>
       </div>
@@ -95,6 +96,22 @@
         <div class="chart-legend" id="fixChartLegend"></div>
         <div class="cache-progress" id="fixResultStatus"></div>
         <div class="chart-caption" id="fixResultCaption"></div>
+      </div>
+    </div>
+
+    <div class="card" id="fixPositionCard" style="display: none;">
+      <div class="section-title">Use This Fix</div>
+      <p class="cache-blurb" style="margin-top:0;">
+        Uses whichever method (least-squares or bisectors) is currently selected above. "Save
+        Position" is a deliberate action -- toggling methods doesn't save anything on its own,
+        so switching to compare doesn't silently change what's stored for this fix.
+      </p>
+      <div class="save-export-row">
+        <button class="btn-secondary" id="btnSaveFixPosition" disabled>Save Position</button>
+      </div>
+      <div class="save-export-row">
+        <button class="btn-secondary" id="btnFixToSighting" disabled>New Sighting from Fix Position</button>
+        <button class="btn-secondary" id="btnFixToDrLeg" disabled>Send to DR Leg</button>
       </div>
     </div>
   </div>

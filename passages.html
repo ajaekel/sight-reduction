@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#121212">
+  <title>Passages - Offline Sight Reduction</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app-container">
+  <div class="header-row">
+    <h1 style="margin-bottom: 2px;">Passages</h1>
+    <div class="header-controls">
+      <div id="swVersion" style="font-size: 0.75rem; color: var(--accent, #888); font-family: monospace;">
+        Version: loading...
+      </div>
+      <div class="header-buttons">
+        <div class="nav-menu-wrap">
+          <button class="btn-hamburger" id="btnNavMenu" aria-label="Menu" aria-haspopup="true" aria-expanded="false" type="button">
+            <span></span><span></span><span></span>
+          </button>
+          <div class="nav-menu" id="navMenu">
+            <div class="nav-menu-header">Sightings</div>
+            <a href="index.html" class="nav-menu-item nav-menu-sub">New sighting</a>
+            <a href="sightings.html" class="nav-menu-item nav-menu-sub">Sightings</a>
+            <a href="fixes.html" class="nav-menu-item">Fixes</a>
+            <a href="planning.html" class="nav-menu-item">Planning</a>
+            <a href="drleg.html" class="nav-menu-item">DR Leg</a>
+            <a href="passages.html" class="nav-menu-item">Passages</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIST VIEW -->
+  <div id="passageListView">
+    <div class="fix-list-header">
+      <p class="cache-blurb" style="margin: 0; flex: 1;">
+        A Passage is the chronological record of a voyage: a starting position plus every Sight,
+        Fix, and DR Leg that belongs to it, ordered by time.
+      </p>
+      <button class="btn-new-fix" id="btnNewPassage" type="button">+ New</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Your Passages</div>
+      <div class="saved-list" id="passageList"></div>
+      <div class="empty-note" id="passageListEmpty">No passages yet.</div>
+    </div>
+  </div>
+
+  <!-- NEW PASSAGE -->
+  <div id="passageNewView" style="display: none;">
+    <div class="card">
+      <div class="section-title">
+        <button class="btn-back" id="btnBackFromNew" type="button" aria-label="Back to Passages list">&larr;</button>
+        New Passage
+      </div>
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" id="newPassageName" placeholder="e.g. Newport to Bermuda">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <input type="text" id="newPassageNotes" placeholder="optional">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Starting Position (optional)</div>
+      <p class="cache-blurb" style="margin-top:0;">
+        Leave blank if this passage should begin from an existing Fix or DR Leg you assign after
+        creating it.
+      </p>
+      <div class="form-group">
+        <div class="body-inline-row">
+          <div class="body-inline-col" style="flex: 1.1;">
+            <label>Date (local)</label>
+            <input type="date" id="newPassageDate">
+          </div>
+          <div class="body-inline-col">
+            <label>Time (24h)</label>
+            <span class="time-hm">
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="newPassageTimeH" placeholder="09">
+              <span>:</span>
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="newPassageTimeM" placeholder="00">
+            </span>
+          </div>
+          <div class="body-inline-col" style="flex: 1;">
+            <label>Timezone Offset (UTC Offset in Hours)</label>
+            <input type="text" inputmode="decimal" id="newPassageTz" placeholder="-4" value="-4">
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <div class="input-row">
+          <div style="width: 140px; flex-shrink: 0; font-size: 0.85rem; color: #aaa;">
+            Latitude<br><span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span>
+          </div>
+          <input type="text" inputmode="decimal" id="newPassageLatDeg" placeholder="40" onfocus="this.select()">
+          <input type="text" inputmode="decimal" id="newPassageLatMin" placeholder="32.2" onfocus="this.select()">
+          <select id="newPassageLatNS">
+            <option value="N">N</option>
+            <option value="S">S</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <div class="input-row">
+          <div style="width: 140px; flex-shrink: 0; font-size: 0.85rem; color: #aaa;">
+            Longitude<br><span style="font-size:0.75rem; color:#888;">(Deg / Min / E-W)</span>
+          </div>
+          <input type="text" inputmode="decimal" id="newPassageLonDeg" placeholder="073" onfocus="this.select()">
+          <input type="text" inputmode="decimal" id="newPassageLonMin" placeholder="56.3" onfocus="this.select()">
+          <select id="newPassageLonEW">
+            <option value="W">W</option>
+            <option value="E">E</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn-secondary" id="btnCreatePassage" type="button">Create Passage</button>
+    </div>
+  </div>
+
+  <!-- DETAIL VIEW -->
+  <div id="passageDetailView" style="display: none;">
+    <div class="card">
+      <div class="section-title">
+        <button class="btn-back" id="btnBackToList" type="button" aria-label="Back to Passages list">&larr;</button>
+        <span id="passageDetailName">Passage</span>
+      </div>
+      <div class="cache-summary-text" id="passageDetailMeta"></div>
+      <div id="passageDetailNotes" style="font-size: 0.85rem; color: #aaa; margin-top: 6px;"></div>
+      <button class="btn-secondary btn-danger-outline" id="btnDeletePassage" type="button">Delete This Passage</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Starting Position</div>
+      <div id="passageStartingPosition" class="cache-summary-text">None set.</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Timeline</div>
+      <div class="saved-list" id="passageTimelineList"></div>
+      <div class="empty-note" id="passageTimelineEmpty">
+        Nothing in this passage yet. Assign an existing Sight, Fix, or DR Leg below.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Add an Existing Sight</div>
+      <div class="saved-list" id="availableSightsList"></div>
+      <div class="empty-note" id="availableSightsEmpty">No unassigned sights available.</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Add an Existing Fix</div>
+      <div class="saved-list" id="availableFixesList"></div>
+      <div class="empty-note" id="availableFixesEmpty">No unassigned fixes available.</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Add an Existing DR Leg</div>
+      <div class="saved-list" id="availableLegsList"></div>
+      <div class="empty-note" id="availableLegsEmpty">No unassigned DR legs available.</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/calc.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/fixStorage.js"></script>
+<script src="js/drlegStorage.js"></script>
+<script src="js/passageStorage.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/version.js"></script>
+<script src="js/passages.js"></script>
+</body>
+</html>

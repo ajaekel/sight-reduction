@@ -37,6 +37,11 @@
         if (!fix.id) fix.id = uid();
         if (!Array.isArray(fix.sightingIds)) fix.sightingIds = [];
         fix.savedAt = new Date().toISOString();
+        // Defaulted here rather than at every call site -- see storage.js's
+        // save() for the same field, same reasoning: a Fix belongs to at
+        // most one Passage, and null until a Passage feature actually
+        // assigns one.
+        if (fix.passageId === undefined) fix.passageId = null;
 
         localStorage.setItem(PREFIX + fix.id, JSON.stringify(fix));
 
@@ -81,10 +86,33 @@
     });
   }
 
+  /**
+   * Assigns (or clears, with passageId=null) this fix's passageId, in
+   * place -- deliberately NOT routed through save(), so filing an existing
+   * fix under a Passage doesn't touch its savedAt/sightingIds/resolved
+   * position or anything else about it. Purely organizational metadata.
+   * Resolves the updated record, or null if not found.
+   */
+  function setPassageId(id, passageId) {
+    return new Promise(function (resolve, reject) {
+      try {
+        var raw = localStorage.getItem(PREFIX + id);
+        if (!raw) { resolve(null); return; }
+        var record = JSON.parse(raw);
+        record.passageId = passageId;
+        localStorage.setItem(PREFIX + id, JSON.stringify(record));
+        resolve(record);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
   global.FixStorage = {
     save: save,
     list: list,
     get: get,
-    remove: remove
+    remove: remove,
+    setPassageId: setPassageId
   };
 })(window);

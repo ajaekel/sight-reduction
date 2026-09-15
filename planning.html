@@ -28,6 +28,7 @@
             <a href="fixes.html" class="nav-menu-item">Fixes</a>
             <a href="planning.html" class="nav-menu-item">Planning</a>
             <a href="drleg.html" class="nav-menu-item">DR Leg</a>
+            <a href="passages.html" class="nav-menu-item">Passages</a>
           </div>
         </div>
       </div>
@@ -305,6 +306,25 @@
     <div><strong>Moonrise:</strong> <span id="resMoonrise">--:--</span></div>
     <div><strong>Moonset:</strong> <span id="resMoonset">--:--</span></div>
     <div><strong>Moon Meridian Passage:</strong> <span id="resMoonTransit">--:--</span></div>
+  </div>
+
+  <div class="form-group" style="margin-top: 12px;">
+    <label>Send AP + this event's time to DR Leg as its start</label>
+    <select id="drLegEventSelect">
+      <option value="resNauticalTwilightAM">Nautical Twilight begins</option>
+      <option value="resCivilTwilightAM">Civil Twilight begins</option>
+      <option value="resSunrise" selected>Sunrise</option>
+      <option value="resSunset">Sunset</option>
+      <option value="resCivilTwilightPM">Civil Twilight ends</option>
+      <option value="resNauticalTwilightPM">Nautical Twilight ends</option>
+      <option value="resSunTransit">Sun Meridian Passage</option>
+      <option value="resMoonrise">Moonrise</option>
+      <option value="resMoonset">Moonset</option>
+      <option value="resMoonTransit">Moon Meridian Passage</option>
+    </select>
+  </div>
+  <div class="save-export-row">
+    <button class="btn-secondary" id="btnToDrLeg" type="button" disabled>Send to DR Leg</button>
   </div>
 </div>
 

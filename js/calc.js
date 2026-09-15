@@ -761,6 +761,64 @@
   }
 
   /**
+   * Rounds a UTC instant (ms since epoch) UP to the next whole minute --
+   * a no-op if it's already exact. For writing a precise instant (which may
+   * carry seconds, e.g. a Fix's resolvedPosition.time, timestamped from a
+   * Sight's own observation seconds) into a field that can only represent
+   * whole minutes (DR Leg's start time has no seconds input, matching how a
+   * DR leg is actually logged in practice). Rounds UP, deliberately never
+   * down: flooring would make the derived time appear to precede the exact
+   * instant it was derived from -- e.g. a Fix resolved at 21:17:40 flooring
+   * to a DR Leg start of 21:17 would make the leg look like it began before
+   * the very fix that established its starting position, which can't be
+   * right. Operates on milliseconds (not a local date/secOfDay pair) so a
+   * rollover into the next minute, hour, day, or even month/year is just
+   * ordinary arithmetic -- no calendar logic needed here at all.
+   */
+  function roundUpToMinuteMs(utcMs) {
+    var minuteMs = 60000;
+    return Math.ceil(utcMs / minuteMs) * minuteMs;
+  }
+
+  /**
+   * Position { time, lat, lon, sourceType, sourceId } -- the one shared shape
+   * for "a place at a moment, and how we know it" used across DR Leg, Fix,
+   * Passage, and the handoffs between pages. Before this existed as one
+   * type, the same concept was scattered in three incompatible partial
+   * forms: a Sight's AP had no time attached to it at all, a Fix's resolved
+   * point had neither a stored time nor a persisted value in the first
+   * place (recomputed live and thrown away), and a DR Leg's result had a
+   * time but no record of where it came from.
+   *
+   * time: ISO 8601 UTC string, or null if only a date (no specific instant)
+   *       is meaningful -- e.g. Planning's AP isn't tied to one instant.
+   * lat/lon: signed decimal degrees (N/E positive).
+   * sourceType: one of POSITION_SOURCE_TYPES -- how much to trust this
+   *       position. KNOWN is exact (GPS, a charted mark, hand-verified);
+   *       FIX is the best current celestial/other estimate; DR is
+   *       provisional and accumulates uncertainty the longer it's been
+   *       projected without a new fix.
+   * sourceId: the id of the specific record this position came from (a Fix
+   *       id, a DR Leg id), or null if it isn't backed by one -- e.g. a
+   *       hand-typed KNOWN position, or a DR Leg's own live result before
+   *       it's been saved (it can't reference a record that doesn't exist
+   *       yet). This is what lets a UI eventually say "current position:
+   *       DR, derived from DR Leg #7" instead of just "DR" with no way to
+   *       go look at the leg that produced it. Set by whichever code is
+   *       handing this position to another record, at the moment of
+   *       handoff -- not necessarily by whoever first computed it (e.g. a
+   *       Fix's resolvedPosition gets its own id stamped on save, but a
+   *       live/unsaved DR Leg's endPosition stays null until that leg is
+   *       actually saved, since only then does it have a stable id to
+   *       point back to).
+   */
+  var POSITION_SOURCE_TYPES = { KNOWN: 'KNOWN', FIX: 'FIX', DR: 'DR' };
+
+  function makePosition(time, lat, lon, sourceType, sourceId) {
+    return { time: time || null, lat: lat, lon: lon, sourceType: sourceType, sourceId: sourceId || null };
+  }
+
+  /**
    * Dead Reckoning position via Mid-Latitude Sailing (Bowditch/Dutton's
    * standard method for exactly this: given a start position, a true
    * course, and a distance run, find the resulting position). Accurate for
@@ -850,6 +908,9 @@
     computeTwilightTimes: computeTwilightTimes,
     localDateTimeToUtcMs: localDateTimeToUtcMs,
     utcMsToLocalDateTime: utcMsToLocalDateTime,
+    roundUpToMinuteMs: roundUpToMinuteMs,
+    POSITION_SOURCE_TYPES: POSITION_SOURCE_TYPES,
+    makePosition: makePosition,
     drPosition: drPosition,
     computeDrLeg: computeDrLeg,
     interpolateGha: interpolateGha,

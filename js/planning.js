@@ -174,6 +174,8 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('modeAutoFill').addEventListener('click', function () { setPlanningMode('autofill'); });
   document.getElementById('btnFetchRstt').addEventListener('click', onFetchRstt);
   document.getElementById('btnStartSight').addEventListener('click', onStartSight);
+  document.getElementById('btnToDrLeg').addEventListener('click', onToDrLeg);
+  document.getElementById('drLegEventSelect').addEventListener('change', updateDrLegButton);
 
   // Digit-box behavior (filtering/validation/auto-advance) for every H/M pair...
   PLANNING_FIELD_IDS.forEach(function (id) {
@@ -267,6 +269,9 @@ function interpolatedLmt(belowId, aboveId, refBelow, refAbove, apLat) {
 }
 
 /** { zoneSec, dayOffset } -> "HH:MM" with a "(+1 day)"-style suffix if the conversion crossed a calendar day. */
+/** event id -> {zoneSec, dayOffset} | null -- the structured data behind what's shown as text, needed to build an accurate Position (see updateDrLegButton/onToDrLeg) rather than re-parsing display strings. */
+var _planningResults = {};
+
 function formatResultTime(zoneSec, dayOffset) {
   var timeStr = SightCalc.secondsToTimeString(zoneSec).slice(0, 5);
   if (dayOffset === 0) return timeStr;
@@ -275,6 +280,7 @@ function formatResultTime(zoneSec, dayOffset) {
 
 function setResult(elId, result) {
   document.getElementById(elId).textContent = result ? formatResultTime(result.zoneSec, result.dayOffset) : '--:--';
+  _planningResults[elId] = result ? { zoneSec: result.zoneSec, dayOffset: result.dayOffset } : null;
 }
 
 function clearResults() {
@@ -284,6 +290,7 @@ function clearResults() {
     'resMoonrise', 'resMoonset', 'resMoonTransit'
   ].forEach(function (id) {
     document.getElementById(id).textContent = '--:--';
+    _planningResults[id] = null;
   });
 }
 
@@ -385,23 +392,32 @@ function refreshManualResults() {
 // ---------------------------------------------------------------------
 
 /** Renders a USNO fetch result (fresh or restored from cache) into the result spans. */
+/** Sets an auto-fill result's displayed text AND stashes the equivalent structured data into _planningResults (dayOffset always 0 -- USNO's fetch is scoped to exactly the requested calendar date, no rollover to track). */
+function setRsttResultText(elId, text) {
+  document.getElementById(elId).textContent = text;
+  var sec = parseHHMM(text);
+  _planningResults[elId] = (sec === null) ? null : { zoneSec: sec, dayOffset: 0 };
+}
+
 function renderRsttResult(pos, result) {
-  document.getElementById('resSunrise').textContent = result.sunrise || 'Does not occur';
-  document.getElementById('resSunset').textContent = result.sunset || 'Does not occur';
-  document.getElementById('resCivilTwilightAM').textContent = result.civilTwilightAM || 'Does not occur';
-  document.getElementById('resCivilTwilightPM').textContent = result.civilTwilightPM || 'Does not occur';
-  document.getElementById('resSunTransit').textContent = result.sunTransit || 'Does not occur';
-  document.getElementById('resMoonrise').textContent = result.moonrise || 'Does not occur';
-  document.getElementById('resMoonset').textContent = result.moonset || 'Does not occur';
-  document.getElementById('resMoonTransit').textContent = result.moonTransit || 'Does not occur';
+  setRsttResultText('resSunrise', result.sunrise || 'Does not occur');
+  setRsttResultText('resSunset', result.sunset || 'Does not occur');
+  setRsttResultText('resCivilTwilightAM', result.civilTwilightAM || 'Does not occur');
+  setRsttResultText('resCivilTwilightPM', result.civilTwilightPM || 'Does not occur');
+  setRsttResultText('resSunTransit', result.sunTransit || 'Does not occur');
+  setRsttResultText('resMoonrise', result.moonrise || 'Does not occur');
+  setRsttResultText('resMoonset', result.moonset || 'Does not occur');
+  setRsttResultText('resMoonTransit', result.moonTransit || 'Does not occur');
 
   // USNO's rstt/oneday service doesn't report Nautical Twilight at all, so it's
   // derived from the Sun data it DOES report (same approach as manual mode).
   var transitSec = parseHHMM(result.sunTransit);
   var twilight = transitSec === null ? null : SightCalc.computeTwilightTimes(pos.lat, transitSec, parseHHMM(result.sunrise), parseHHMM(result.sunset));
   var fmt = function (sec) { return (sec === null || sec === undefined) ? null : SightCalc.secondsToTimeString(sec).slice(0, 5); };
-  document.getElementById('resNauticalTwilightAM').textContent = (twilight && fmt(twilight.nauticalAM)) || 'Does not occur';
-  document.getElementById('resNauticalTwilightPM').textContent = (twilight && fmt(twilight.nauticalPM)) || 'Does not occur';
+  setRsttResultText('resNauticalTwilightAM', (twilight && fmt(twilight.nauticalAM)) || 'Does not occur');
+  setRsttResultText('resNauticalTwilightPM', (twilight && fmt(twilight.nauticalPM)) || 'Does not occur');
+
+  updateDrLegButton();
 }
 
 /** True if a cached fetch's inputs still match what's currently in the form. */
@@ -485,6 +501,40 @@ function refreshPlanning() {
 
   if (_planningMode === 'manual') refreshManualResults();
   // Auto-fill results only ever populate from an explicit button click.
+  updateDrLegButton();
+}
+
+/**
+ * Sends the current AP plus the currently-selected event's computed time to
+ * DR Leg as its start position (sessionStorage key 'ocsrDrLegStartHandoff',
+ * same shape fixes.html's "Send to DR Leg" already uses -- see
+ * applyPendingDrLegStartHandoff in js/drleg.js). Uses the structured
+ * {zoneSec, dayOffset} behind the displayed text (see _planningResults),
+ * not a re-parse of it, so a rollover like a post-midnight moonset still
+ * lands on the correct calendar date.
+ */
+function updateDrLegButton() {
+  var pos = getPlanningPosition();
+  var dateVal = document.getElementById('planDate').value;
+  var tzOffset = parseFloat(document.getElementById('planTzOffset').value);
+  var r = _planningResults[document.getElementById('drLegEventSelect').value];
+  document.getElementById('btnToDrLeg').disabled = !(pos && dateVal && !isNaN(tzOffset) && r);
+}
+
+function onToDrLeg() {
+  var pos = getPlanningPosition();
+  var dateVal = document.getElementById('planDate').value;
+  var tzOffset = parseFloat(document.getElementById('planTzOffset').value);
+  var r = _planningResults[document.getElementById('drLegEventSelect').value];
+  if (!pos || !dateVal || isNaN(tzOffset) || !r) return;
+
+  var utcMs = SightCalc.localDateTimeToUtcMs(dateVal, 0, tzOffset) + r.dayOffset * 86400000 + r.zoneSec * 1000;
+  // sourceId stays null: Planning's AP is a hand-entered field with no
+  // record of its own to point back to (unlike a Fix, which always has a
+  // stable id by the time it resolves a position).
+  var position = SightCalc.makePosition(new Date(utcMs).toISOString(), pos.lat, pos.lon, SightCalc.POSITION_SOURCE_TYPES.KNOWN, null);
+  sessionStorage.setItem('ocsrDrLegStartHandoff', JSON.stringify({ position: position, tzOffset: tzOffset }));
+  location.href = 'drleg.html';
 }
 
 function onStartSight() {

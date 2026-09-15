@@ -19,10 +19,19 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 /**
- * Consumes a one-time Date/TZ/AP handoff from planning.html's
- * "Start a Sight with this AP" (see sessionStorage key 'ocsrApHandoff' in
- * js/planning.js). Only this direction -- planning -> index -- exists
- * today; nothing currently reads FROM index.html's live fields.
+ * Consumes a one-time AP handoff via sessionStorage key 'ocsrApHandoff'.
+ * Two producers, two shapes, both supported:
+ *  - planning.html's "Start a Sight with this AP" sends the older simple
+ *    shape (date/tzOffset/latDeg/etc directly) -- Planning has no specific
+ *    time-of-day to offer, only a date, so this shape has none either.
+ *  - drleg.html sends the newer { position: {time,lat,lon,sourceType,sourceId}, tzOffset }
+ *    shape (calc.js's Position type -- see makePosition's own comment)
+ *    which carries an exact arrival instant, used below to pre-fill the
+ *    first sighting line's observation time as a starting guess. This is a
+ *    convenience, not a correctness fix -- the AP itself doesn't need a
+ *    time (reduceSight only ever reads the observation's own clock time),
+ *    it just saves a little typing on the common "DR to an event, then
+ *    observe" workflow.
  */
 function applyPendingHandoff() {
   var raw;
@@ -41,6 +50,48 @@ function applyPendingHandoff() {
     return false;
   }
 
+  if (h.position) {
+    // Newer Position-aware shape (currently: DR Leg).
+    var tzOffset = h.tzOffset;
+    var local = SightCalc.utcMsToLocalDateTime(new Date(h.position.time).getTime(), tzOffset);
+    var latDM = SightCalc.decimalToDM(Math.abs(h.position.lat));
+    var lonDM = SightCalc.decimalToDM(Math.abs(h.position.lon));
+
+    document.getElementById('sightDate').value = local.dateStr;
+    document.getElementById('tzOffset').value = tzOffset;
+    document.getElementById('latDeg').value = latDM.deg;
+    document.getElementById('latMin').value = latDM.min.toFixed(1);
+    document.getElementById('latNS').value = h.position.lat < 0 ? 'S' : 'N';
+    document.getElementById('lonDeg').value = lonDM.deg;
+    document.getElementById('lonMin').value = lonDM.min.toFixed(1);
+    document.getElementById('lonEW').value = h.position.lon < 0 ? 'W' : 'E';
+
+    var firstRow = document.querySelector('.sighting-item');
+    if (firstRow) {
+      var pad2 = function (n) { return String(n).padStart(2, '0'); };
+      var hh = Math.floor(local.secOfDay / 3600);
+      var mm = Math.floor((local.secOfDay % 3600) / 60);
+      var ss = local.secOfDay % 60;
+      firstRow.querySelector('.t-h').value = pad2(hh);
+      firstRow.querySelector('.t-m').value = pad2(mm);
+      firstRow.querySelector('.t-s').value = pad2(ss);
+    } else {
+      // Called early in initApp(), before addSightingLine(false) has created
+      // the first row yet -- stash it and apply once that row exists (see
+      // initApp(), right after addSightingLine(false)).
+      var pad2b = function (n) { return String(n).padStart(2, '0'); };
+      window._pendingObservationTime = {
+        h: pad2b(Math.floor(local.secOfDay / 3600)),
+        m: pad2b(Math.floor((local.secOfDay % 3600) / 60)),
+        s: pad2b(local.secOfDay % 60)
+      };
+    }
+
+    showToast('Date, time, time zone, and AP filled in from DR Leg.');
+    return true;
+  }
+
+  // Older simple shape (Planning) -- unchanged behavior.
   if (h.date) document.getElementById('sightDate').value = h.date;
   if (h.tzOffset !== undefined) document.getElementById('tzOffset').value = h.tzOffset;
   if (h.latDeg !== undefined) document.getElementById('latDeg').value = h.latDeg;
@@ -105,7 +156,9 @@ function initApp() {
   document.getElementById('btnAddSight').addEventListener('click', function () {
     addSightingLine(true);
   });
-  document.getElementById('btnClearAll').addEventListener('click', clearAllData);
+  ['btnClearAll', 'btnClearAllBottom'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', clearAllData);
+  });
 
   ['btnSaveSightTop', 'btnSaveSightBottom'].forEach(function (id) {
     document.getElementById(id).addEventListener('click', onSaveSight);
@@ -119,6 +172,12 @@ function initApp() {
     });
   });
   document.getElementById('fileImportJson').addEventListener('change', onImportJson);
+  ['btnAddToFixTop', 'btnAddToFixBottom'].forEach(function (id) {
+    document.getElementById(id).addEventListener('click', openAddToFixPanel);
+  });
+  document.getElementById('addToFixSelect').addEventListener('change', updateAddToFixPanel);
+  document.getElementById('btnConfirmAddToFix').addEventListener('click', onConfirmAddToFix);
+  document.getElementById('btnCancelAddToFix').addEventListener('click', closeAddToFixPanel);
   document.getElementById('btnFetchUsno').addEventListener('click', onFetchUsno);
   document.getElementById('btnCacheRange').addEventListener('click', onCacheRange);
   document.getElementById('btnClearCache').addEventListener('click', onClearCache);
@@ -196,6 +255,15 @@ function initApp() {
   });
 
   addSightingLine(false);
+  if (window._pendingObservationTime) {
+    var firstRowNow = document.querySelector('.sighting-item');
+    if (firstRowNow) {
+      firstRowNow.querySelector('.t-h').value = window._pendingObservationTime.h;
+      firstRowNow.querySelector('.t-m').value = window._pendingObservationTime.m;
+      firstRowNow.querySelector('.t-s').value = window._pendingObservationTime.s;
+    }
+    window._pendingObservationTime = null;
+  }
   handleBodyTypeChange();
   refreshLiveCalculations();
   refreshCacheSummary();
@@ -1661,6 +1729,76 @@ function onImportJson(evt) {
     evt.target.value = '';
   };
   reader.readAsText(file);
+}
+
+/**
+ * "Add to a Fix" opens a small inline panel (not a blocking prompt) to pick
+ * an existing Fix or name a new one. Operates on the sight this page
+ * currently has open -- it must already be saved (Fix references sightings
+ * by id, so there has to be one) -- and reuses the exact same
+ * "push sighting id, save" mutation fixes.js's own add-sighting flow uses.
+ */
+function openAddToFixPanel() {
+  if (!window._currentRecordId) {
+    showToast('Save this sight first, then add it to a Fix.', true);
+    return;
+  }
+
+  var select = document.getElementById('addToFixSelect');
+  select.innerHTML = '<option value="__new__">+ Create a new fix</option>';
+
+  FixStorage.list().then(function (entries) {
+    entries.forEach(function (entry) {
+      var opt = document.createElement('option');
+      opt.value = entry.id;
+      opt.textContent = entry.name || 'Untitled Fix';
+      select.appendChild(opt);
+    });
+    var panel = document.getElementById('addToFixPanel');
+    panel.style.display = 'block';
+    updateAddToFixPanel();
+    if (panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+}
+
+function updateAddToFixPanel() {
+  var isNew = document.getElementById('addToFixSelect').value === '__new__';
+  document.getElementById('newFixNameGroup').style.display = isNew ? 'block' : 'none';
+  if (isNew && !document.getElementById('newFixNameInput').value) {
+    var d = new Date();
+    document.getElementById('newFixNameInput').value = 'Fix - ' + (d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0') + '/' + d.getFullYear();
+  }
+}
+
+function closeAddToFixPanel() {
+  document.getElementById('addToFixPanel').style.display = 'none';
+}
+
+function onConfirmAddToFix() {
+  var select = document.getElementById('addToFixSelect');
+  var sightId = window._currentRecordId;
+  if (!sightId) { closeAddToFixPanel(); return; }
+
+  var fixPromise;
+  if (select.value === '__new__') {
+    var name = document.getElementById('newFixNameInput').value.trim() || 'Untitled Fix';
+    fixPromise = FixStorage.save({ name: name, sightingIds: [] });
+  } else {
+    fixPromise = FixStorage.get(select.value);
+  }
+
+  fixPromise.then(function (fix) {
+    if (!fix) throw new Error('Fix not found');
+    if (fix.sightingIds.indexOf(sightId) === -1) fix.sightingIds.push(sightId);
+    if (fix.activeSightingIds && fix.activeSightingIds.indexOf(sightId) === -1) fix.activeSightingIds.push(sightId);
+    return FixStorage.save(fix);
+  }).then(function (fix) {
+    showToast('Added to "' + fix.name + '".');
+    closeAddToFixPanel();
+  }).catch(function (err) {
+    console.error(err);
+    showToast('Could not add to that fix.', true);
+  });
 }
 
 
