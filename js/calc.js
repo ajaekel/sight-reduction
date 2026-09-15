@@ -761,6 +761,26 @@
   }
 
   /**
+   * Rounds a UTC instant (ms since epoch) UP to the next whole minute --
+   * a no-op if it's already exact. For writing a precise instant (which may
+   * carry seconds, e.g. a Fix's resolvedPosition.time, timestamped from a
+   * Sight's own observation seconds) into a field that can only represent
+   * whole minutes (DR Leg's start time has no seconds input, matching how a
+   * DR leg is actually logged in practice). Rounds UP, deliberately never
+   * down: flooring would make the derived time appear to precede the exact
+   * instant it was derived from -- e.g. a Fix resolved at 21:17:40 flooring
+   * to a DR Leg start of 21:17 would make the leg look like it began before
+   * the very fix that established its starting position, which can't be
+   * right. Operates on milliseconds (not a local date/secOfDay pair) so a
+   * rollover into the next minute, hour, day, or even month/year is just
+   * ordinary arithmetic -- no calendar logic needed here at all.
+   */
+  function roundUpToMinuteMs(utcMs) {
+    var minuteMs = 60000;
+    return Math.ceil(utcMs / minuteMs) * minuteMs;
+  }
+
+  /**
    * Position { time, lat, lon, sourceType, sourceId } -- the one shared shape
    * for "a place at a moment, and how we know it" used across DR Leg, Fix,
    * Passage, and the handoffs between pages. Before this existed as one
@@ -888,6 +908,7 @@
     computeTwilightTimes: computeTwilightTimes,
     localDateTimeToUtcMs: localDateTimeToUtcMs,
     utcMsToLocalDateTime: utcMsToLocalDateTime,
+    roundUpToMinuteMs: roundUpToMinuteMs,
     POSITION_SOURCE_TYPES: POSITION_SOURCE_TYPES,
     makePosition: makePosition,
     drPosition: drPosition,

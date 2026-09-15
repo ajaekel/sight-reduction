@@ -335,6 +335,15 @@ function onToPlanning() {
  * clears duration/end-time (unknown for the new leg). SOG/course are left
  * alone -- shared by both call sites below since they each decide separately
  * whether carrying them over makes sense.
+ *
+ * Rounds endPosition.time UP to the next whole minute before writing it
+ * into the (seconds-less) start time field -- see
+ * applyPendingDrLegStartHandoff's comment on why up, not down. In today's
+ * DR Leg math this is normally already exact (duration/end-time entry has
+ * no seconds either, so a leg's own endPosition never accumulates a
+ * sub-minute remainder on its own), but rounding defensively here costs
+ * nothing and keeps this function correct regardless of what produced the
+ * position it's given.
  */
 function chainFromPosition(endPosition, tzOffset) {
   var dm = positionToDegMinFields(endPosition);
@@ -345,7 +354,8 @@ function chainFromPosition(endPosition, tzOffset) {
   document.getElementById('drLonMin').value = dm.lonMin;
   document.getElementById('drLonEW').value = dm.lonEW;
 
-  var local = SightCalc.utcMsToLocalDateTime(new Date(endPosition.time).getTime(), tzOffset);
+  var roundedMs = SightCalc.roundUpToMinuteMs(new Date(endPosition.time).getTime());
+  var local = SightCalc.utcMsToLocalDateTime(roundedMs, tzOffset);
   document.getElementById('drStartDate').value = local.dateStr;
   var pad2 = function (n) { return String(n).padStart(2, '0'); };
   setFieldValue('drStartTime', pad2(Math.floor(local.secOfDay / 3600)) + ':' + pad2(Math.floor((local.secOfDay % 3600) / 60)));
@@ -464,6 +474,13 @@ function onDeleteLeg(id) {
  * the handoff already stamped it correctly (a Fix stamps its own id when
  * caching resolvedPosition; Planning has no id of its own, so it sends
  * sourceType KNOWN with no sourceId), so there's nothing to re-derive here.
+ *
+ * The incoming position.time may carry seconds (a Fix's resolvedPosition.time
+ * is timestamped from a Sight's own observation seconds; Planning's computed
+ * event times can too) -- but DR Leg's start time field is minutes-only, no
+ * seconds input. Rounded UP to the next whole minute (see
+ * SightCalc.roundUpToMinuteMs) rather than truncated down, so the leg's
+ * start never appears to precede the exact instant it was derived from.
  */
 function applyPendingDrLegStartHandoff() {
   var raw;
@@ -483,7 +500,8 @@ function applyPendingDrLegStartHandoff() {
   }
   if (!h.position) return false;
 
-  var local = SightCalc.utcMsToLocalDateTime(new Date(h.position.time).getTime(), h.tzOffset);
+  var roundedMs = SightCalc.roundUpToMinuteMs(new Date(h.position.time).getTime());
+  var local = SightCalc.utcMsToLocalDateTime(roundedMs, h.tzOffset);
   var dm = positionToDegMinFields(h.position);
   var pad2 = function (n) { return String(n).padStart(2, '0'); };
 
