@@ -371,7 +371,34 @@ select {
 .time-hm {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  background: #2a2a2a;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 6px;
+}
+/* The compact "HH:MM" / "HH:MM:SS" look: each digit-box keeps its existing
+   behavior (numeric-only, auto-advance -- see wireDigitBox/autoFocusNext)
+   entirely unchanged; only its OWN border/background is removed here so the
+   shared .time-hm wrapper is what reads as a single field, with the colons
+   as plain static text between the boxes rather than gaps between separate
+   inputs. Deliberately not type="time": that's a native control, and on iOS
+   it always shows a scroll-wheel picker (not a keyboard) plus AM/PM unless
+   the device itself is set to 24h -- neither is under this page's control
+   with type="time". type="text" inputmode="numeric" (already what these
+   boxes use) is what gets a plain number keypad with no AM/PM at all. */
+.time-hm .time-box {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 8px 1px;
+  width: 20px;
+}
+.time-hm:focus-within {
+  border-color: var(--accent);
+}
+.time-hm > span {
+  color: #fff;
+  user-select: none;
 }
 .planning-row {
   display: flex;

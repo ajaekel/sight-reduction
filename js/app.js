@@ -467,11 +467,13 @@ function addObservationLine(autoFocus) {
   div.innerHTML =
     '<div class="input-row">' +
       '<div class="observation-side-label">' + observationCount + '</div>' +
-      '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-h" placeholder="12" maxlength="2">' +
-      '<span>:</span>' +
-      '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-m" placeholder="00" maxlength="2">' +
-      '<span>:</span>' +
-      '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-s" placeholder="00" maxlength="2">' +
+      '<span class="time-hm">' +
+        '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-h" placeholder="12" maxlength="2">' +
+        '<span>:</span>' +
+        '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-m" placeholder="00" maxlength="2">' +
+        '<span>:</span>' +
+        '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-s" placeholder="00" maxlength="2">' +
+      '</span>' +
       '<input type="text" inputmode="decimal" class="s-deg" placeholder="31">' +
       '<input type="text" inputmode="decimal" class="s-min" placeholder="08.1">' +
       (observationCount > 1 ? '<button class="btn-del" type="button">\u2715</button>' : '') +
@@ -1563,51 +1565,16 @@ function showToast(message, isError) {
  * record's title and the Export filename base, and updates live on screen
  * (see updateAutoNamePreview) as those fields change -- no prompt, ever.
  */
-function computeAutoName(state) {
-  var pad2 = function (n) { return String(n).padStart(2, '0'); };
-  var now = new Date();
-
-  var dateStr = state.date || now.toISOString().split('T')[0];
-
-  var avg = SightCalc.averageObservations(state.observations);
-  var timeStr;
-  if (avg) {
-    var corr = state.corrections || {};
-    var sign = (corr.clockErrorDirection === 'fast') ? -1 : 1;
-    var correctedSec = ((avg.avgLocalSec + sign * (corr.clockErrorSec || 0)) % 86400 + 86400) % 86400;
-    var h = Math.floor(correctedSec / 3600);
-    var m = Math.floor((correctedSec % 3600) / 60);
-    var s = Math.floor(correctedSec % 60);
-    timeStr = pad2(h) + '.' + pad2(m) + '.' + pad2(s);
-  } else {
-    timeStr = pad2(now.getHours()) + '.' + pad2(now.getMinutes()) + '.' + pad2(now.getSeconds());
-  }
-
-  // Sun/Moon are themselves proper nouns and get capitalized; "star"/"planet"
-  // are just category words, so they stay lowercase -- only the actual name
-  // that follows (Arcturus, Venus, etc.) is the proper noun there.
-  var rawType = (state.body && state.body.type) || 'sight';
-  var properTypeNames = { sun: 'Sun', moon: 'Moon' };
-  var typeStr = properTypeNames[rawType] || rawType;
-  var nameStr = ((state.body && state.body.name) || '').trim();
-
-  var parts = [dateStr, timeStr, typeStr];
-  if (nameStr) parts.push(nameStr);
-
-  // Strip characters that are illegal (or awkward) in filenames on common filesystems.
-  return parts.join(' ').replace(/[\\/:*?"<>|]/g, '_');
-}
-
 /** Keeps the on-screen "Save name" preview (next to the Save/Export buttons) in sync. */
 function updateAutoNamePreview() {
   var el = document.getElementById('autoNamePreview');
   if (!el) return;
-  el.textContent = computeAutoName(collectFormState());
+  el.textContent = SightCalc.computeAutoName(collectFormState());
 }
 
 function onSaveSight() {
   var state = collectFormState();
-  var autoName = computeAutoName(state);
+  var autoName = SightCalc.computeAutoName(state);
 
   var name = prompt('Save sight as:', autoName);
   if (name === null) return; // cancelled
@@ -1681,7 +1648,7 @@ function onExportJson() {
   var state = collectFormState();
   if (window._lastResult) state.results = window._lastResult;
 
-  var autoName = computeAutoName(state);
+  var autoName = SightCalc.computeAutoName(state);
   var name = prompt('Export sight as:', autoName);
   if (name === null) return; // cancelled
   name = name.trim() || autoName;
