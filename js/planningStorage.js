@@ -7,7 +7,7 @@
  *  - Form fields (date/TZ/AP, ref latitudes, manual LMT entries, mode) go in
  *    localStorage. This is real work the user typed in from a printed
  *    almanac; it should survive navigating away, closing the tab, even
- *    restarting the browser, same as a saved sighting would.
+ *    restarting the browser, same as a saved sight would.
  *  - The auto-fill result (one USNO fetch) goes in sessionStorage, per the
  *    "at least for the session" ask. It's just a cached network response,
  *    cheap to re-fetch, and not meant to be a substitute for the real batch

@@ -1,9 +1,9 @@
 /**
  * fixStorage.js
- * Persists Fixes: named collections of saved-sighting IDs, representing a
+ * Persists Fixes: named collections of saved Sight IDs, representing a
  * position derived from multiple LOPs (a 3-star fix, a running fix, etc.).
- * A Fix references Sightings by id (SightStorage) rather than duplicating
- * their data -- a sighting reduced and saved once can belong to any number
+ * A Fix references Sights by id (SightStorage) rather than duplicating
+ * their data -- a sight reduced and saved once can belong to any number
  * of Fixes with no re-entry.
  *
  * Same Promise-based localStorage pattern as storage.js and almanacCache.js.
@@ -35,19 +35,20 @@
     return new Promise(function (resolve, reject) {
       try {
         if (!fix.id) fix.id = uid();
-        if (!Array.isArray(fix.sightingIds)) fix.sightingIds = [];
+        if (!Array.isArray(fix.sightIds)) fix.sightIds = [];
         fix.savedAt = new Date().toISOString();
         // Defaulted here rather than at every call site -- see storage.js's
         // save() for the same field, same reasoning: a Fix belongs to at
         // most one Passage, and null until a Passage feature actually
         // assigns one.
         if (fix.passageId === undefined) fix.passageId = null;
-        // Running Fix support: maps sightingId -> the id of the DrLeg used
-        // to advance that sighting's LOP to a later time (see
-        // js/fixes.js's onAdvanceSighting / SightCalc.advancePositionByLeg).
-        // A Running Fix is deliberately NOT a different kind of Fix -- it's
-        // an ordinary Fix where one or more sightings carry an entry here;
-        // a sighting absent from this map is used as-observed, unchanged.
+        // Running Fix support: maps sightId -> the id of the DrLeg used to
+        // advance that sight's LOP to a later time (see js/fixes.js's
+        // openAdvancePanel/onConfirmAdvance and
+        // SightCalc.advancePositionByLeg). A Running Fix is deliberately
+        // NOT a different kind of Fix -- it's an ordinary Fix where one or
+        // more sights carry an entry here; a sight absent from this map is
+        // used as-observed, unchanged.
         if (!fix.advances || typeof fix.advances !== 'object') fix.advances = {};
 
         localStorage.setItem(PREFIX + fix.id, JSON.stringify(fix));
@@ -57,7 +58,7 @@
           id: fix.id,
           name: fix.name || 'Untitled Fix',
           savedAt: fix.savedAt,
-          sightingCount: fix.sightingIds.length
+          sightCount: fix.sightIds.length
         });
         writeIndex(idx);
 
@@ -96,7 +97,7 @@
   /**
    * Assigns (or clears, with passageId=null) this fix's passageId, in
    * place -- deliberately NOT routed through save(), so filing an existing
-   * fix under a Passage doesn't touch its savedAt/sightingIds/resolved
+   * fix under a Passage doesn't touch its savedAt/sightIds/resolved
    * position or anything else about it. Purely organizational metadata.
    * Resolves the updated record, or null if not found.
    */

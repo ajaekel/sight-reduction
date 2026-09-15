@@ -12,8 +12,8 @@
  * turns that geometry into pixels/markup and owns the DOM update.
  *
  * Shared by:
- *   - renderSightChart()      -- one sighting (index.html's Plot card)
- *   - renderMultiSightChart() -- several sightings overlaid (a Fix's plot)
+ *   - renderSightChart()      -- one sight (index.html's Plot card)
+ *   - renderMultiSightChart() -- several sights overlaid (a Fix's plot)
  */
 (function (global) {
   'use strict';
@@ -154,11 +154,11 @@
   }
 
   /**
-   * sightingsInput = [{ lat, lon, zn, interceptNM, label, color?, badgeNumber? }]
+   * sightsInput = [{ lat, lon, zn, interceptNM, label, color?, badgeNumber? }]
    *   color/badgeNumber optional -- default to a palette cycle / 1-based
-   *   position if omitted. A caller (e.g. fixes.js) that wants a sighting's
-   *   plotted color to stay stable even when other sightings are skipped
-   *   should pass both explicitly, keyed off that sighting's position in
+   *   position if omitted. A caller (e.g. fixes.js) that wants a sight's
+   *   plotted color to stay stable even when other sights are skipped
+   *   should pass both explicitly, keyed off that sight's position in
    *   its own full list rather than the filtered/plotted subset.
    *
    * opts = {
@@ -179,12 +179,12 @@
    *   }
    * }
    */
-  function renderMultiSightChart(container, sightingsInput, opts) {
+  function renderMultiSightChart(container, sightsInput, opts) {
     opts = opts || {};
     var showAzimuth = opts.showAzimuth !== false;
     var showBisectors = !!opts.showBisectors;
 
-    var withColor = sightingsInput.map(function (s, i) {
+    var withColor = sightsInput.map(function (s, i) {
       var out = {};
       for (var key in s) { if (Object.prototype.hasOwnProperty.call(s, key)) out[key] = s[key]; }
       out.color = s.color || SightCalc.paletteColor(i);
@@ -193,7 +193,7 @@
     });
 
     var multiGeo = SightCalc.computeMultiLopGeometry(withColor);
-    var fixResult = SightCalc.resolveMultiLopFix(multiGeo.sightings);
+    var fixResult = SightCalc.resolveMultiLopFix(multiGeo.sights);
 
     // Which point (if any) is actually drawn/reported as "the Fix" is
     // entirely driven by the bisector toggle: bisector incenter when on (and
@@ -226,13 +226,13 @@
     var markers = '';
     var legend = [];
 
-    multiGeo.sightings.forEach(function (s) {
+    multiGeo.sights.forEach(function (s) {
       var idx = s.badgeNumber;
       var apPx = toPx(s.apPoint, pxPerNm);
       var isAdvanced = !!s.originalApPoint;
       var lopExtendNm = scale * 2.2;
 
-      // The main LOP line -- as-observed if this sighting hasn't been
+      // The main LOP line -- as-observed if this sight hasn't been
       // advanced, or the transferred/advanced LOP if it has (s.interceptPoint
       // is already anchored at the advanced AP either way -- see
       // computeMultiLopGeometry). Convention (per USCG/RYA piloting
@@ -286,7 +286,7 @@
           '" stroke="' + s.color + '" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#drTrackArrow' + idx + ')"/>';
 
         // Original AP: a small hollow circle (not the filled badge -- the
-        // badge belongs at the position this sighting actually contributes
+        // badge belongs at the position this sight actually contributes
         // to the fix, i.e. the advanced one).
         markers += '<circle cx="' + origApPx.x + '" cy="' + origApPx.y + '" r="5" fill="none" stroke="' + s.color + '" stroke-width="2"/>';
 
@@ -368,7 +368,7 @@
     if (fixResult.bisector) {
       fix.bisectorMaxSideNM = fixResult.bisector.maxSideNM;
       fix.bisectorBadgeNumbers = fixResult.bisector.tripleIndices.map(function (idx) {
-        return multiGeo.sightings[idx].badgeNumber;
+        return multiGeo.sights[idx].badgeNumber;
       });
     }
 

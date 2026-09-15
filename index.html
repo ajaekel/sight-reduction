@@ -20,9 +20,9 @@
         <span></span><span></span><span></span>
       </button>
       <div class="nav-menu" id="navMenu">
-        <div class="nav-menu-header">Sightings</div>
-        <a href="index.html" class="nav-menu-item nav-menu-sub">New sighting</a>
-        <a href="sightings.html" class="nav-menu-item nav-menu-sub">Sightings</a>
+        <div class="nav-menu-header">Sights</div>
+        <a href="index.html" class="nav-menu-item nav-menu-sub">New Sight</a>
+        <a href="sights.html" class="nav-menu-item nav-menu-sub">Sights</a>
         <a href="fixes.html" class="nav-menu-item">Fixes</a>
         <a href="planning.html" class="nav-menu-item">Planning</a>
         <a href="drleg.html" class="nav-menu-item">DR Leg</a>
@@ -131,16 +131,16 @@
     </div>
   </div>
 
-  <!-- SECTION 2: SIGHTINGS & CORRECTIONS -->
+  <!-- SECTION 2: OBSERVATIONS & CORRECTIONS -->
   <div class="card">
-    <div class="section-title">2. Sightings &amp; Corrections</div>
+    <div class="section-title">2. Observations &amp; Corrections</div>
 
-    <div class="sub-title">SIGHTINGS</div>
+    <div class="sub-title">OBSERVATIONS</div>
     <div style="margin-left: 22px; margin-bottom: 4px; font-size: 0.75rem; color: #aaa;">
       24h Time (HH : MM : SS) | Height (Deg / Min)
     </div>
 
-    <div id="sightingsContainer"></div>
+    <div id="observationsContainer"></div>
     <button class="btn-add" id="btnAddSight">+ Add Another Sight</button>
 
     <div class="form-group">
@@ -156,7 +156,7 @@
     </div>
 
     <div class="summary-box">
-      <div style="font-size: 0.75rem; font-weight: bold; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Average of Sightings</div>
+      <div style="font-size: 0.75rem; font-weight: bold; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;">Average of Observations</div>
       <div><strong>Local Time:</strong> <span id="avgLocalTime">--:--:--</span></div>
       <div><strong>Local Time corrected:</strong> <span id="avgLocalTimeCorrected">--:--:--</span></div>
       <div><strong>UTC Time:</strong> <span id="avgUtcTime">--:--:-- UTC</span></div>
@@ -463,8 +463,8 @@
   </div>
 
   <p class="cache-blurb" style="margin-top: 12px;">
-    To view, load, or delete previously saved sightings, see the
-    <a href="sightings.html" style="color: var(--accent);">Sightings</a> page.
+    To view, load, or delete previously saved sights, see the
+    <a href="sights.html" style="color: var(--accent);">Sights</a> page.
   </p>
   <input type="file" id="fileImportJson" accept="application/json,.json" style="display: none;">
 </div>

@@ -4,14 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#121212">
-  <title>Sightings - Offline Sight Reduction</title>
+  <title>Sights - Offline Sight Reduction</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
 <div class="app-container">
   <div class="header-row">
-    <h1 style="margin-bottom: 2px;">Sightings</h1>
+    <h1 style="margin-bottom: 2px;">Sights</h1>
     <div class="header-controls">
       <div id="swVersion" style="font-size: 0.75rem; color: var(--accent, #888); font-family: monospace;">
         Version: loading...
@@ -22,9 +22,9 @@
             <span></span><span></span><span></span>
           </button>
           <div class="nav-menu" id="navMenu">
-            <div class="nav-menu-header">Sightings</div>
-            <a href="index.html" class="nav-menu-item nav-menu-sub">New sighting</a>
-            <a href="sightings.html" class="nav-menu-item nav-menu-sub">Sightings</a>
+            <div class="nav-menu-header">Sights</div>
+            <a href="index.html" class="nav-menu-item nav-menu-sub">New Sight</a>
+            <a href="sights.html" class="nav-menu-item nav-menu-sub">Sights</a>
             <a href="fixes.html" class="nav-menu-item">Fixes</a>
             <a href="planning.html" class="nav-menu-item">Planning</a>
             <a href="drleg.html" class="nav-menu-item">DR Leg</a>
@@ -36,7 +36,7 @@
   </div>
 
   <p class="cache-blurb">
-    Sightings you've saved on this device. Load one to continue editing it on the New Sighting
+    Sights you've saved on this device. Load one to continue editing it on the New Sight
     page, or delete it for good.
   </p>
 
@@ -46,9 +46,9 @@
   <input type="file" id="fileImportJson" accept="application/json,.json" style="display: none;">
 
   <div class="card">
-    <div class="section-title">Saved Sightings (this device)</div>
+    <div class="section-title">Saved Sights (this device)</div>
     <div class="saved-list" id="savedList"></div>
-    <div class="empty-note" id="savedListEmpty">No sightings saved on this device yet.</div>
+    <div class="empty-note" id="savedListEmpty">No sights saved on this device yet.</div>
   </div>
 
   <!-- ADD TO FIX -->
@@ -78,6 +78,6 @@
 <script src="js/fixStorage.js"></script>
 <script src="js/nav.js"></script>
 <script src="js/version.js"></script>
-<script src="js/sightings.js"></script>
+<script src="js/sights.js"></script>
 </body>
 </html>

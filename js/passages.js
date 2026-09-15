@@ -232,7 +232,7 @@ function renderPassageDetailHeader() {
   }
 }
 
-/** "Sun - 2026-09-14" / "star Vega - 2026-09-14" etc., same idea as fixes.js's sightingRowLabel but standalone (this page doesn't load fixes.js). */
+/** "Sun - 2026-09-14" / "star Vega - 2026-09-14" etc., same idea as fixes.js's sightRowLabel but standalone (this page doesn't load fixes.js). */
 function sightSummary(record) {
   var label = SightCalc.formatBodyLabel(record.body);
   return (record.title || label) + ' \u00B7 ' + (record.date || 'no date');
@@ -273,7 +273,7 @@ function resolveTimelineEntry(entry) {
 
 function openUnderlyingRecord(entry) {
   if (entry.type === 'sight') {
-    try { sessionStorage.setItem('ocsrLoadSightingId', entry.recordId); } catch (e) {}
+    try { sessionStorage.setItem('ocsrLoadSightId', entry.recordId); } catch (e) {}
     location.href = 'index.html';
   } else if (entry.type === 'fix') {
     location.href = 'fixes.html#fix=' + encodeURIComponent(entry.recordId);

@@ -125,7 +125,7 @@ function resetResults() {
   document.getElementById('resDistance').textContent = '--.- nm';
   document.getElementById('resDuration').textContent = '--h --m';
   document.getElementById('resArrival').textContent = '----\u2011--\u2011-- --:--';
-  document.getElementById('btnToSighting').disabled = true;
+  document.getElementById('btnToSight').disabled = true;
   document.getElementById('btnToPlanning').disabled = true;
   document.getElementById('btnChainLeg').disabled = true;
   document.getElementById('btnSaveLeg').disabled = true;
@@ -233,7 +233,7 @@ function recompute() {
     distanceNM: leg.distanceNM,
     tzOffset: tzOffset
   };
-  document.getElementById('btnToSighting').disabled = false;
+  document.getElementById('btnToSight').disabled = false;
   document.getElementById('btnToPlanning').disabled = false;
   document.getElementById('btnChainLeg').disabled = false;
   document.getElementById('btnSaveLeg').disabled = false;
@@ -278,14 +278,14 @@ function positionToDegMinFields(position) {
 }
 
 /**
- * New Sighting handoff: the rich, Position-aware shape, since index.html
+ * New Sight handoff: the rich, Position-aware shape, since index.html
  * has somewhere meaningful to put an exact time (the first observation
  * line). Note this is a convenience prefill, not a correctness fix: the AP
  * itself never needed a time (reduceSight only reads the observation's own
  * clock time), it's just a time-saver for the common "DR to an event, then
  * observe" workflow.
  */
-function buildSightingHandoff() {
+function buildSightHandoff() {
   var r = window._lastDrResult;
   if (!r) return null;
   return { position: r.endPosition, tzOffset: r.tzOffset };
@@ -311,8 +311,8 @@ function buildPlanningHandoff() {
   };
 }
 
-function onToSighting() {
-  var handoff = buildSightingHandoff();
+function onToSight() {
+  var handoff = buildSightHandoff();
   if (!handoff) return;
   sessionStorage.setItem('ocsrApHandoff', JSON.stringify(handoff));
   location.href = 'index.html';
@@ -467,10 +467,10 @@ function onDeleteLeg(id) {
  * Consumes a one-time start-position handoff via sessionStorage key
  * 'ocsrDrLegStartHandoff' -- sent by fixes.html's "Send to DR Leg" (see
  * onFixToDrLeg in js/fixes.js), planning.html's "Send to DR Leg" (see
- * onToDrLeg in js/planning.js), and index.html/sightings.html's "Send to
- * DR Leg" (see onSendToDrLeg in js/app.js and js/sightings.js), all
+ * onToDrLeg in js/planning.js), and index.html/sights.html's "Send to
+ * DR Leg" (see onSendToDrLeg in js/app.js and js/sights.js), all
  * carrying the same { position: {time,lat,lon,sourceType,sourceId},
- * tzOffset, sentFrom } shape as the New Sighting handoff. Fills the START
+ * tzOffset, sentFrom } shape as the New Sight handoff. Fills the START
  * fields (not the result) and copies the incoming position's own
  * sourceType/sourceId directly -- whoever built the handoff already
  * stamped it correctly (a Fix stamps its own id when caching
@@ -608,7 +608,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   document.getElementById('modeDuration').addEventListener('click', function () { setDrMode('duration'); });
   document.getElementById('modeEndTime').addEventListener('click', function () { setDrMode('endtime'); });
-  document.getElementById('btnToSighting').addEventListener('click', onToSighting);
+  document.getElementById('btnToSight').addEventListener('click', onToSight);
   document.getElementById('btnToPlanning').addEventListener('click', onToPlanning);
   document.getElementById('btnChainLeg').addEventListener('click', onChainLeg);
   document.getElementById('btnSaveLeg').addEventListener('click', onSaveLeg);

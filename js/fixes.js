@@ -1,15 +1,15 @@
 /**
  * fixes.js
- * Page logic for fixes.html. A Fix is a named collection of saved Sighting
+ * Page logic for fixes.html. A Fix is a named collection of saved Sight
  * ids (FixStorage); this file wires up create/list/delete, add/remove
- * sightings, and plotting the Fix as a multi-LOP chart (SightChart /
+ * sights, and plotting the Fix as a multi-LOP chart (SightChart /
  * SightCalc do the actual geometry -- this file is DOM glue only, same
  * separation of concerns as app.js).
  */
 
 var currentFix = null;
 var fixRenderToken = 0;
-var lastChartInput = null; // cached so toggling azimuth/bisectors doesn't need to re-fetch sightings
+var lastChartInput = null; // cached so toggling azimuth/bisectors doesn't need to re-fetch sights
 var bisectorMethodSelected = false; // false = least-squares, true = method of bisectors
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('methodLeastSquares').addEventListener('click', function () { setFixMethod(false); });
   document.getElementById('methodBisectors').addEventListener('click', function () { setFixMethod(true); });
   document.getElementById('btnSaveFixPosition').addEventListener('click', onSaveFixPosition);
-  document.getElementById('btnFixToSighting').addEventListener('click', onFixToSighting);
+  document.getElementById('btnFixToSight').addEventListener('click', onFixToSight);
   document.getElementById('btnFixToDrLeg').addEventListener('click', onFixToDrLeg);
   document.getElementById('btnCancelAdvance').addEventListener('click', closeAdvancePanel);
 
@@ -99,7 +99,7 @@ function refreshFixList() {
 
       item.querySelector('.saved-item-title').textContent = entry.name;
       item.querySelector('.saved-item-meta').textContent =
-        entry.sightingCount + ' sighting' + (entry.sightingCount === 1 ? '' : 's') +
+        entry.sightCount + ' sight' + (entry.sightCount === 1 ? '' : 's') +
         ' \u00B7 saved ' + new Date(entry.savedAt).toLocaleString();
 
       item.querySelector('.btn-mini-load').addEventListener('click', function () {
@@ -107,7 +107,7 @@ function refreshFixList() {
       });
 
       item.querySelector('.btn-mini-del').addEventListener('click', function () {
-        if (!confirm('Delete the fix "' + entry.name + '"? Its sightings are not affected, only the fix itself.')) return;
+        if (!confirm('Delete the fix "' + entry.name + '"? Its sights are not affected, only the fix itself.')) return;
         FixStorage.remove(entry.id).then(function () {
           showToast('Fix deleted.');
           refreshFixList();
@@ -132,7 +132,7 @@ function onNewFixClick() {
 
   name = name.trim() || suggested;
 
-  FixStorage.save({ name: name, sightingIds: [] }).then(function (saved) {
+  FixStorage.save({ name: name, sightIds: [] }).then(function (saved) {
     showToast('Created "' + name + '".');
     location.hash = 'fix=' + encodeURIComponent(saved.id);
   }).catch(function (err) {
@@ -160,7 +160,7 @@ function openFix(id) {
 
     document.getElementById('fixDetailName').textContent = fix.name;
     document.getElementById('fixDetailMeta').textContent =
-      fix.sightingIds.length + ' sighting' + (fix.sightingIds.length === 1 ? '' : 's') +
+      fix.sightIds.length + ' sight' + (fix.sightIds.length === 1 ? '' : 's') +
       ' \u00B7 saved ' + new Date(fix.savedAt).toLocaleString();
 
     document.getElementById('fixChartCard').style.display = 'none';
@@ -168,20 +168,20 @@ function openFix(id) {
     lastChartInput = null;
     // Reflect whatever was last saved (if anything) immediately, before the
     // plot even loads -- renderCurrentPlot() below will refresh this to the
-    // live-computed value once sightings are fetched, which may differ if
+    // live-computed value once sights are fetched, which may differ if
     // anything's changed since the last Save.
-    document.getElementById('fixPositionCard').style.display = fix.sightingIds.length ? 'block' : 'none';
+    document.getElementById('fixPositionCard').style.display = fix.sightIds.length ? 'block' : 'none';
     updateFixPositionButtons();
     // Reflect whichever method was actually saved (if any) -- not just
     // always defaulting to least-squares. renderCurrentPlot() below will
     // fall back to least-squares on its own if this fix no longer has
-    // enough active sightings to support bisectors (see its own guard),
+    // enough active sights to support bisectors (see its own guard),
     // so this only needs to express what was last explicitly saved, not
     // re-validate it.
     setFixMethodState(fix.resolvedPositionMethod === 'bisector');
 
-    renderFixSightings(myToken);
-    renderAvailableSightings(myToken);
+    renderFixSights(myToken);
+    renderAvailableSights(myToken);
     autoPlotFix();
   }).catch(function (err) {
     console.error(err);
@@ -190,24 +190,24 @@ function openFix(id) {
 }
 
 /**
- * A sighting is "active" (used in the plot and fed into fix resolution) by
- * default -- activeSightingIds only gets materialized the first time
+ * A sight is "active" (used in the plot and fed into fix resolution) by
+ * default -- activeSightIds only gets materialized the first time
  * someone deselects one, so old fixes (and new ones nobody's touched yet)
  * correctly treat every member as active without needing a migration.
  */
-function getActiveSightingIds(fix) {
-  return new Set(fix.activeSightingIds || fix.sightingIds);
+function getActiveSightIds(fix) {
+  return new Set(fix.activeSightIds || fix.sightIds);
 }
 
-function setSightingActive(fix, id, isActive) {
-  var current = fix.activeSightingIds ? fix.activeSightingIds.slice() : fix.sightingIds.slice();
+function setSightActive(fix, id, isActive) {
+  var current = fix.activeSightIds ? fix.activeSightIds.slice() : fix.sightIds.slice();
   var idx = current.indexOf(id);
   if (isActive && idx === -1) current.push(id);
   if (!isActive && idx !== -1) current.splice(idx, 1);
-  fix.activeSightingIds = current;
+  fix.activeSightIds = current;
 }
 
-function sightingRowLabel(record) {
+function sightRowLabel(record) {
   var title = record.title || SightCalc.formatBodyLabel(record.body);
   var meta = SightCalc.formatBodyLabel(record.body) + ' \u00B7 ' + (record.date || 'no date');
   if (record.results && record.results.observationTime) {
@@ -217,18 +217,18 @@ function sightingRowLabel(record) {
   return { title: title, meta: meta };
 }
 
-function renderFixSightings(token) {
-  var listEl = document.getElementById('fixSightingsList');
-  var emptyEl = document.getElementById('fixSightingsEmpty');
+function renderFixSights(token) {
+  var listEl = document.getElementById('fixSightsList');
+  var emptyEl = document.getElementById('fixSightsEmpty');
   listEl.innerHTML = '';
 
-  if (!currentFix.sightingIds.length) {
+  if (!currentFix.sightIds.length) {
     emptyEl.style.display = 'block';
     return;
   }
   emptyEl.style.display = 'none';
 
-  var idsAtRenderTime = currentFix.sightingIds.slice();
+  var idsAtRenderTime = currentFix.sightIds.slice();
   var advances = currentFix.advances || {};
   var legIdsNeeded = idsAtRenderTime.map(function (id) { return advances[id]; }).filter(function (legId) { return !!legId; });
 
@@ -251,12 +251,12 @@ function renderFixSightings(token) {
         if (!record) {
           item.innerHTML =
             '<div class="saved-item-info">' +
-              '<div class="saved-item-info-row"><span class="sighting-color-dot" style="background:' + swatchColor + '"></span>' +
-              '<div class="saved-item-title">(sighting no longer exists)</div></div>' +
+              '<div class="saved-item-info-row"><span class="sight-color-dot" style="background:' + swatchColor + '"></span>' +
+              '<div class="saved-item-title">(sight no longer exists)</div></div>' +
             '</div>' +
             '<div class="saved-item-actions"><button class="btn-mini btn-mini-del">Remove</button></div>';
         } else {
-          var labels = sightingRowLabel(record);
+          var labels = sightRowLabel(record);
           var legId = advances[id];
           var advanceLine = '';
           if (legId) {
@@ -267,7 +267,7 @@ function renderFixSightings(token) {
           }
           item.innerHTML =
             '<div class="saved-item-info">' +
-              '<div class="saved-item-info-row"><span class="sighting-color-dot" style="background:' + swatchColor + '"></span>' +
+              '<div class="saved-item-info-row"><span class="sight-color-dot" style="background:' + swatchColor + '"></span>' +
               '<div><div class="saved-item-title"></div><div class="saved-item-meta"></div><div class="saved-item-meta advance-line" style="display:none;"></div></div></div>' +
             '</div>' +
             '<div class="saved-item-actions">' +
@@ -293,11 +293,11 @@ function renderFixSightings(token) {
         }
 
         item.querySelector('.btn-mini-del').addEventListener('click', function () {
-          currentFix.sightingIds = currentFix.sightingIds.filter(function (sid) { return sid !== id; });
-          if (currentFix.activeSightingIds) {
-            currentFix.activeSightingIds = currentFix.activeSightingIds.filter(function (sid) { return sid !== id; });
+          currentFix.sightIds = currentFix.sightIds.filter(function (sid) { return sid !== id; });
+          if (currentFix.activeSightIds) {
+            currentFix.activeSightIds = currentFix.activeSightIds.filter(function (sid) { return sid !== id; });
           }
-          if (currentFix.advances) delete currentFix.advances[id]; // don't leave a stale advance pointing at a sighting no longer in this fix
+          if (currentFix.advances) delete currentFix.advances[id]; // don't leave a stale advance pointing at a sight no longer in this fix
           FixStorage.save(currentFix).then(function () { openFix(currentFix.id); });
         });
 
@@ -306,15 +306,15 @@ function renderFixSightings(token) {
     });
 }
 
-function renderAvailableSightings(token) {
-  var listEl = document.getElementById('availableSightingsList');
-  var emptyEl = document.getElementById('availableSightingsEmpty');
+function renderAvailableSights(token) {
+  var listEl = document.getElementById('availableSightsList');
+  var emptyEl = document.getElementById('availableSightsEmpty');
   listEl.innerHTML = '';
 
   SightStorage.list().then(function (entries) {
     if (token !== fixRenderToken) return; // a newer render superseded this one
 
-    var available = entries.filter(function (e) { return currentFix.sightingIds.indexOf(e.id) === -1; });
+    var available = entries.filter(function (e) { return currentFix.sightIds.indexOf(e.id) === -1; });
 
     if (!available.length) {
       emptyEl.style.display = 'block';
@@ -334,11 +334,11 @@ function renderAvailableSightings(token) {
         entry.bodyLabel + ' \u00B7 ' + (entry.date || 'no date') + ' \u00B7 saved ' + new Date(entry.savedAt).toLocaleString();
 
       item.querySelector('.btn-mini-load').addEventListener('click', function () {
-        currentFix.sightingIds.push(entry.id);
-        // New members default to active -- only append here if activeSightingIds
+        currentFix.sightIds.push(entry.id);
+        // New members default to active -- only append here if activeSightIds
         // has already been materialized (an untouched fix's fallback already
-        // includes everyone via getActiveSightingIds()).
-        if (currentFix.activeSightingIds) currentFix.activeSightingIds.push(entry.id);
+        // includes everyone via getActiveSightIds()).
+        if (currentFix.activeSightIds) currentFix.activeSightIds.push(entry.id);
         FixStorage.save(currentFix).then(function () { openFix(currentFix.id); });
       });
 
@@ -348,20 +348,20 @@ function renderAvailableSightings(token) {
 }
 
 // ---------------------------------------------------------------------
-// RUNNING FIX: advancing a sighting's LOP via a saved DR Leg
+// RUNNING FIX: advancing a sight's LOP via a saved DR Leg
 // ---------------------------------------------------------------------
 
 var _advanceTargetId = null;
 
 /**
- * Opens the shared "Advance via DR Leg" panel for one sighting. Lists every
- * saved DR Leg (not filtered by proximity to this sighting's own time --
+ * Opens the shared "Advance via DR Leg" panel for one sight. Lists every
+ * saved DR Leg (not filtered by proximity to this sight's own time --
  * simplest correct behavior for now: the person can see each leg's own
  * start/end times right in the list and judge for themselves which one
  * applies, rather than the app guessing at a "close enough" heuristic).
  */
-function openAdvancePanel(sightingId, sightRecord) {
-  _advanceTargetId = sightingId;
+function openAdvancePanel(sightId, sightRecord) {
+  _advanceTargetId = sightId;
 
   DrLegStorage.list().then(function (legs) {
     var listEl = document.getElementById('advanceLegList');
@@ -386,7 +386,7 @@ function openAdvancePanel(sightingId, sightRecord) {
       });
     }
 
-    document.getElementById('advanceLegTargetLabel').textContent = sightingRowLabel(sightRecord).title;
+    document.getElementById('advanceLegTargetLabel').textContent = sightRowLabel(sightRecord).title;
     var panel = document.getElementById('advanceLegPanel');
     panel.style.display = 'block';
     if (panel.scrollIntoView) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -406,14 +406,14 @@ function onConfirmAdvance(legId) {
   FixStorage.save(currentFix).then(function () { openFix(currentFix.id); });
 }
 
-function onClearAdvance(sightingId) {
-  if (currentFix.advances) delete currentFix.advances[sightingId];
+function onClearAdvance(sightId) {
+  if (currentFix.advances) delete currentFix.advances[sightId];
   FixStorage.save(currentFix).then(function () { openFix(currentFix.id); });
 }
 
 function onDeleteFix() {
   if (!currentFix) return;
-  if (!confirm('Delete the fix "' + currentFix.name + '"? Its sightings are not affected, only the fix itself.')) return;
+  if (!confirm('Delete the fix "' + currentFix.name + '"? Its sights are not affected, only the fix itself.')) return;
   FixStorage.remove(currentFix.id).then(function () {
     showToast('Fix deleted.');
     location.hash = '';
@@ -449,35 +449,35 @@ function setFixMethod(useBisectors) {
   renderCurrentPlot();
 }
 
-/** Plots automatically whenever the fix's sightings change -- called from openFix(). */
+/** Plots automatically whenever the fix's sights change -- called from openFix(). */
 /**
  * A Running Fix isn't a different kind of Fix -- it's this same function,
- * given a sighting that has an entry in currentFix.advances. For those,
+ * given a sight that has an entry in currentFix.advances. For those,
  * the AP fed into the solver is shifted by the referenced DR Leg
  * (SightCalc.advancePositionByLeg -- see its own comment for why this is
  * ALL a Running Fix needs: Zn/interceptNM stay exactly as observed, only
  * the AP moves, and resolveMultiLopFix already handles a mix of APs across
  * LOPs). The "time" contributed for cacheResolvedPosition's latest-time
- * calc is likewise the leg's endPosition.time, not the sighting's own
+ * calc is likewise the leg's endPosition.time, not the sight's own
  * observation time -- an advanced LOP is being treated as current as of
  * when it was advanced TO, not when it was actually observed.
  */
 function autoPlotFix() {
-  if (!currentFix || !currentFix.sightingIds.length) {
+  if (!currentFix || !currentFix.sightIds.length) {
     document.getElementById('fixChartCard').style.display = 'none';
-    setFixPlotStatus('Add at least one sighting to this fix to see its plot.', '');
+    setFixPlotStatus('Add at least one sight to this fix to see its plot.', '');
     return;
   }
 
-  setFixPlotStatus('Loading sightings\u2026', 'loading');
+  setFixPlotStatus('Loading sights\u2026', 'loading');
 
   var advances = currentFix.advances || {};
-  var legIdsNeeded = currentFix.sightingIds
+  var legIdsNeeded = currentFix.sightIds
     .map(function (id) { return advances[id]; })
     .filter(function (legId) { return !!legId; });
 
   Promise.all([
-    Promise.all(currentFix.sightingIds.map(function (id) { return SightStorage.get(id); })),
+    Promise.all(currentFix.sightIds.map(function (id) { return SightStorage.get(id); })),
     Promise.all(legIdsNeeded.map(function (legId) { return DrLegStorage.get(legId); }))
   ]).then(function (results) {
       var records = results[0];
@@ -489,17 +489,17 @@ function autoPlotFix() {
       var skippedBrokenAdvance = 0;
       var chartInput = [];
 
-      // Color and badge number are keyed to each sighting's position in the
-      // FULL fix list (not the filtered/plottable subset), so a sighting's
-      // color always matches its swatch in the "Sightings in this Fix" list
-      // above -- even when an earlier sighting gets skipped from the plot.
+      // Color and badge number are keyed to each sight's position in the
+      // FULL fix list (not the filtered/plottable subset), so a sight's
+      // color always matches its swatch in the "Sights in this Fix" list
+      // above -- even when an earlier sight gets skipped from the plot.
       records.forEach(function (record, i) {
         if (!record) { skippedMissing++; return; }
         if (!record.results || typeof record.results.zn !== 'number' || typeof record.results.interceptNM !== 'number') {
           skippedNoResults++;
           return;
         }
-        var id = currentFix.sightingIds[i];
+        var id = currentFix.sightIds[i];
         var pos = SightCalc.signedPositionFromRecord(record.position);
         var observationTime = record.results.observationTime;
         var originalPos = null;
@@ -512,7 +512,7 @@ function autoPlotFix() {
           if (!leg) {
             // The referenced leg was deleted out from under this advance --
             // fail safe to the as-observed LOP rather than silently
-            // dropping the sighting or crashing the plot; renderFixSightings()
+            // dropping the sight or crashing the plot; renderFixSights()
             // surfaces this same brokenness so it's not silent.
             skippedBrokenAdvance++;
           } else {
@@ -521,7 +521,7 @@ function autoPlotFix() {
             pos = advanced;
             observationTime = leg.endPosition.time;
 
-            // Both time labels use this sighting's OWN tzOffset (not the
+            // Both time labels use this sight's OWN tzOffset (not the
             // leg's) -- simplest honest choice for a single two-time label;
             // the leg's own end time is used for the actual math above
             // regardless of which offset is shown here.
@@ -535,7 +535,7 @@ function autoPlotFix() {
           }
         }
 
-        var labels = sightingRowLabel(record);
+        var labels = sightRowLabel(record);
         chartInput.push({
           id: id,
           lat: pos.lat,
@@ -547,7 +547,7 @@ function autoPlotFix() {
           zn: record.results.zn,
           interceptNM: record.results.interceptNM,
           observationTime: observationTime, // ISO UTC -- used to timestamp the Fix's cached resolvedPosition
-          tzOffset: record.position.tzOffset, // carried alongside, for handoffs built from the resolved position (see onFixToSighting/onFixToDrLeg)
+          tzOffset: record.position.tzOffset, // carried alongside, for handoffs built from the resolved position (see onFixToSight/onFixToDrLeg)
           label: labels.title,
           color: SightCalc.paletteColor(i),
           badgeNumber: i + 1
@@ -556,7 +556,7 @@ function autoPlotFix() {
 
       if (!chartInput.length) {
         document.getElementById('fixChartCard').style.display = 'none';
-        setFixPlotStatus('None of this fix\u2019s sightings have calculated results to plot. Recalculate and re-save them on the Sight Reduction page.', 'error');
+        setFixPlotStatus('None of this fix\u2019s sights have calculated results to plot. Recalculate and re-save them on the Sight Reduction page.', 'error');
         return;
       }
 
@@ -565,13 +565,13 @@ function autoPlotFix() {
       document.getElementById('fixChartCard').style.display = 'block';
       renderCurrentPlot();
 
-      var msg = 'Plotted ' + chartInput.length + ' of ' + currentFix.sightingIds.length + ' sighting' + (currentFix.sightingIds.length === 1 ? '' : 's') + '.';
+      var msg = 'Plotted ' + chartInput.length + ' of ' + currentFix.sightIds.length + ' sight' + (currentFix.sightIds.length === 1 ? '' : 's') + '.';
       var skipped = skippedMissing + skippedNoResults;
       if (skipped) {
         msg += ' Skipped ' + skipped + ' (missing or not yet calculated).';
       }
       if (skippedBrokenAdvance) {
-        msg += ' ' + skippedBrokenAdvance + ' advanced sighting' + (skippedBrokenAdvance === 1 ? '' : 's') + ' fell back to as-observed (the DR Leg it referenced no longer exists).';
+        msg += ' ' + skippedBrokenAdvance + ' advanced sight' + (skippedBrokenAdvance === 1 ? '' : 's') + ' fell back to as-observed (the DR Leg it referenced no longer exists).';
       }
       setFixPlotStatus(msg, (skipped || skippedBrokenAdvance) ? 'error' : 'ok');
     })
@@ -602,19 +602,19 @@ function formatInterceptBadge(interceptNM) {
  * which method's answer to commit to.
  *
  * Timestamped with the LATEST observation time among the actively-plotted
- * sightings, matching the usual convention that a fix's time is the time of
+ * sights, matching the usual convention that a fix's time is the time of
  * its most recent constituent sight. sourceId is stamped as this Fix's own
  * id right away (unlike a DR Leg's live endPosition, a Fix always has a
  * stable id already -- FixStorage.save() assigns one the moment the fix is
- * first created, before any sightings are even added), so anything that
+ * first created, before any sights are even added), so anything that
  * later copies this position elsewhere (a new Sight's AP, a DR Leg's start)
  * can say which Fix it came from. tzOffset/method are tracked alongside,
  * not inside the Position itself (Position is intentionally tz- and
  * method-agnostic), so the handoffs below can reconstruct a local
  * date/time and the Save button can report which method was used.
  */
-function cacheResolvedPosition(fixResult, activeSightings) {
-  document.getElementById('fixPositionCard').style.display = activeSightings.length ? 'block' : 'none';
+function cacheResolvedPosition(fixResult, activeSights) {
+  document.getElementById('fixPositionCard').style.display = activeSights.length ? 'block' : 'none';
 
   if (!fixResult.solvable || typeof fixResult.lat !== 'number' || typeof fixResult.lon !== 'number') {
     currentFix.resolvedPosition = null;
@@ -623,7 +623,7 @@ function cacheResolvedPosition(fixResult, activeSightings) {
   }
 
   var latest = null;
-  activeSightings.forEach(function (s) {
+  activeSights.forEach(function (s) {
     if (s.observationTime && (!latest || s.observationTime > latest.observationTime)) latest = s;
   });
   if (!latest) { currentFix.resolvedPosition = null; updateFixPositionButtons(); return; }
@@ -637,7 +637,7 @@ function cacheResolvedPosition(fixResult, activeSightings) {
 function updateFixPositionButtons() {
   var ready = !!currentFix.resolvedPosition;
   document.getElementById('btnSaveFixPosition').disabled = !ready;
-  document.getElementById('btnFixToSighting').disabled = !ready;
+  document.getElementById('btnFixToSight').disabled = !ready;
   document.getElementById('btnFixToDrLeg').disabled = !ready;
 }
 
@@ -653,7 +653,7 @@ function onSaveFixPosition() {
   });
 }
 
-function onFixToSighting() {
+function onFixToSight() {
   if (!currentFix.resolvedPosition) return;
   var handoff = { position: currentFix.resolvedPosition, tzOffset: currentFix.resolvedPositionTzOffset };
   sessionStorage.setItem('ocsrApHandoff', JSON.stringify(handoff));
@@ -670,13 +670,13 @@ function onFixToDrLeg() {
 /**
  * Re-renders the already-fetched plot using the current toggle/method/active
  * states -- no re-fetch needed. The legend always lists every plottable
- * sighting (so a deselected one can be switched back on); only the ones in
+ * sight (so a deselected one can be switched back on); only the ones in
  * the active set are actually fed into the chart and the fix resolution.
  */
 function renderCurrentPlot() {
   if (!lastChartInput) return;
 
-  var activeSet = getActiveSightingIds(currentFix);
+  var activeSet = getActiveSightIds(currentFix);
   var plotInput = lastChartInput.filter(function (item) { return activeSet.has(item.id); });
 
   var methodBisectorsBtn = document.getElementById('methodBisectors');
@@ -706,7 +706,7 @@ function renderCurrentPlot() {
       (item.transferLabel ? ' \u2014 advanced ' + item.transferLabel : '');
 
     row.querySelector('input').addEventListener('change', function (e) {
-      setSightingActive(currentFix, item.id, e.target.checked);
+      setSightActive(currentFix, item.id, e.target.checked);
       FixStorage.save(currentFix).then(renderCurrentPlot);
     });
 
@@ -724,7 +724,7 @@ function fixIconSvg() {
   '</svg>';
 }
 
-function renderFixResult(fix, sightingCount, legendEl) {
+function renderFixResult(fix, sightCount, legendEl) {
   var caption = document.getElementById('fixResultCaption');
   caption.textContent = '';
 
@@ -734,16 +734,16 @@ function renderFixResult(fix, sightingCount, legendEl) {
   }
   setFixResultStatus('', '');
 
-  // Least-squares uses every checked/active sighting; the bisector method
+  // Least-squares uses every checked/active sight; the bisector method
   // can only use exactly 3, auto-picked for widest azimuth spread when more
   // than 3 are active (see the caption below). Naming the count here makes
-  // that difference visible instead of implied -- unchecking a sighting that
+  // that difference visible instead of implied -- unchecking a sight that
   // ISN'T one of the bisector triple still changes the least-squares answer,
   // because it was never excluded from that one to begin with.
   var methodLabel = fix.source === 'bisector' ? 'method of bisectors' : 'least-squares';
   var scopeNote = fix.source === 'bisector'
-    ? ' (3 of ' + sightingCount + ' active)'
-    : ' (' + sightingCount + ' active sighting' + (sightingCount === 1 ? '' : 's') + ')';
+    ? ' (3 of ' + sightCount + ' active)'
+    : ' (' + sightCount + ' active sight' + (sightCount === 1 ? '' : 's') + ')';
   var item = document.createElement('div');
   item.className = 'chart-legend-item fix-legend-item';
   item.innerHTML = fixIconSvg() + ' Fix (' + methodLabel + scopeNote + '): ' + fix.positionText;
@@ -752,12 +752,12 @@ function renderFixResult(fix, sightingCount, legendEl) {
   // Shown whenever a 3-LOP triangle exists, regardless of which method is
   // currently displayed -- it's useful fix-quality context either way. But
   // it describes ONLY the bisector triangle, so it's worded to never look
-  // like a statement about which sightings the (possibly different)
+  // like a statement about which sights the (possibly different)
   // currently-shown Fix number is based on.
   if (typeof fix.bisectorMaxSideNM === 'number') {
     var note = 'Bisector triangle (cocked hat) spread: ' + fix.bisectorMaxSideNM.toFixed(1) + ' nm';
-    if (fix.bisectorBadgeNumbers && fix.bisectorBadgeNumbers.length === 3 && sightingCount > 3) {
-      note += ', using sightings #' + fix.bisectorBadgeNumbers.join(', #') + ' (widest azimuth spread)';
+    if (fix.bisectorBadgeNumbers && fix.bisectorBadgeNumbers.length === 3 && sightCount > 3) {
+      note += ', using sights #' + fix.bisectorBadgeNumbers.join(', #') + ' (widest azimuth spread)';
     }
     caption.textContent = note;
   }

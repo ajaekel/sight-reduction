@@ -1,13 +1,13 @@
 /**
- * sightings.js
- * Standalone "Saved Sightings (this device)" browser -- the list that used to
+ * sights.js
+ * Standalone "Saved Sights (this device)" browser -- the list that used to
  * render at the bottom of index.html now lives on its own page. Reads/writes
  * go straight through storage.js (window.SightStorage); this file only
  * touches the DOM.
  *
  * "Load" can't apply a record directly (this page has no sight reduction
  * form), so it hands the record id off via sessionStorage and navigates to
- * index.html, which consumes it in applyPendingSightingLoad() (see app.js).
+ * index.html, which consumes it in applyPendingSightLoad() (see app.js).
  * "Delete" is fully local to this page -- no handoff needed.
  */
 
@@ -76,17 +76,17 @@ function showToast(msg, isError) {
   showToast._t = setTimeout(function () { toast.classList.remove('show'); }, 2200);
 }
 
-function onLoadSighting(entryId) {
+function onLoadSight(entryId) {
   try {
-    sessionStorage.setItem('ocsrLoadSightingId', entryId);
+    sessionStorage.setItem('ocsrLoadSightId', entryId);
   } catch (e) {
-    showToast('Could not hand off to New Sighting (storage unavailable).', true);
+    showToast('Could not hand off to New Sight (storage unavailable).', true);
     return;
   }
   location.href = 'index.html';
 }
 
-function onDeleteSighting(entryId) {
+function onDeleteSight(entryId) {
   if (!confirm('Delete this saved sight? This cannot be undone.')) return;
   SightStorage.remove(entryId).then(function () {
     showToast('Deleted.');
@@ -150,23 +150,23 @@ function refreshSavedList() {
 
       item.querySelector('.saved-item-title').textContent = title;
       item.querySelector('.saved-item-meta').textContent = meta;
-      item.querySelector('.btn-mini-load').addEventListener('click', function () { onLoadSighting(entry.id); });
+      item.querySelector('.btn-mini-load').addEventListener('click', function () { onLoadSight(entry.id); });
       item.querySelector('.btn-mini-fix').addEventListener('click', function () { openAddToFixPanel(entry.id); });
       item.querySelector('.btn-mini-drleg').addEventListener('click', function () { onSendToDrLeg(entry.id); });
-      item.querySelector('.btn-mini-del').addEventListener('click', function () { onDeleteSighting(entry.id); });
+      item.querySelector('.btn-mini-del').addEventListener('click', function () { onDeleteSight(entry.id); });
 
       listEl.appendChild(item);
     });
   }).catch(function (err) {
     console.error(err);
-    showToast('Could not load saved sightings.', true);
+    showToast('Could not load saved sights.', true);
   });
 }
 
 /**
- * "Add to a Fix" for a specific saved sighting (per-row, this page). Same
+ * "Add to a Fix" for a specific saved sight (per-row, this page). Same
  * shared inline-panel pattern as index.html's version (see app.js), just
- * tracking WHICH sighting the panel currently targets, since this page
+ * tracking WHICH sight the panel currently targets, since this page
  * lists many.
  */
 var _addToFixTargetId = null;
@@ -213,15 +213,15 @@ function onConfirmAddToFix() {
   var fixPromise;
   if (select.value === '__new__') {
     var name = document.getElementById('newFixNameInput').value.trim() || 'Untitled Fix';
-    fixPromise = FixStorage.save({ name: name, sightingIds: [] });
+    fixPromise = FixStorage.save({ name: name, sightIds: [] });
   } else {
     fixPromise = FixStorage.get(select.value);
   }
 
   fixPromise.then(function (fix) {
     if (!fix) throw new Error('Fix not found');
-    if (fix.sightingIds.indexOf(sightId) === -1) fix.sightingIds.push(sightId);
-    if (fix.activeSightingIds && fix.activeSightingIds.indexOf(sightId) === -1) fix.activeSightingIds.push(sightId);
+    if (fix.sightIds.indexOf(sightId) === -1) fix.sightIds.push(sightId);
+    if (fix.activeSightIds && fix.activeSightIds.indexOf(sightId) === -1) fix.activeSightIds.push(sightId);
     return FixStorage.save(fix);
   }).then(function (fix) {
     showToast('Added to "' + fix.name + '".');

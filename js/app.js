@@ -10,7 +10,7 @@
  * never on the DOM directly.
  */
 
-var sightingCount = 0;
+var observationCount = 0;
 
 document.addEventListener('DOMContentLoaded', initApp);
 
@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', function () {
  *  - drleg.html sends the newer { position: {time,lat,lon,sourceType,sourceId}, tzOffset }
  *    shape (calc.js's Position type -- see makePosition's own comment)
  *    which carries an exact arrival instant, used below to pre-fill the
- *    first sighting line's observation time as a starting guess. This is a
+ *    first observation line's observation time as a starting guess. This is a
  *    convenience, not a correctness fix -- the AP itself doesn't need a
  *    time (reduceSight only ever reads the observation's own clock time),
  *    it just saves a little typing on the common "DR to an event, then
@@ -66,7 +66,7 @@ function applyPendingHandoff() {
     document.getElementById('lonMin').value = lonDM.min.toFixed(1);
     document.getElementById('lonEW').value = h.position.lon < 0 ? 'W' : 'E';
 
-    var firstRow = document.querySelector('.sighting-item');
+    var firstRow = document.querySelector('.observation-item');
     if (firstRow) {
       var pad2 = function (n) { return String(n).padStart(2, '0'); };
       var hh = Math.floor(local.secOfDay / 3600);
@@ -76,9 +76,9 @@ function applyPendingHandoff() {
       firstRow.querySelector('.t-m').value = pad2(mm);
       firstRow.querySelector('.t-s').value = pad2(ss);
     } else {
-      // Called early in initApp(), before addSightingLine(false) has created
+      // Called early in initApp(), before addObservationLine(false) has created
       // the first row yet -- stash it and apply once that row exists (see
-      // initApp(), right after addSightingLine(false)).
+      // initApp(), right after addObservationLine(false)).
       var pad2b = function (n) { return String(n).padStart(2, '0'); };
       window._pendingObservationTime = {
         h: pad2b(Math.floor(local.secOfDay / 3600)),
@@ -106,20 +106,20 @@ function applyPendingHandoff() {
 }
 
 /**
- * Consumes a one-time "load this saved sighting" handoff from sightings.html's
- * "Load" button (see sessionStorage key 'ocsrLoadSightingId' in js/sightings.js).
- * Sightings.html can't apply the record itself (it doesn't have the sight
+ * Consumes a one-time "load this saved sight" handoff from sights.html's
+ * "Load" button (see sessionStorage key 'ocsrLoadSightId' in js/sights.js).
+ * Sights.html can't apply the record itself (it doesn't have the sight
  * reduction form), so it hands the id off here instead.
  */
-function applyPendingSightingLoad() {
+function applyPendingSightLoad() {
   var id;
   try {
-    id = sessionStorage.getItem('ocsrLoadSightingId');
+    id = sessionStorage.getItem('ocsrLoadSightId');
   } catch (e) {
     return;
   }
   if (!id) return;
-  sessionStorage.removeItem('ocsrLoadSightingId'); // one-time consume
+  sessionStorage.removeItem('ocsrLoadSightId'); // one-time consume
 
   SightStorage.get(id).then(function (record) {
     if (!record) { showToast('Could not find that saved sight.', true); return; }
@@ -139,7 +139,7 @@ function initApp() {
   } catch (e) {}
 
   applyPendingHandoff(); // overrides the date above if Planning just sent one
-  applyPendingSightingLoad(); // may override the AP/date further if Sightings just sent one
+  applyPendingSightLoad(); // may override the AP/date further if Sights just sent one
 
   document.getElementById('bodyType').addEventListener('change', function () {
     handleBodyTypeChange();
@@ -154,7 +154,7 @@ function initApp() {
   });
 
   document.getElementById('btnAddSight').addEventListener('click', function () {
-    addSightingLine(true);
+    addObservationLine(true);
   });
   ['btnClearAll', 'btnClearAllBottom'].forEach(function (id) {
     document.getElementById(id).addEventListener('click', clearAllData);
@@ -257,9 +257,9 @@ function initApp() {
     document.getElementById(id).addEventListener('change', function () { markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); });
   });
 
-  addSightingLine(false);
+  addObservationLine(false);
   if (window._pendingObservationTime) {
-    var firstRowNow = document.querySelector('.sighting-item');
+    var firstRowNow = document.querySelector('.observation-item');
     if (firstRowNow) {
       firstRowNow.querySelector('.t-h').value = window._pendingObservationTime.h;
       firstRowNow.querySelector('.t-m').value = window._pendingObservationTime.m;
@@ -457,16 +457,16 @@ function initStarCombo() {
   });
 }
 
-function addSightingLine(autoFocus) {
-  sightingCount++;
-  var container = document.getElementById('sightingsContainer');
+function addObservationLine(autoFocus) {
+  observationCount++;
+  var container = document.getElementById('observationsContainer');
   var div = document.createElement('div');
-  div.className = 'sighting-item';
-  div.id = 'sightLine_' + sightingCount;
+  div.className = 'observation-item';
+  div.id = 'observationLine_' + observationCount;
 
   div.innerHTML =
     '<div class="input-row">' +
-      '<div class="sighting-side-label">' + sightingCount + '</div>' +
+      '<div class="observation-side-label">' + observationCount + '</div>' +
       '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-h" placeholder="12" maxlength="2">' +
       '<span>:</span>' +
       '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-m" placeholder="00" maxlength="2">' +
@@ -474,7 +474,7 @@ function addSightingLine(autoFocus) {
       '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-s" placeholder="00" maxlength="2">' +
       '<input type="text" inputmode="decimal" class="s-deg" placeholder="31">' +
       '<input type="text" inputmode="decimal" class="s-min" placeholder="08.1">' +
-      (sightingCount > 1 ? '<button class="btn-del" type="button">\u2715</button>' : '') +
+      (observationCount > 1 ? '<button class="btn-del" type="button">\u2715</button>' : '') +
     '</div>' +
     '<div class="error-msg"></div>';
 
@@ -516,7 +516,7 @@ function addSightingLine(autoFocus) {
     input.addEventListener('focus', function () { this.select(); });
   });
 
-  if (sightingCount > 1) {
+  if (observationCount > 1) {
     var delBtn = div.querySelector('.btn-del');
     delBtn.addEventListener('click', function () {
       div.remove();
@@ -605,7 +605,7 @@ function autoFocusNext(el, maxChars, nextEl) {
 // ---------------------------------------------------------------------
 
 function collectObservations() {
-  var rows = document.querySelectorAll('.sighting-item');
+  var rows = document.querySelectorAll('.observation-item');
   var observations = [];
   rows.forEach(function (row) {
     var hVal = row.querySelector('.t-h').value;
@@ -614,7 +614,7 @@ function collectObservations() {
     var degVal = row.querySelector('.s-deg').value;
     var minVal = row.querySelector('.s-min').value;
 
-    // A brand-new/untouched sighting line (e.g. right after "+ Add Another
+    // A brand-new/untouched observation line (e.g. right after "+ Add Another
     // Sight") shouldn't drag the average toward 00:00:00 / 0deg as a phantom
     // zero-value data point -- skip it entirely until at least one of its
     // fields has something in it, at which point it's included right away
@@ -732,13 +732,13 @@ function applyFormState(state) {
   setVal('decBaseDeg', ns.decBaseDeg); setVal('decBaseMin', ns.decBaseMin); setVal('decBaseNS', ns.decBaseNS || 'N');
   setVal('decNextDeg', ns.decNextDeg); setVal('decNextMin', ns.decNextMin); setVal('decNextNS', ns.decNextNS || 'N');
 
-  // Rebuild sighting rows to match the loaded observation count.
-  document.getElementById('sightingsContainer').innerHTML = '';
-  sightingCount = 0;
+  // Rebuild observation rows to match the loaded observation count.
+  document.getElementById('observationsContainer').innerHTML = '';
+  observationCount = 0;
   var obs = (state.observations && state.observations.length) ? state.observations : [{}];
-  obs.forEach(function () { addSightingLine(false); });
+  obs.forEach(function () { addObservationLine(false); });
 
-  var rows = document.querySelectorAll('.sighting-item');
+  var rows = document.querySelectorAll('.observation-item');
   rows.forEach(function (row, i) {
     var o = obs[i] || {};
     row.querySelector('.t-h').value = (o.h !== undefined) ? String(o.h).padStart(2, '0') : '';
@@ -841,7 +841,7 @@ function updateAverages() {
   updateAlmanacHourLabels(baseUtcDate);
 }
 
-/** Placeholder state for "Average of Sightings" -- no sighting line has any data yet. */
+/** Placeholder state for "Average of Observations" -- no observation line has any data yet. */
 function resetAveragesDisplay() {
   document.getElementById('avgLocalTime').innerText = '--:--:--';
   document.getElementById('avgLocalTimeCorrected').innerText = '--:--:--';
@@ -929,7 +929,7 @@ function almanacFieldsAnyFilled(bodyType) {
  * A key representing "the date/body/hour Section 3's values should
  * currently reflect" -- used to detect when previously-filled (or
  * manually-edited) almanac fields have gone stale because the date, body,
- * or average sighting time changed underneath them. Returns null if there
+ * or average observation time changed underneath them. Returns null if there
  * isn't yet enough info to compute it.
  */
 function currentAlmanacContextKey() {
@@ -953,7 +953,7 @@ function currentAlmanacContextKey() {
 }
 
 function hasCompleteTimeAllRows() {
-  var rows = document.querySelectorAll('.sighting-item');
+  var rows = document.querySelectorAll('.observation-item');
   return rows.length > 0 && Array.prototype.every.call(rows, function (row) {
     return row.querySelector('.t-h').value.trim() !== '' &&
            row.querySelector('.t-m').value.trim() !== '' &&
@@ -1056,7 +1056,7 @@ function tryAutoFillAlmanacFromCache() {
 
   if (hasAnyValue && _almanacFieldsContext === null) {
     // First time this session we're tracking context -- treat whatever's
-    // already there (e.g. a freshly-loaded sighting) as the established
+    // already there (e.g. a freshly-loaded sight) as the established
     // baseline rather than immediately flagging it stale.
     _almanacFieldsContext = currentContext;
   }
@@ -1198,7 +1198,7 @@ function tryAutoCalculateReduction() {
 
   renderChart(state, result, apString, built);
 
-  // The exact UTC instant the averaged sighting corresponds to (same
+  // The exact UTC instant the averaged observation corresponds to (same
   // construction used elsewhere to bracket the almanac hour).
   var obsUtcDate = state.date ? new Date(state.date + 'T00:00:00Z') : new Date();
   obsUtcDate.setUTCSeconds(obsUtcDate.getUTCSeconds() + avgUtcSec);
@@ -1266,9 +1266,9 @@ function clearAllData() {
   document.getElementById('addAltCorrMin').value = '0.0';
   document.getElementById('clockErrorSec').value = '0';
   document.getElementById('tzOffset').value = '-4';
-  document.getElementById('sightingsContainer').innerHTML = '';
-  sightingCount = 0;
-  addSightingLine(false);
+  document.getElementById('observationsContainer').innerHTML = '';
+  observationCount = 0;
+  addObservationLine(false);
   window._currentRecordId = null;
   window._currentTitle = null;
   _almanacFieldsContext = null;
@@ -1367,14 +1367,14 @@ function onFetchUsno() {
   if (state.body.type === 'planet' && !state.body.name) missing.push('a planet selection (Section 2)');
   if (state.body.type === 'star' && !state.body.name) missing.push('the star name (Section 2)');
 
-  var rows = document.querySelectorAll('.sighting-item');
+  var rows = document.querySelectorAll('.observation-item');
   var hasCompleteTime = rows.length > 0 && Array.prototype.every.call(rows, function (row) {
     return row.querySelector('.t-h').value.trim() !== '' &&
            row.querySelector('.t-m').value.trim() !== '' &&
            row.querySelector('.t-s').value.trim() !== '';
   });
   var avg = SightCalc.averageObservations(state.observations);
-  if (!avg || !hasCompleteTime) missing.push('a complete sighting time \u2014 Hours, Minutes, and Seconds (Section 2)');
+  if (!avg || !hasCompleteTime) missing.push('a complete observation time \u2014 Hours, Minutes, and Seconds (Section 2)');
 
   if (document.querySelectorAll('.input-error').length > 0) missing.push('valid values for the field(s) currently outlined in red');
 
@@ -1555,7 +1555,7 @@ function showToast(message, isError) {
 /**
  * The sight's "name" is fully derived, never typed: "yyyy-mm-dd HH.mm.ss <type>
  * <name>", from the observation date, the clock-error-corrected AVERAGE local
- * time across all sighting lines (the same "Average of Sightings -> Local
+ * time across all observation lines (the same "Average of Observations -> Local
  * Time corrected" value shown on the form -- it's what the reduction math
  * itself treats as the moment of the sight, and unlike UT it's immediately
  * meaningful to the person who took it: a dusk sight, a daytime sight, a
@@ -1737,9 +1737,9 @@ function onImportJson(evt) {
 /**
  * "Add to a Fix" opens a small inline panel (not a blocking prompt) to pick
  * an existing Fix or name a new one. Operates on the sight this page
- * currently has open -- it must already be saved (Fix references sightings
+ * currently has open -- it must already be saved (Fix references sights
  * by id, so there has to be one) -- and reuses the exact same
- * "push sighting id, save" mutation fixes.js's own add-sighting flow uses.
+ * "push sight id, save" mutation fixes.js's own add-sight flow uses.
  */
 function openAddToFixPanel() {
   if (!window._currentRecordId) {
@@ -1785,15 +1785,15 @@ function onConfirmAddToFix() {
   var fixPromise;
   if (select.value === '__new__') {
     var name = document.getElementById('newFixNameInput').value.trim() || 'Untitled Fix';
-    fixPromise = FixStorage.save({ name: name, sightingIds: [] });
+    fixPromise = FixStorage.save({ name: name, sightIds: [] });
   } else {
     fixPromise = FixStorage.get(select.value);
   }
 
   fixPromise.then(function (fix) {
     if (!fix) throw new Error('Fix not found');
-    if (fix.sightingIds.indexOf(sightId) === -1) fix.sightingIds.push(sightId);
-    if (fix.activeSightingIds && fix.activeSightingIds.indexOf(sightId) === -1) fix.activeSightingIds.push(sightId);
+    if (fix.sightIds.indexOf(sightId) === -1) fix.sightIds.push(sightId);
+    if (fix.activeSightIds && fix.activeSightIds.indexOf(sightId) === -1) fix.activeSightIds.push(sightId);
     return FixStorage.save(fix);
   }).then(function (fix) {
     showToast('Added to "' + fix.name + '".');

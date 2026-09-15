@@ -97,7 +97,7 @@ function restorePlanningForm() {
  * Consumes a one-time Date/TZ/AP handoff from drleg.html's "Send to Planning"
  * (see sessionStorage key 'ocsrPlanningApHandoff' in js/drleg.js). Same
  * {date, tzOffset, latDeg, latMin, latNS, lonDeg, lonMin, lonEW} shape as
- * the existing DR-Leg-to-New-Sighting / Planning-to-New-Sighting handoff
+ * the existing DR-Leg-to-New-Sight / Planning-to-New-Sight handoff
  * (sessionStorage key 'ocsrApHandoff', consumed in app.js) -- just a
  * different destination page, so it gets its own key rather than racing
  * index.html for the same one.

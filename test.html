@@ -225,16 +225,16 @@
       ];
       var multi = SightCalc.computeMultiLopGeometry(sameAP);
       assertClose('multi-LOP: centroid lat with identical APs', multi.originLat, 40.5, 0.0001);
-      assertClose('multi-LOP: sighting apPoint.x ~0 when APs identical', multi.sightings[0].apPoint.x, 0, 1e-6);
+      assertClose('multi-LOP: sight apPoint.x ~0 when APs identical', multi.sights[0].apPoint.x, 0, 1e-6);
       var single = SightCalc.computeLopGeometry(90, 5);
-      assertClose('multi-LOP: intercept matches single-sight geometry', multi.sightings[0].interceptPoint.x, single.interceptPoint.x, 1e-6);
+      assertClose('multi-LOP: intercept matches single-sight geometry', multi.sights[0].interceptPoint.x, single.interceptPoint.x, 1e-6);
 
       var diffAP = [
         { lat: 40.0, lon: -74.0, zn: 0, interceptNM: 10 },
         { lat: 41.0, lon: -74.0, zn: 90, interceptNM: 10 }
       ];
       var multiDiff = SightCalc.computeMultiLopGeometry(diffAP);
-      assertClose('multi-LOP: differing-AP offset (nm)', multiDiff.sightings[0].apPoint.y, -30, 0.01);
+      assertClose('multi-LOP: differing-AP offset (nm)', multiDiff.sights[0].apPoint.y, -30, 0.01);
     })();
 
     // --- signedPositionFromRecord ---
@@ -267,13 +267,13 @@
     // point should resolve both methods back to that point, with ~0 spread ---
     (function testResolveMultiLopFixThreeLopsConcurrent() {
       var truePoint = { x: 3, y: 4 };
-      function sightingThrough(zn) {
+      function sightThrough(zn) {
         var geo = SightCalc.computeLopGeometry(zn, 0);
         var interceptNM = geo.azimuthUnit.x * truePoint.x + geo.azimuthUnit.y * truePoint.y;
         return SightCalc.computeLopGeometry(zn, interceptNM);
       }
-      var sightings = [10, 130, 250].map(sightingThrough);
-      var fix = SightCalc.resolveMultiLopFix(sightings);
+      var sights = [10, 130, 250].map(sightThrough);
+      var fix = SightCalc.resolveMultiLopFix(sights);
       assertClose('3-LOP concurrent: least-squares x', fix.leastSquaresPoint.x, 3, 0.001);
       assertClose('3-LOP concurrent: least-squares y', fix.leastSquaresPoint.y, 4, 0.001);
       // Exact concurrency is a degenerate (zero-area) triangle -- the incenter
@@ -287,17 +287,17 @@
     // should genuinely differ for an asymmetric error ---
     (function testResolveMultiLopFixCockedHat() {
       var truePoint = { x: 3, y: 4 };
-      function sightingThrough(zn, extraNM) {
+      function sightThrough(zn, extraNM) {
         var geo0 = SightCalc.computeLopGeometry(zn, 0);
         var interceptNM = geo0.azimuthUnit.x * truePoint.x + geo0.azimuthUnit.y * truePoint.y + (extraNM || 0);
         return SightCalc.computeLopGeometry(zn, interceptNM);
       }
-      var sightings = [
-        sightingThrough(15, 1),
-        sightingThrough(60, -0.4),
-        sightingThrough(260, 0.3)
+      var sights = [
+        sightThrough(15, 1),
+        sightThrough(60, -0.4),
+        sightThrough(260, 0.3)
       ];
-      var fix = SightCalc.resolveMultiLopFix(sightings);
+      var fix = SightCalc.resolveMultiLopFix(sights);
       assertClose('cocked hat produced (non-degenerate)', fix.bisector ? 1 : 0, 1, 0);
       assertClose('cocked hat maxSideNM is positive', fix.bisector.maxSideNM > 0 ? 1 : 0, 1, 0);
       var distApart = Math.hypot(
@@ -309,8 +309,8 @@
 
     // --- selectWidestAzimuthSpreadTriple: avoids pairing two close azimuths ---
     (function testSelectWidestAzimuthSpreadTriple() {
-      var sightings = [0, 5, 130, 250].map(function (zn) { return SightCalc.computeLopGeometry(zn, 10); });
-      var triple = SightCalc.selectWidestAzimuthSpreadTriple(sightings);
+      var sights = [0, 5, 130, 250].map(function (zn) { return SightCalc.computeLopGeometry(zn, 10); });
+      var triple = SightCalc.selectWidestAzimuthSpreadTriple(sights);
       assertClose('widest-spread triple excludes index 0 (too close to index 1)', triple.indexOf(0), -1, 0);
       assertClose('widest-spread triple includes index 1', triple.indexOf(1) !== -1 ? 1 : 0, 1, 0);
       assertClose('widest-spread triple includes index 2', triple.indexOf(2) !== -1 ? 1 : 0, 1, 0);

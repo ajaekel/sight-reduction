@@ -426,11 +426,11 @@
   }
 
   /**
-   * Pure: given a stored sighting's "position" sub-object (the shape
+   * Pure: given a stored sight's "position" sub-object (the shape
    * collectFormState() produces: latDeg/latMin/latNS/lonDeg/lonMin/lonEW),
    * returns signed decimal degrees (S/W negative). This is the non-DOM
    * counterpart to app.js's getAssumedPositionSigned() -- used when reading
-   * a saved sighting record directly (e.g. for a Fix plot) rather than
+   * a saved sight record directly (e.g. for a Fix plot) rather than
    * live form fields.
    */
   function signedPositionFromRecord(position) {
@@ -444,21 +444,21 @@
   }
 
   /**
-   * Pure: lays out multiple sightings' AP + LOP geometry in one shared
+   * Pure: lays out multiple sights' AP + LOP geometry in one shared
    * North-up, nm-based plane, so they can be overlaid on a single chart.
    *
-   * Each sighting's AP may differ slightly (e.g. a 3-star fix taken over a
+   * Each sight's AP may differ slightly (e.g. a 3-star fix taken over a
    * few minutes, or genuinely different APs) -- the shared origin is the
-   * centroid of all APs, and each sighting's own AP is placed at its offset
+   * centroid of all APs, and each sight's own AP is placed at its offset
    * from that centroid (flat-earth approximation: dx = dLon*60*cos(refLat),
    * dy = dLat*60, both in nm -- entirely adequate at chart-plotting scale).
-   * A sighting's own LOP geometry (computeLopGeometry, relative to ITS OWN
+   * A sight's own LOP geometry (computeLopGeometry, relative to ITS OWN
    * AP) is then translated by that same offset into the shared frame.
    *
-   * sightings: [{ lat, lon, zn, interceptNM, ...anything else the caller
+   * sights: [{ lat, lon, zn, interceptNM, ...anything else the caller
    *               wants carried through untouched, e.g. label/color/id }]
    *
-   * A sighting that's been advanced for a Running Fix (see fixes.js) may
+   * A sight that's been advanced for a Running Fix (see fixes.js) may
    * also carry originalLat/originalLon -- its own as-observed AP, before
    * the DR-Leg shift. When present, this also computes originalApPoint and
    * originalInterceptPoint in the SAME shared frame, using the SAME
@@ -470,26 +470,26 @@
    * Returns {
    *   originLat, originLon,          -- the centroid AP (decimal degrees)
    *   maxExtentNM,                    -- farthest point from origin, for scale selection
-   *   sightings: [{
+   *   sights: [{
    *     ...all original fields carried through,
    *     apPoint, azimuthUnit, interceptPoint, lopDirection,   -- all in shared nm frame
    *     originalApPoint?, originalInterceptPoint?              -- only if originalLat/originalLon given
    *   }]
    * }
    */
-  function computeMultiLopGeometry(sightings) {
-    if (!sightings || sightings.length === 0) {
-      return { originLat: 0, originLon: 0, maxExtentNM: 0, sightings: [] };
+  function computeMultiLopGeometry(sights) {
+    if (!sights || sights.length === 0) {
+      return { originLat: 0, originLon: 0, maxExtentNM: 0, sights: [] };
     }
 
-    var n = sightings.length;
-    var originLat = sightings.reduce(function (sum, s) { return sum + s.lat; }, 0) / n;
-    var originLon = sightings.reduce(function (sum, s) { return sum + s.lon; }, 0) / n;
+    var n = sights.length;
+    var originLat = sights.reduce(function (sum, s) { return sum + s.lat; }, 0) / n;
+    var originLon = sights.reduce(function (sum, s) { return sum + s.lon; }, 0) / n;
     var originLatRad = rad(originLat);
     var cosOriginLat = Math.cos(originLatRad);
 
     var maxExtentNM = 0;
-    var results = sightings.map(function (s) {
+    var results = sights.map(function (s) {
       var dLat = s.lat - originLat;
       var dLon = s.lon - originLon;
       var apPoint = {
@@ -497,7 +497,7 @@
         y: dLat * 60                // North nm
       };
 
-      var localGeo = computeLopGeometry(s.zn, s.interceptNM); // relative to this sighting's own AP
+      var localGeo = computeLopGeometry(s.zn, s.interceptNM); // relative to this sight's own AP
       var interceptPoint = {
         x: apPoint.x + localGeo.interceptPoint.x,
         y: apPoint.y + localGeo.interceptPoint.y
@@ -529,7 +529,7 @@
       return out;
     });
 
-    return { originLat: originLat, originLon: originLon, maxExtentNM: maxExtentNM, sightings: results };
+    return { originLat: originLat, originLon: originLon, maxExtentNM: maxExtentNM, sights: results };
   }
 
   /**
@@ -540,24 +540,24 @@
   }
 
   /**
-   * Pure: out of 3+ sightings, picks the 3 whose azimuths are most evenly
+   * Pure: out of 3+ sights, picks the 3 whose azimuths are most evenly
    * spread around the compass -- specifically, the triple that maximizes the
    * smallest of the three gaps between them. A narrow gap between any two
    * means those two LOPs cross at a shallow angle, which is exactly what
    * makes both a plain intersection AND the bisector construction below
    * unreliable (small altitude errors swing the crossing point a long way).
-   * Returns [i, j, k] (indices into `sightings`), or null if fewer than 3.
+   * Returns [i, j, k] (indices into `sights`), or null if fewer than 3.
    */
-  function selectWidestAzimuthSpreadTriple(sightings) {
-    if (!sightings || sightings.length < 3) return null;
+  function selectWidestAzimuthSpreadTriple(sights) {
+    if (!sights || sights.length < 3) return null;
 
-    var azimuths = sightings.map(function (s) { return azimuthDegFromUnit(s.azimuthUnit); });
+    var azimuths = sights.map(function (s) { return azimuthDegFromUnit(s.azimuthUnit); });
     var best = null;
     var bestScore = -1;
 
-    for (var i = 0; i < sightings.length; i++) {
-      for (var j = i + 1; j < sightings.length; j++) {
-        for (var k = j + 1; k < sightings.length; k++) {
+    for (var i = 0; i < sights.length; i++) {
+      for (var j = i + 1; j < sights.length; j++) {
+        for (var k = j + 1; k < sights.length; k++) {
           var sorted = [azimuths[i], azimuths[j], azimuths[k]].sort(function (a, b) { return a - b; });
           var gapA = sorted[1] - sorted[0];
           var gapB = sorted[2] - sorted[1];
@@ -576,7 +576,7 @@
 
   /**
    * Pure: intersection of two LOPs, each given as a point + its normal
-   * (a LOP's normal is exactly its sighting's azimuthUnit -- the LOP is
+   * (a LOP's normal is exactly its sight's azimuthUnit -- the LOP is
    * defined by azimuthUnit . (P - interceptPoint) = 0). Returns null if the
    * two azimuths are too nearly parallel to intersect reliably.
    */
@@ -609,7 +609,7 @@
    * one sight is known to be better than the others, the incenter has no
    * way to reflect that and should be treated skeptically.
    *
-   * triple: exactly 3 sightings, each { azimuthUnit: {x,y}, interceptPoint: {x,y} }
+   * triple: exactly 3 sights, each { azimuthUnit: {x,y}, interceptPoint: {x,y} }
    * Returns { vertices: [v0, v1, v2], incenter: {x,y}, maxSideNM } or null if
    * any pair is too nearly parallel, or the "triangle" has ~zero perimeter.
    * vertices[0] = LOP1 x LOP2 (opposite LOP0), and so on -- standard
@@ -663,18 +663,18 @@
    *    degrades the same way a plain intersection does when LOPs cross at a
    *    shallow angle.
    *
-   * sightings: [{ azimuthUnit: {x,y}, interceptPoint: {x,y} }, ...]
+   * sights: [{ azimuthUnit: {x,y}, interceptPoint: {x,y} }, ...]
    *
    * Returns { solvable: false, reason } or
    *         { solvable: true, leastSquaresPoint: {x,y}, bisector?: {...} }
    */
-  function resolveMultiLopFix(sightings) {
-    if (!sightings || sightings.length < 2) {
+  function resolveMultiLopFix(sights) {
+    if (!sights || sights.length < 2) {
       return { solvable: false, reason: 'Need at least 2 plotted LOPs to resolve a fix.' };
     }
 
     var Sxx = 0, Sxy = 0, Syy = 0, Sxc = 0, Syc = 0;
-    sightings.forEach(function (s) {
+    sights.forEach(function (s) {
       var a = s.azimuthUnit.x, b = s.azimuthUnit.y;
       var c = a * s.interceptPoint.x + b * s.interceptPoint.y;
       Sxx += a * a; Sxy += a * b; Syy += b * b;
@@ -694,9 +694,9 @@
       }
     };
 
-    if (sightings.length >= 3) {
-      var tripleIndices = sightings.length === 3 ? [0, 1, 2] : selectWidestAzimuthSpreadTriple(sightings);
-      var triple = tripleIndices.map(function (idx) { return sightings[idx]; });
+    if (sights.length >= 3) {
+      var tripleIndices = sights.length === 3 ? [0, 1, 2] : selectWidestAzimuthSpreadTriple(sights);
+      var triple = tripleIndices.map(function (idx) { return sights[idx]; });
       var bisectors = resolveCockedHatBisectors(triple);
       if (bisectors) {
         result.bisector = {
@@ -736,7 +736,7 @@
 
   var CHART_PALETTE = ['#00bcd4', '#ff9800', '#8bc34a', '#e91e63', '#9c27b0', '#ffeb3b', '#03a9f4', '#ff5722'];
 
-  /** Stable color for a given sighting index, cycling through CHART_PALETTE. Single source of truth so a sighting's color is identical everywhere it's shown (a fix's sighting list, its plot, its legend). */
+  /** Stable color for a given sight index, cycling through CHART_PALETTE. Single source of truth so a sight's color is identical everywhere it's shown (a fix's sight list, its plot, its legend). */
   function paletteColor(index) {
     var i = ((index % CHART_PALETTE.length) + CHART_PALETTE.length) % CHART_PALETTE.length;
     return CHART_PALETTE[i];

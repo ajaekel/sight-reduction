@@ -7,7 +7,7 @@
  * only ever talks to SightStorage, never to localStorage directly.
  *
  * A companion "index" entry (a small array of {id, savedAt, date, bodyLabel})
- * is kept alongside the full records so the "Saved Sightings" list can render
+ * is kept alongside the full records so the "Saved Sights" list can render
  * without loading every full record.
  */
 (function (global) {
