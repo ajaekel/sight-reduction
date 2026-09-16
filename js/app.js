@@ -467,14 +467,18 @@ function addObservationLine(autoFocus) {
   div.innerHTML =
     '<div class="input-row">' +
       '<div class="observation-side-label">' + observationCount + '</div>' +
-      '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-h" placeholder="12" maxlength="2">' +
-      '<span>:</span>' +
-      '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-m" placeholder="00" maxlength="2">' +
-      '<span>:</span>' +
-      '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-s" placeholder="00" maxlength="2">' +
-      '<input type="text" inputmode="decimal" class="s-deg" placeholder="31">' +
-      '<input type="text" inputmode="decimal" class="s-min" placeholder="08.1">' +
-      (observationCount > 1 ? '<button class="btn-del" type="button">\u2715</button>' : '') +
+      '<span class="time-hm">' +
+        '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-h" placeholder="12" maxlength="2">' +
+        '<span>:</span>' +
+        '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-m" placeholder="00" maxlength="2">' +
+        '<span>:</span>' +
+        '<input type="text" inputmode="numeric" pattern="[0-9]*" class="time-box t-s" placeholder="00" maxlength="2">' +
+      '</span>' +
+      '<span class="height-group">' +
+        '<input type="text" inputmode="decimal" class="s-deg" placeholder="31">' +
+        '<input type="text" inputmode="decimal" class="s-min" placeholder="08.1">' +
+      '</span>' +
+      (observationCount > 1 ? '<button class="btn-del" type="button">\u2715</button>' : '<button class="btn-del" type="button" tabindex="-1" aria-hidden="true" style="visibility: hidden;">\u2715</button>') +
     '</div>' +
     '<div class="error-msg"></div>';
 
