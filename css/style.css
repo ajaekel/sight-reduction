@@ -11,6 +11,7 @@
   --chart-grid: #3a3a3a;
   --chart-fix: #ffffff;
   --chart-bisector: #bdbdbd;
+  --chart-dr: #8bc34a;
 }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -205,6 +206,20 @@ label {
   flex: 1;
 }
 
+/* Groups the two altitude fields together, visually separated from the
+   time group by the same dashed-divider convention used elsewhere on this
+   page (see .almanac-col-border) -- previously just a margin, which read
+   as a gap rather than a deliberate separation between two different
+   kinds of field. */
+.height-group {
+  display: flex;
+  gap: 6px;
+  flex: 2;
+  min-width: 0;
+  border-left: 1px dashed var(--border);
+  padding-left: 10px;
+}
+
 /* Inline layout for Section 1 Date, Celestial Body & Name */
 .body-inline-row {
   display: flex;
@@ -326,6 +341,20 @@ input, select {
   box-sizing: border-box;
   -webkit-appearance: none;
 }
+/* type="number" is used specifically (and only) where a field needs a
+   minus sign typeable directly -- e.g. Timezone Offset -- since iOS only
+   shows a "-" key on the number-style keypad, not on inputmode="decimal"'s.
+   The spin-button arrows that come with type="number" don't match this
+   app's plain custom-styled inputs anywhere else, so they're suppressed
+   here rather than left inconsistent on just these few fields. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
 input[type="checkbox"] {
   width: auto;
   height: auto;
@@ -357,7 +386,47 @@ select {
 .time-hm {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  background: #2a2a2a;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 6px;
+}
+/* The compact "HH:MM" / "HH:MM:SS" look: each digit-box keeps its existing
+   behavior (numeric-only, auto-advance -- see wireDigitBox/autoFocusNext)
+   entirely unchanged; only its OWN border/background is removed here so the
+   shared .time-hm wrapper is what reads as a single field, with the colons
+   as plain static text between the boxes rather than gaps between separate
+   inputs. Deliberately not type="time": that's a native control, and on iOS
+   it always shows a scroll-wheel picker (not a keyboard) plus AM/PM unless
+   the device itself is set to 24h -- neither is under this page's control
+   with type="time". type="text" inputmode="numeric" (already what these
+   boxes use) is what gets a plain number keypad with no AM/PM at all. */
+.time-hm .time-box {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 8px 1px;
+  width: 24px;
+}
+/* Without the box's own border (removed above so the group reads as one
+   field), there's otherwise no visible cue for WHICH digit position is
+   active -- most noticeable right when a new observation row auto-focuses
+   its Hour box (see addObservationLine's autoFocus), where the focus move
+   is real (confirmed: document.activeElement does update correctly) but
+   was easy to read as "didn't happen" with nothing to see. A background
+   highlight on just the focused box restores that visible cue without
+   touching any of the underlying focus/auto-advance logic. */
+.time-hm .time-box:focus {
+  outline: none;
+  background: rgba(0, 188, 212, 0.18);
+  border-radius: 3px;
+}
+.time-hm:focus-within {
+  border-color: var(--accent);
+}
+.time-hm > span {
+  color: #fff;
+  user-select: none;
 }
 .planning-row {
   display: flex;
@@ -670,6 +739,188 @@ details:not([open]) > summary.cache-summary-toggle {
 .chart-wrap {
   display: flex;
   justify-content: center;
+  position: relative;
+}
+/* Anything wrapping a chart's actual render target in an extra div (done
+   for chartFullscreen.js's benefit -- see its own header comment for why)
+   needs that inner div to actually fill the flex container's width;
+   otherwise it sizes to its own content instead of the space available,
+   and the SVG inside it (which sizes itself as a % of ITS parent) has
+   nothing real to size against. This was the actual cause of the chart
+   rendering "exceedingly small" in normal view after the fullscreen
+   wrapper was introduced -- not something the fullscreen CSS itself
+   touched, but a direct structural consequence of adding that wrapper
+   without also constraining what's now inside it. Targeted structurally
+   (direct child of .chart-wrap) rather than by a specific id, so any
+   future chart wrapped the same way gets this automatically rather than
+   requiring it to be remembered each time.
+*/
+.chart-wrap > div {
+  width: 100%;
+  min-width: 0;
+}
+.chart-fs-toggle {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+}
+.chart-fs-reset {
+  position: absolute;
+  top: 4px;
+  right: 40px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 2;
+}
+.chart-wrap-fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+  box-sizing: border-box;
+  overflow: hidden; /* keeps zoomed/panned content from visually escaping the overlay */
+  touch-action: none; /* pan/zoom handles its own touch gestures; this stops the browser's own pinch/scroll from fighting it */
+}
+/* width/height: auto here (with only max-width/max-height:100% capping
+   them) was the actual bug reported: this SVG has a viewBox but no
+   explicit width/height attribute of its own, so "auto" gives the browser
+   nothing concrete to size FROM -- it falls back to a tiny default
+   replaced-element size instead of growing to fill the overlay, which is
+   exactly what produced a full-screen overlay with no visible chart in
+   it. min(90vw, 90vh) sizes both dimensions directly off the viewport
+   instead -- since the chart's own viewBox is square, using the same
+   value for both gives the largest square that fits within 90% of
+   whichever viewport dimension is smaller, with no dependency on the
+   flex container's own sizing behavior for an SVG child. */
+.chart-wrap-fullscreen .chart-svg {
+  width: min(90vw, 90vh);
+  height: min(90vw, 90vh);
+  max-width: none;
+}
+body.chart-fs-open {
+  overflow: hidden;
+}
+.chart-select-caption {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 6px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.78rem;
+  color: var(--text);
+  text-align: center;
+  z-index: 3;
+  pointer-events: none; /* it's a caption, not a control -- taps pass through to the chart underneath */
+}
+.chart-select-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  border-radius: 10px 10px 0 0;
+  padding: 16px 18px 20px;
+  z-index: 5;
+  box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.4);
+}
+.chart-select-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+}
+.chart-select-title {
+  font-weight: bold;
+  font-size: 1rem;
+  margin-bottom: 6px;
+  padding-right: 24px;
+}
+.chart-select-line {
+  font-size: 0.85rem;
+  color: #ccc;
+  line-height: 1.5;
+}
+.chart-select-open {
+  margin-top: 12px;
+  width: 100%;
+  padding: 10px;
+  background: var(--accent);
+  color: #000;
+  font-weight: bold;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.chart-select-picker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  border-radius: 10px 10px 0 0;
+  padding: 14px 16px 18px;
+  z-index: 5;
+  box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.4);
+  max-height: 60%;
+  overflow-y: auto;
+}
+.chart-select-picker-title {
+  font-size: 0.8rem;
+  color: #999;
+  margin-bottom: 8px;
+}
+.chart-select-picker-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 8px;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.chart-select-picker-row:first-of-type {
+  border-top: none;
 }
 .chart-svg {
   width: 100%;

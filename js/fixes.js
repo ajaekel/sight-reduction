@@ -10,11 +10,14 @@
 var currentFix = null;
 var fixRenderToken = 0;
 var lastChartInput = null; // cached so toggling azimuth/bisectors doesn't need to re-fetch sights
+var currentSelection = null; // {type, recordId, part} | null -- see chartInteraction.js; independent of pan/zoom/fullscreen state
 var bisectorMethodSelected = false; // false = least-squares, true = method of bisectors
 
 document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('swVersion').textContent = APP_VERSION;
   initNavMenu();
+  ChartFullscreen.wire('fixChartWrap', 'fixChartContainer');
+  ChartInteraction.wire('fixChartWrap', { getDetail: getFixSelectionDetail, onSelectionChange: onFixSelectionChange });
 
   document.getElementById('btnNewFix').addEventListener('click', onNewFixClick);
   document.getElementById('btnBackToList').addEventListener('click', function () {
@@ -743,7 +746,9 @@ function renderCurrentPlot() {
   var opts = {
     showAzimuth: document.getElementById('toggleShowAzimuth').checked,
     showBisectors: bisectorMethodSelected,
-    fixTimeLabel: fixTimeLabel
+    fixTimeLabel: fixTimeLabel,
+    selected: currentSelection,
+    fixId: currentFix.id
   };
 
   var container = document.getElementById('fixChartContainer');
@@ -772,6 +777,59 @@ function renderCurrentPlot() {
   });
 
   renderFixResult(result.fix, plotInput.length, legendEl);
+}
+
+/**
+ * chartInteraction.js calls this whenever the selected element changes
+ * (a tap resolved to a single element, an ambiguity list got resolved, or
+ * the selection was cleared) -- it doesn't know or care what changed,
+ * only that it did. Re-rendering with the new selection is what lets
+ * chart.js draw the newly-selected element emphasized; that's the one
+ * place these two files' concerns touch.
+ */
+function onFixSelectionChange(selection) {
+  currentSelection = selection;
+  renderCurrentPlot();
+}
+
+/**
+ * Supplies the actual semantic content chartInteraction.js's generic
+ * sheet/caption shell displays -- this is the one place that knows what
+ * "lop"/"sight"/"fix" mean, deliberately kept out of both chart.js (draws
+ * geometry, knows nothing about selection meaning) and chartInteraction.js
+ * (owns hit-testing and presentation mechanics, also knows nothing about
+ * selection meaning).
+ */
+function getFixSelectionDetail(candidate) {
+  if (candidate.type === 'fix') {
+    if (!currentFix.resolvedPosition) return null;
+    return {
+      title: 'Fix',
+      lines: [
+        (bisectorMethodSelected ? 'Bisectors' : 'Least-squares') + ' \u00B7 ' + getActiveSightIds(currentFix).size + ' active sights',
+        SightCalc.formatLat(currentFix.resolvedPosition.lat) + ' ' + SightCalc.formatLon(currentFix.resolvedPosition.lon)
+      ]
+      // No onOpen -- we're already looking at this fix's own page; nowhere else to send "Open" to.
+    };
+  }
+
+  if (candidate.type === 'lop' || candidate.type === 'sight') {
+    var item = (lastChartInput || []).find(function (x) { return x.id === candidate.recordId; });
+    if (!item) return null;
+    var lines = [formatZnBadge(item.zn) + ' \u00B7 ' + formatInterceptBadge(item.interceptNM)];
+    if (item.transferLabel) lines.push('Advanced \u2014 ' + item.transferLabel);
+    return {
+      title: item.chartLabel || item.label,
+      lines: lines,
+      openLabel: 'Open Sight',
+      onOpen: function () {
+        sessionStorage.setItem('ocsrLoadSightId', item.id);
+        location.href = 'index.html';
+      }
+    };
+  }
+
+  return null;
 }
 
 function fixIconSvg() {
