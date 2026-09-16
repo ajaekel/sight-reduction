@@ -1,5 +1,25 @@
 # Roadmap
 
+## Support passage
+
+* [X] Chronological record of navigation
+* [ ] Add plot
+
+## Support full-screen plotting (Desktop mode)
+
+* [X] Develop feature for Fix plot:
+  * [X] Zoom in/out
+  * [ ] Collapsible control panels
+  * [ ] Adjust visualization variables
+  * [ ] Background layer selection: map, satellite
+* [ ] Enable for Sight plot
+* [ ] Enable for DR Leg plot 
+* [ ] Enable for Passage and make actionable – create/edit navigation elements from plot
+
+## Support Meridian Passage as a navigation element
+
+* [ ] User enters sextant height (+corrections) and gets Latitude
+
 ## Autofill vs Manual modes
 
 * [X] Add button to retrieve data with USNO API call
@@ -21,26 +41,6 @@
 * [ ] Add option to expose the formulas behind calculated fields
 * [ ] Option to show intermediate calculations
 * [ ] Evolve the app to be an educational aid
-
-## Support passage
-
-* [X] Chronological record of navigation
-* [ ] Add plot
-
-## Support full-screen plotting (Desktop mode)
-
-* [X] Develop feature for Fix plot:
-  * [X] Zoom in/out
-  * [ ] Collapsible control panels
-  * [ ] Adjust visualization variables
-  * [ ] Background layer selection: map, satellite
-* [ ] Enable for Sight plot
-* [ ] Enable for DR Leg plot 
-* [ ] Enable for Passage and make actionable – create/edit navigation elements from plot
-
-## Support Meridian Passage as a navigation element
-
-* [ ] User enters sextant height (+corrections) and gets Latitude
 
 ## Data management page
 
