@@ -52,7 +52,7 @@
     <div class="form-group">
       <div class="body-inline-row">
         <div class="body-inline-col" style="flex: 1.2;">
-          <label>Date (local)</label>
+          <label>Date</label>
           <input type="date" id="sightDate">
         </div>
 
@@ -88,44 +88,43 @@
     </div>
 
     <div class="form-group">
-      <label>Notes (observed bearing, visibility, etc...)</label>
-      <input type="text" id="sightNotes" placeholder="e.g. Morning sun, day 3 offshore">
+      <label>Notes</label>
+      <input type="text" id="sightNotes" placeholder="e.g. observed bearing, confidence, etc...">
     </div>
 
     <div class="form-group">
-      <div class="input-row">
-        <div style="width: 140px; flex-shrink: 0; font-size: 0.85rem; color: #aaa;">
-          Latitude, assumed<br><span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span>
+      <div class="body-inline-row">
+        <div class="body-inline-col almanac-col-border">
+          <label>Lat (Deg / Min / N-S)</label>
+          <div class="input-row input-row-3">
+            <input type="text" inputmode="decimal" class="deg-box" id="latDeg" placeholder="40" value="40" onfocus="this.select()">
+            <input type="text" inputmode="decimal" class="min-box" id="latMin" placeholder="32.2" value="32.2" onfocus="this.select()">
+            <select id="latNS" class="select-compact">
+              <option value="N">N</option>
+              <option value="S">S</option>
+            </select>
+          </div>
         </div>
-        <input type="text" inputmode="decimal" id="latDeg" placeholder="40" onfocus="this.select()">
-        <input type="text" inputmode="decimal" id="latMin" placeholder="32.2" onfocus="this.select()">
-        <select id="latNS">
-          <option value="N">N</option>
-          <option value="S">S</option>
-        </select>
+        <div class="body-inline-col">
+          <label>Lon (Deg / Min / E-W)</label>
+          <div class="input-row input-row-3">
+            <input type="text" inputmode="decimal" class="deg-box" id="lonDeg" placeholder="073" value="073" onfocus="this.select()">
+            <input type="text" inputmode="decimal" class="min-box" id="lonMin" placeholder="56.3" value="56.3" onfocus="this.select()">
+            <select id="lonEW" class="select-compact">
+              <option value="W">W</option>
+              <option value="E">E</option>
+            </select>
+          </div>
+        </div>
       </div>
       <div class="error-msg" id="errLat"></div>
-    </div>
-
-    <div class="form-group">
-      <div class="input-row">
-        <div style="width: 140px; flex-shrink: 0; font-size: 0.85rem; color: #aaa;">
-          Longitude, assumed<br><span style="font-size:0.75rem; color:#888;">(Deg / Min / E-W)</span>
-        </div>
-        <input type="text" inputmode="decimal" id="lonDeg" placeholder="073" onfocus="this.select()">
-        <input type="text" inputmode="decimal" id="lonMin" placeholder="56.3" onfocus="this.select()">
-        <select id="lonEW">
-          <option value="W">W</option>
-          <option value="E">E</option>
-        </select>
-      </div>
       <div class="error-msg" id="errLon"></div>
     </div>
 
     <div class="form-group">
       <label>Timezone Offset (UTC Offset in Hours)</label>
       <div class="input-row">
-        <input type="text" inputmode="decimal" id="tzOffset" placeholder="-4" value="-4">
+        <input type="number" step="any" id="tzOffset" placeholder="-4" value="-4">
       </div>
       <label style="font-size: 0.75rem; margin-top:2px;">e.g., -4 for EDT, -5 for EST, +0 for UTC</label>
     </div>
@@ -136,8 +135,10 @@
     <div class="section-title">2. Observations &amp; Corrections</div>
 
     <div class="sub-title">OBSERVATIONS</div>
-    <div style="margin-left: 22px; margin-bottom: 4px; font-size: 0.75rem; color: #aaa;">
-      24h Time (HH : MM : SS) | Height (Deg / Min)
+    <div class="input-row" style="margin-bottom: 4px;">
+      <div class="observation-side-label"></div>
+      <div style="flex-shrink: 0; width: 108px; font-size: 0.75rem; color: #aaa; text-align: center;">Time (24-hour)</div>
+      <div style="flex: 2; font-size: 0.75rem; color: #aaa; text-align: left; border-left: 1px dashed var(--border); padding-left: 10px;">Height (Deg / Min)</div>
     </div>
 
     <div id="observationsContainer"></div>
@@ -166,20 +167,23 @@
     <div class="sub-title" style="margin-top: 18px;">Sextant Altitude Corrections</div>
 
     <div class="form-group">
-      <label>Index Error (IE) [Minutes / On-Off Arc]</label>
-      <div class="input-row">
-        <input type="text" inputmode="decimal" id="ieMin" placeholder="2.0" value="0.0" onfocus="this.select()">
-        <select id="ieSign">
-          <option value="on">On the Arc (-)</option>
-          <option value="off">Off the Arc (+)</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label>Dip Correction [Minutes (-)]</label>
-      <div class="input-row">
-        <input type="text" inputmode="decimal" id="dipMin" placeholder="3.8" value="0.0" onfocus="this.select()">
+      <div class="body-inline-row">
+        <div class="body-inline-col almanac-col-border">
+          <label>IE (Min / On-Off Arc)</label>
+          <div class="input-row">
+            <input type="text" inputmode="decimal" id="ieMin" placeholder="2.0" value="0.0" onfocus="this.select()">
+            <select id="ieSign">
+              <option value="on">On the Arc (-)</option>
+              <option value="off">Off the Arc (+)</option>
+            </select>
+          </div>
+        </div>
+        <div class="body-inline-col">
+          <label>Dip (Min, always &minus;)</label>
+          <div class="input-row">
+            <input type="text" inputmode="decimal" id="dipMin" placeholder="3.8" value="0.0" onfocus="this.select()">
+          </div>
+        </div>
       </div>
     </div>
 
@@ -188,24 +192,27 @@
     </div>
 
     <div class="form-group">
-      <label>Altitude Correction / Refraction [Minutes / (+/-)]</label>
-      <div class="input-row">
-        <input type="text" inputmode="decimal" id="altCorrMin" placeholder="12.4" value="0.0" onfocus="this.select()">
-        <select id="altCorrSign">
-          <option value="+">+</option>
-          <option value="-">-</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label>Additional Altitude Correction [Minutes / (+/-)]</label>
-      <div class="input-row">
-        <input type="text" inputmode="decimal" id="addAltCorrMin" placeholder="0.2" value="0.0" onfocus="this.select()">
-        <select id="addAltCorrSign">
-          <option value="+">+</option>
-          <option value="-">-</option>
-        </select>
+      <div class="body-inline-row">
+        <div class="body-inline-col almanac-col-border">
+          <label>Alt Corr (Min / +/-)</label>
+          <div class="input-row">
+            <input type="text" inputmode="decimal" id="altCorrMin" placeholder="12.4" value="0.0" onfocus="this.select()">
+            <select id="altCorrSign">
+              <option value="+">+</option>
+              <option value="-">-</option>
+            </select>
+          </div>
+        </div>
+        <div class="body-inline-col">
+          <label>Add'l Corr (Min / +/-)</label>
+          <div class="input-row">
+            <input type="text" inputmode="decimal" id="addAltCorrMin" placeholder="0.2" value="0.0" onfocus="this.select()">
+            <select id="addAltCorrSign">
+              <option value="+">+</option>
+              <option value="-">-</option>
+            </select>
+          </div>
+        </div>
       </div>
     </div>
 
