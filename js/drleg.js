@@ -130,6 +130,7 @@ function resetResults() {
   document.getElementById('btnChainLeg').disabled = true;
   document.getElementById('btnSaveLeg').disabled = true;
   window._lastDrResult = null;
+  renderDrLegChartDisplay(null);
 }
 
 function setDrMode(mode) {
@@ -238,7 +239,68 @@ function recompute() {
   document.getElementById('btnChainLeg').disabled = false;
   document.getElementById('btnSaveLeg').disabled = false;
 
+  renderDrLegChartDisplay(window._lastDrResult);
+
   saveForm();
+}
+
+/**
+ * DR track caption, matching the convention already established for the
+ * same annotation drawn inside a Fix's plot (fixes.js): "DR 0934-1834 ·
+ * 135°T @ 10 kn · 90.0 NM" (same day), or "DR 15 Sep 2340 -> 16 Sep 0110 ·
+ * ..." spanning midnight -- 4-digit 24h time, no colon, per USCG
+ * convention. Duplicated here rather than shared, matching how this
+ * codebase already keeps page-specific formatting local (e.g.
+ * wireDigitBox exists separately in app.js/drleg.js/planning.js) rather
+ * than factoring out a cross-page utility file for it.
+ */
+/** Shared by formatDrTrackLabel and the chart's own point labels. */
+function fmtHHMM(secOfDay) {
+  return String(Math.floor(secOfDay / 3600)).padStart(2, '0') + String(Math.floor((secOfDay % 3600) / 60)).padStart(2, '0');
+}
+
+function formatDrTrackLabel(r) {
+  var MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var fmtDayMonth = function (dateStr) {
+    var parts = dateStr.split('-');
+    return parseInt(parts[2], 10) + ' ' + MONTH_ABBR[parseInt(parts[1], 10) - 1];
+  };
+  var trimNum = function (n) { return String(Math.round(n * 10) / 10); };
+
+  var start = SightCalc.utcMsToLocalDateTime(new Date(r.startPosition.time).getTime(), r.tzOffset);
+  var end = SightCalc.utcMsToLocalDateTime(new Date(r.endPosition.time).getTime(), r.tzOffset);
+  var timeRange = (start.dateStr !== end.dateStr)
+    ? fmtDayMonth(start.dateStr) + ' ' + fmtHHMM(start.secOfDay) + ' \u2192 ' + fmtDayMonth(end.dateStr) + ' ' + fmtHHMM(end.secOfDay)
+    : fmtHHMM(start.secOfDay) + '\u2013' + fmtHHMM(end.secOfDay);
+  var courseStr = String(Math.round(r.courseDegTrue)).padStart(3, '0') + '\u00B0T';
+
+  return 'DR ' + timeRange + ' \u00B7 ' + courseStr + ' @ ' + trimNum(r.sog) + ' kn \u00B7 ' + r.distanceNM.toFixed(1) + ' NM';
+}
+
+/** Renders (or hides, if there's nothing valid to show) the Plot card. */
+function renderDrLegChartDisplay(r) {
+  var card = document.getElementById('drLegChartCard');
+  if (!r) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = 'block';
+  var startLocal = SightCalc.utcMsToLocalDateTime(new Date(r.startPosition.time).getTime(), r.tzOffset);
+  var endLocal = SightCalc.utcMsToLocalDateTime(new Date(r.endPosition.time).getTime(), r.tzOffset);
+  SightChart.renderDrLegChart(document.getElementById('drLegChartContainer'), {
+    startLat: r.startPosition.lat,
+    startLon: r.startPosition.lon,
+    endLat: r.endPosition.lat,
+    endLon: r.endPosition.lon,
+    startSourceType: r.startPosition.sourceType,
+    startTimeLabel: fmtHHMM(startLocal.secOfDay),
+    endTimeLabel: fmtHHMM(endLocal.secOfDay)
+  });
+  // Displayed as a caption below the chart, not drawn inside the SVG --
+  // see the comment in chart.js's renderDrLegChart for why: this caption
+  // routinely runs 40-55+ characters, which doesn't fit gracefully inside
+  // a chart this small no matter how its position is computed.
+  document.getElementById('drLegChartCaption').textContent = formatDrTrackLabel(r);
 }
 
 function saveForm() {

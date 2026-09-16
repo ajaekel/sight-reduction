@@ -16,6 +16,9 @@ var PRECACHE_URLS = [
   './js/calc.js',
   './js/storage.js',
   './js/chart.js',
+  './js/chartFullscreen.js',
+  './js/chartPanZoom.js',
+  './js/chartInteraction.js',
   './js/almanacCache.js',
   './js/fixStorage.js',
   './js/usno.js',
@@ -59,17 +62,25 @@ self.addEventListener('activate', function (e) {
 });
 
 self.addEventListener('fetch', function (e) {
-  if (e.request.mode === 'navigate') {
-    e.respondWith(
-      fetch(e.request).catch(function () {
-        return caches.match(e.request);
-      })
-    );
-    return;
-  }
+  if (e.request.method !== 'GET') return;
+  // Network-first, falling back to cache -- consistently, for every
+  // same-origin request, not just page navigations (as before). Serving
+  // everything else cache-first meant a freshly deployed JS/CSS file could
+  // keep being served stale for a real, confusing stretch of time after an
+  // update, even with skipWaiting()/clients.claim() already active -- a
+  // genuine source of "my fix isn't taking effect" confusion, not just a
+  // theoretical risk. Falling back to cache (rather than failing outright)
+  // is what keeps this working offline, which is the whole point of this
+  // app -- and every successful network fetch also refreshes the cache, so
+  // the offline fallback itself doesn't stay stuck at whatever was
+  // precached at install time.
   e.respondWith(
-    caches.match(e.request).then(function (cached) {
-      return cached || fetch(e.request);
+    fetch(e.request).then(function (response) {
+      var copy = response.clone();
+      caches.open(CACHE_NAME).then(function (c) { c.put(e.request, copy); });
+      return response;
+    }).catch(function () {
+      return caches.match(e.request);
     })
   );
 });

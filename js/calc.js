@@ -725,6 +725,22 @@
     };
   }
 
+  /**
+   * Inverse of positionFromOffset: given an origin and a second point (both
+   * signed decimal degrees), returns the second point's {x, y} nm-offset
+   * from the origin in the same local-flat approximation used throughout
+   * this file's chart geometry (x=East, y=North). Needed for any chart that
+   * plots two real lat/lon positions relative to each other rather than
+   * starting from an intercept/azimuth (e.g. a DR leg's start and end).
+   */
+  function offsetFromPosition(originLat, originLon, lat, lon) {
+    var cosOriginLat = Math.cos(rad(originLat)) || 1e-9;
+    return {
+      x: (lon - originLon) * 60 * cosOriginLat,
+      y: (lat - originLat) * 60
+    };
+  }
+
   /** Pure: {type, name} -> display label, e.g. "Sun", "Star Aldebaran", "Planet Jupiter". */
   function formatBodyLabel(body) {
     if (!body) return 'Body';
@@ -749,6 +765,62 @@
       return body.name.toUpperCase();
     }
     return body.type.toUpperCase();
+  }
+
+  /**
+   * Pure: derives a default name for a Sight record from its own data --
+   * "yyyy-mm-dd HH.mm.ss Type Name" -- using the clock-error-corrected
+   * average local time of its observations. Used as the default text
+   * offered in the Save/Export prompts on the New Sight page, and as the
+   * title assigned automatically when a sight is imported directly (the
+   * Sights page's Import button saves straight to storage with no naming
+   * prompt) -- since a Sight's own JSON export never carries a title at
+   * all (title is storage metadata, attached only at SightStorage.save()
+   * time, not part of the record's own data), every import needs this
+   * computed fresh rather than ever finding one already present.
+   *
+   * Moved here from app.js (previously index.html-only) because it's a
+   * pure function of the state object it's given -- no DOM access -- and
+   * needed to be callable from sights.js too, which doesn't load app.js.
+   *
+   * state: a Sight-shaped object -- { date, observations, corrections,
+   *   body: { type, name } }. Same shape collectFormState() produces on
+   *   the New Sight page, and the same shape a parsed import file already
+   *   has, so both callers can pass their object straight through.
+   */
+  function computeAutoName(state) {
+    var pad2 = function (n) { return String(n).padStart(2, '0'); };
+    var now = new Date();
+
+    var dateStr = state.date || now.toISOString().split('T')[0];
+
+    var avg = averageObservations(state.observations);
+    var timeStr;
+    if (avg) {
+      var corr = state.corrections || {};
+      var sign = (corr.clockErrorDirection === 'fast') ? -1 : 1;
+      var correctedSec = ((avg.avgLocalSec + sign * (corr.clockErrorSec || 0)) % 86400 + 86400) % 86400;
+      var h = Math.floor(correctedSec / 3600);
+      var m = Math.floor((correctedSec % 3600) / 60);
+      var s = Math.floor(correctedSec % 60);
+      timeStr = pad2(h) + '.' + pad2(m) + '.' + pad2(s);
+    } else {
+      timeStr = pad2(now.getHours()) + '.' + pad2(now.getMinutes()) + '.' + pad2(now.getSeconds());
+    }
+
+    // Sun/Moon are themselves proper nouns and get capitalized; "star"/"planet"
+    // are just category words, so they stay lowercase -- only the actual name
+    // that follows (Arcturus, Venus, etc.) is the proper noun there.
+    var rawType = (state.body && state.body.type) || 'sight';
+    var properTypeNames = { sun: 'Sun', moon: 'Moon' };
+    var typeStr = properTypeNames[rawType] || rawType;
+    var nameStr = ((state.body && state.body.name) || '').trim();
+
+    var parts = [dateStr, timeStr, typeStr];
+    if (nameStr) parts.push(nameStr);
+
+    // Strip characters that are illegal (or awkward) in filenames on common filesystems.
+    return parts.join(' ').replace(/[\\/:*?"<>|]/g, '_');
   }
 
   var CHART_PALETTE = ['#00bcd4', '#ff9800', '#8bc34a', '#e91e63', '#9c27b0', '#ffeb3b', '#03a9f4', '#ff5722'];
@@ -1000,8 +1072,10 @@
     resolveCockedHatBisectors: resolveCockedHatBisectors,
     resolveMultiLopFix: resolveMultiLopFix,
     positionFromOffset: positionFromOffset,
+    offsetFromPosition: offsetFromPosition,
     formatBodyLabel: formatBodyLabel,
     formatBodyLabelChart: formatBodyLabelChart,
+    computeAutoName: computeAutoName,
     paletteColor: paletteColor
   };
 })(window);
