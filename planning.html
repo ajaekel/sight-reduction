@@ -53,36 +53,35 @@
         </div>
         <div class="body-inline-col" style="flex: 1;">
           <label>Timezone Offset (UTC Offset in Hours)</label>
-          <input type="text" inputmode="decimal" id="planTzOffset" placeholder="-4" value="-4" onfocus="this.select()">
+          <input type="number" step="any" id="planTzOffset" placeholder="-4" value="-4" onfocus="this.select()">
         </div>
       </div>
     </div>
 
     <div class="form-group">
-      <div class="input-row">
-        <div style="width: 140px; flex-shrink: 0; font-size: 0.85rem; color: #aaa;">
-          Latitude<br><span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span>
+      <div class="body-inline-row">
+        <div class="body-inline-col almanac-col-border">
+          <label>Lat (Deg / Min / N-S)</label>
+          <div class="input-row input-row-3">
+            <input type="text" inputmode="decimal" class="deg-box" id="planLatDeg" placeholder="40" onfocus="this.select()">
+            <input type="text" inputmode="decimal" class="min-box" id="planLatMin" placeholder="32.2" onfocus="this.select()">
+            <select id="planLatNS" class="select-compact">
+              <option value="N">N</option>
+              <option value="S">S</option>
+            </select>
+          </div>
         </div>
-        <input type="text" inputmode="decimal" id="planLatDeg" placeholder="40" onfocus="this.select()">
-        <input type="text" inputmode="decimal" id="planLatMin" placeholder="32.2" onfocus="this.select()">
-        <select id="planLatNS">
-          <option value="N">N</option>
-          <option value="S">S</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="form-group">
-      <div class="input-row">
-        <div style="width: 140px; flex-shrink: 0; font-size: 0.85rem; color: #aaa;">
-          Longitude<br><span style="font-size:0.75rem; color:#888;">(Deg / Min / E-W)</span>
+        <div class="body-inline-col">
+          <label>Lon (Deg / Min / E-W)</label>
+          <div class="input-row input-row-3">
+            <input type="text" inputmode="decimal" class="deg-box" id="planLonDeg" placeholder="073" onfocus="this.select()">
+            <input type="text" inputmode="decimal" class="min-box" id="planLonMin" placeholder="56.3" onfocus="this.select()">
+            <select id="planLonEW" class="select-compact">
+              <option value="W">W</option>
+              <option value="E">E</option>
+            </select>
+          </div>
         </div>
-        <input type="text" inputmode="decimal" id="planLonDeg" placeholder="073" onfocus="this.select()">
-        <input type="text" inputmode="decimal" id="planLonMin" placeholder="56.3" onfocus="this.select()">
-        <select id="planLonEW">
-          <option value="W">W</option>
-          <option value="E">E</option>
-        </select>
       </div>
     </div>
 
