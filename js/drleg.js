@@ -517,6 +517,66 @@ function onSaveLeg() {
   });
 }
 
+/**
+ * Reloads a previously saved leg's own inputs back onto the form -- distinct
+ * from onChainFromSavedLeg, which only borrows the saved leg's ENDPOINT as
+ * the start of a brand-new leg. This instead reconstructs the saved leg
+ * itself: its start position (with original provenance), SOG, course, and
+ * duration, so it recomputes to the same result and can be reviewed, tweaked,
+ * or re-saved.
+ *
+ * Always lands in 'duration' mode: a saved record only stores durationHours
+ * (see drlegStorage.js's save()), not which entry mode -- duration or
+ * end-time -- originally produced it, and duration mode reproduces an
+ * identical leg either way.
+ *
+ * Start date/time is written directly from startPosition.time with no
+ * rounding (unlike chainFromPosition/applyPendingDrLegStartHandoff): this
+ * time was itself derived from a whole-minute HH:MM field when the leg was
+ * first computed, so it's already exact on a minute boundary.
+ */
+function onLoadLeg(legId) {
+  DrLegStorage.get(legId).then(function (leg) {
+    if (!leg) { showToast('Could not find that saved leg.', true); return; }
+
+    var dm = positionToDegMinFields(leg.startPosition);
+    document.getElementById('drLatDeg').value = dm.latDeg;
+    document.getElementById('drLatMin').value = dm.latMin;
+    document.getElementById('drLatNS').value = dm.latNS;
+    document.getElementById('drLonDeg').value = dm.lonDeg;
+    document.getElementById('drLonMin').value = dm.lonMin;
+    document.getElementById('drLonEW').value = dm.lonEW;
+
+    var local = SightCalc.utcMsToLocalDateTime(new Date(leg.startPosition.time).getTime(), leg.tzOffset);
+    var pad2 = function (n) { return String(n).padStart(2, '0'); };
+    document.getElementById('drStartDate').value = local.dateStr;
+    setFieldValue('drStartTime', pad2(Math.floor(local.secOfDay / 3600)) + ':' + pad2(Math.floor((local.secOfDay % 3600) / 60)));
+    document.getElementById('drTzOffset').value = leg.tzOffset;
+
+    document.getElementById('drSog').value = leg.sog;
+    document.getElementById('drCourse').value = leg.courseDegTrue;
+
+    var hours = Math.floor(leg.durationHours);
+    var minutes = Math.round((leg.durationHours - hours) * 60);
+    if (minutes === 60) { hours += 1; minutes = 0; }
+    document.getElementById('drDurationHours').value = hours;
+    document.getElementById('drDurationMinutes').value = minutes;
+    document.getElementById('drEndDate').value = '';
+    setFieldValue('drEndTime', '');
+
+    // Set BEFORE switching mode, so the recompute triggered by setDrMode
+    // below already reflects the reloaded leg's own provenance.
+    _drStartPositionType = leg.startPosition.sourceType || 'KNOWN';
+    _drStartSourceId = leg.startPosition.sourceId || null;
+
+    setDrMode('duration'); // updates the toggle UI, persists the form, and recomputes
+    showToast('Loaded "' + leg.name + '".');
+  }).catch(function (err) {
+    console.error(err);
+    showToast('Could not load that saved leg.', true);
+  });
+}
+
 function onDeleteLeg(id) {
   if (!confirm('Delete this saved DR leg? This cannot be undone.')) return;
   DrLegStorage.remove(id).then(function () {
@@ -630,12 +690,14 @@ function refreshSavedLegsList() {
           '<div class="saved-item-meta"></div>' +
         '</div>' +
         '<div class="saved-item-actions">' +
+          '<button class="btn-mini btn-mini-load">Load</button>' +
           '<button class="btn-mini btn-mini-fix">Use as Start</button>' +
           '<button class="btn-mini btn-mini-del">Delete</button>' +
         '</div>';
 
       item.querySelector('.saved-item-title').textContent = entry.name;
       item.querySelector('.saved-item-meta').textContent = meta;
+      item.querySelector('.btn-mini-load').addEventListener('click', function () { onLoadLeg(entry.id); });
       item.querySelector('.btn-mini-fix').addEventListener('click', function () { onChainFromSavedLeg(entry.id); });
       item.querySelector('.btn-mini-del').addEventListener('click', function () { onDeleteLeg(entry.id); });
 
