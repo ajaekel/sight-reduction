@@ -40,9 +40,11 @@
     <div class="fix-list-header">
       <p class="cache-blurb" style="margin: 0; flex: 1;">
         A Fix is a named collection of saved Sights (e.g. a 3-star fix, or a running fix),
-        plotted together as overlaid Lines of Position.
+        plotted together as overlaid Lines of Position. A Known Fix is a position and time
+        entered directly from an outside source (e.g. relayed by VHF), with no Sights involved.
       </p>
       <button class="btn-new-fix" id="btnNewFix" type="button">+ New</button>
+      <button class="btn-new-fix" id="btnNewKnownFix" type="button">+ New Known Fix</button>
     </div>
 
     <div class="card">
@@ -63,7 +65,64 @@
       <button class="btn-secondary btn-danger-outline" id="btnDeleteFix" type="button">Delete This Fix</button>
     </div>
 
-    <div class="card">
+    <div class="card" id="knownFixCard" style="display: none;">
+      <div class="section-title">Known Position</div>
+      <p class="cache-blurb" style="margin-top:0;">
+        Enter the position and time as reported from its source (e.g. relayed by VHF from a
+        passing ship).
+      </p>
+      <div class="form-group">
+        <div class="body-inline-row">
+          <div class="body-inline-col" style="flex: 1.1;">
+            <label>Date (local)</label>
+            <input type="date" id="knownFixDate">
+          </div>
+          <div class="body-inline-col">
+            <label>Time (24h)</label>
+            <span class="time-hm">
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="knownFixTimeH" placeholder="09">
+              <span>:</span>
+              <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="knownFixTimeM" placeholder="00">
+            </span>
+          </div>
+          <div class="body-inline-col" style="flex: 1;">
+            <label>Timezone Offset (UTC Offset in Hours)</label>
+            <input type="number" step="any" id="knownFixTz" placeholder="-4" value="-4" onfocus="this.select()">
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <div class="input-row">
+          <div style="width: 140px; flex-shrink: 0; font-size: 0.85rem; color: #aaa;">
+            Latitude<br><span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span>
+          </div>
+          <input type="text" inputmode="decimal" id="knownFixLatDeg" placeholder="40" onfocus="this.select()">
+          <input type="text" inputmode="decimal" id="knownFixLatMin" placeholder="32.2" onfocus="this.select()">
+          <select id="knownFixLatNS">
+            <option value="N">N</option>
+            <option value="S">S</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <div class="input-row">
+          <div style="width: 140px; flex-shrink: 0; font-size: 0.85rem; color: #aaa;">
+            Longitude<br><span style="font-size:0.75rem; color:#888;">(Deg / Min / E-W)</span>
+          </div>
+          <input type="text" inputmode="decimal" id="knownFixLonDeg" placeholder="073" onfocus="this.select()">
+          <input type="text" inputmode="decimal" id="knownFixLonMin" placeholder="56.3" onfocus="this.select()">
+          <select id="knownFixLonEW">
+            <option value="W">W</option>
+            <option value="E">E</option>
+          </select>
+        </div>
+      </div>
+      <div class="save-export-row">
+        <button class="btn-secondary" id="btnSaveKnownFix">Save Position</button>
+      </div>
+    </div>
+
+    <div class="card" id="fixSightsCard">
       <div class="section-title">Sights in this Fix</div>
       <p class="cache-blurb" style="margin-top:0;">
         A sight can be "advanced" -- shifted by a saved DR Leg's course and distance run -- to
@@ -88,7 +147,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="availableSightsCard">
       <div class="section-title">Add a Saved Sight</div>
       <div class="saved-list" id="availableSightsList"></div>
       <div class="empty-note" id="availableSightsEmpty">
@@ -96,7 +155,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="fixPlotCard">
       <div class="section-title">Plot</div>
       <div class="cache-progress" id="fixPlotStatus"></div>
 
@@ -122,12 +181,12 @@
 
     <div class="card" id="fixPositionCard" style="display: none;">
       <div class="section-title">Use This Fix</div>
-      <p class="cache-blurb" style="margin-top:0;">
+      <p class="cache-blurb" style="margin-top:0;" id="fixUseBlurb">
         Uses whichever method (least-squares or bisectors) is currently selected above. "Save
         Position" is a deliberate action -- toggling methods doesn't save anything on its own,
         so switching to compare doesn't silently change what's stored for this fix.
       </p>
-      <div class="save-export-row">
+      <div class="save-export-row" id="fixUseSaveRow">
         <button class="btn-secondary" id="btnSaveFixPosition" disabled>Save Position</button>
       </div>
       <div class="save-export-row">

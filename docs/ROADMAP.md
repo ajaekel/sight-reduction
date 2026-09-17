@@ -18,7 +18,8 @@
 
 ## Support remaining navigational elements
 
-* [ ] Known Fix – position coordinate and datetime from any source, e.g., via VHF radio from a passing ship
+* [X] Known Fix – position coordinate and datetime from any source, e.g., via VHF radio from a passing ship
+  * [ ] Add optional Notes field to Known Fix for provenance/confidence/context.
 * [ ] Meridian Passage – User enters sextant height (+corrections) and gets Latitude
 
 ## Planning page
@@ -84,7 +85,9 @@
 
 ## UX/UI improvements
 
-* [ ] Put star SHA and declination on the same line  
+* [ ] Establish consistent defaulting rules for date/time/timezone/position fields.
+* [ ] Make lat/lon position rendition consistent (outliers: Passages > New, Fixes > New Known Fix)
+* [ ] Put star SHA and declination on the same line
 * [ ] Make single-touch and consist the treatment of fields for selecting N/S, E/W, fast/slow, on/off the arc, +/(-)
 * [ ] Put a char limit on all input fields (A user shouldn’t be able to enter an arbitrarily large string; test, can it crash the app if abused?)  
 * [ ] Improve "Sights" page and replicate for all saved navigation elements: Fixes, DR Legs, Passages

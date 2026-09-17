@@ -414,7 +414,9 @@ function getPassageSelectionDetail(candidate) {
     return {
       title: 'Fix \u2014 ' + new Date(fix.resolvedPosition.time).toLocaleTimeString(),
       lines: [
-        (fix.resolvedPositionMethod === 'bisector' ? 'Bisectors' : 'Least-squares') + ' \u00B7 ' + (fix.activeSightIds || fix.sightIds || []).length + ' active sights',
+        fix.type === 'KNOWN'
+          ? 'Known position'
+          : (fix.resolvedPositionMethod === 'bisector' ? 'Bisectors' : 'Least-squares') + ' \u00B7 ' + (fix.activeSightIds || fix.sightIds || []).length + ' active sights',
         SightCalc.formatLat(fix.resolvedPosition.lat) + ' ' + SightCalc.formatLon(fix.resolvedPosition.lon)
       ],
       openLabel: 'Open Fix',

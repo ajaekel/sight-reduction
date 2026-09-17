@@ -50,6 +50,13 @@
         // more sights carry an entry here; a sight absent from this map is
         // used as-observed, unchanged.
         if (!fix.advances || typeof fix.advances !== 'object') fix.advances = {};
+        // Discriminates a Known Fix (position/time entered directly from an
+        // outside source, e.g. relayed by VHF -- no underlying Sights) from
+        // the default, sight-derived Fix. Defaulted here rather than at
+        // every call site -- same reasoning as passageId/advances above --
+        // so every pre-existing Fix (which predates this field) is treated
+        // as SIGHT_DERIVED without needing a migration.
+        if (fix.type !== 'KNOWN') fix.type = 'SIGHT_DERIVED';
 
         localStorage.setItem(PREFIX + fix.id, JSON.stringify(fix));
 
@@ -58,7 +65,8 @@
           id: fix.id,
           name: fix.name || 'Untitled Fix',
           savedAt: fix.savedAt,
-          sightCount: fix.sightIds.length
+          sightCount: fix.sightIds.length,
+          type: fix.type
         });
         writeIndex(idx);
 

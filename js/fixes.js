@@ -28,6 +28,10 @@ document.addEventListener('DOMContentLoaded', function () {
   ChartInteraction.wire('fixChartWrap', { getDetail: getFixSelectionDetail, onSelectionChange: onFixSelectionChange });
 
   document.getElementById('btnNewFix').addEventListener('click', onNewFixClick);
+  document.getElementById('btnNewKnownFix').addEventListener('click', onNewKnownFixClick);
+  document.getElementById('btnSaveKnownFix').addEventListener('click', onSaveKnownFixPosition);
+  wireDigitBox('knownFixTimeH', 2, 0, 23, 'knownFixTimeM');
+  wireDigitBox('knownFixTimeM', 2, 0, 59, null);
   document.getElementById('btnBackToList').addEventListener('click', function () {
     location.hash = '';
   });
@@ -51,6 +55,25 @@ function showToast(message, isError) {
   toast.classList.add('show');
   clearTimeout(showToast._t);
   showToast._t = setTimeout(function () { toast.classList.remove('show'); }, 2200);
+}
+
+/** Digit-only filtering and auto-advance -- same small helper as passages.js/drleg.js/planning.js, kept page-local rather than shared (matches this codebase's existing convention). */
+function wireDigitBox(id, maxLen, min, max, nextId) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('focus', function () { this.select(); });
+  el.addEventListener('input', function () {
+    var cleaned = this.value.replace(/[^0-9]/g, '').slice(0, maxLen);
+    if (cleaned !== this.value) this.value = cleaned;
+    if (min !== null && max !== null) {
+      var n = parseInt(cleaned, 10);
+      this.classList.toggle('input-error', cleaned !== '' && (isNaN(n) || n < min || n > max));
+    }
+    if (cleaned.length >= maxLen && nextId) {
+      var nextEl = document.getElementById(nextId);
+      if (nextEl) { nextEl.focus(); nextEl.select(); }
+    }
+  });
 }
 
 function fixIdFromHash() {
@@ -110,7 +133,7 @@ function refreshFixList() {
 
       item.querySelector('.saved-item-title').textContent = entry.name;
       item.querySelector('.saved-item-meta').textContent =
-        entry.sightCount + ' sight' + (entry.sightCount === 1 ? '' : 's') +
+        (entry.type === 'KNOWN' ? 'Known position' : entry.sightCount + ' sight' + (entry.sightCount === 1 ? '' : 's')) +
         ' \u00B7 saved ' + new Date(entry.savedAt).toLocaleString();
 
       item.querySelector('.btn-mini-load').addEventListener('click', function () {
@@ -143,7 +166,23 @@ function onNewFixClick() {
 
   name = name.trim() || suggested;
 
-  FixStorage.save({ name: name, sightIds: [] }).then(function (saved) {
+  FixStorage.save({ name: name, sightIds: [], type: 'SIGHT_DERIVED' }).then(function (saved) {
+    showToast('Created "' + name + '".');
+    location.hash = 'fix=' + encodeURIComponent(saved.id);
+  }).catch(function (err) {
+    console.error(err);
+    showToast('Could not create fix (storage may be full or unavailable).', true);
+  });
+}
+
+function onNewKnownFixClick() {
+  var suggested = defaultFixName();
+  var name = prompt('Name this known fix:', suggested);
+  if (name === null) return; // cancelled
+
+  name = name.trim() || suggested;
+
+  FixStorage.save({ name: name, sightIds: [], type: 'KNOWN' }).then(function (saved) {
     showToast('Created "' + name + '".');
     location.hash = 'fix=' + encodeURIComponent(saved.id);
   }).catch(function (err) {
@@ -170,6 +209,19 @@ function openFix(id) {
     closeAdvancePanel();
 
     document.getElementById('fixDetailName').textContent = fix.name;
+
+    setDetailCardsForType(fix.type);
+
+    if (fix.type === 'KNOWN') {
+      document.getElementById('fixDetailMeta').textContent = fix.resolvedPosition
+        ? 'Known position \u00B7 as of ' + new Date(fix.resolvedPosition.time).toLocaleString()
+        : 'Known position \u00B7 not yet set';
+      renderKnownFixForm(fix);
+      document.getElementById('fixPositionCard').style.display = fix.resolvedPosition ? 'block' : 'none';
+      updateFixPositionButtons();
+      return;
+    }
+
     document.getElementById('fixDetailMeta').textContent =
       fix.sightIds.length + ' sight' + (fix.sightIds.length === 1 ? '' : 's') +
       ' \u00B7 saved ' + new Date(fix.savedAt).toLocaleString();
@@ -428,6 +480,131 @@ function onDeleteFix() {
   FixStorage.remove(currentFix.id).then(function () {
     showToast('Fix deleted.');
     location.hash = '';
+  });
+}
+
+// ---------------------------------------------------------------------
+// KNOWN FIX: position/time entered directly, no underlying Sights
+// ---------------------------------------------------------------------
+
+/**
+ * Toggles which detail-view cards apply -- a Known Fix has no Sights, so
+ * everything that operates on sightIds (the sights list, the "Advance via
+ * DR Leg" panel, the "Add a Saved Sight" picker, the LOP plot) is hidden in
+ * favor of the direct-entry "Known Position" card. "Use This Fix" (New
+ * Sight from Fix Position / Send to DR Leg) stays visible either way -- see
+ * updateFixPositionButtons -- since those only depend on resolvedPosition
+ * being set, not on how it got there; only its own "Save Position" row is
+ * hidden for a Known Fix (see below).
+ */
+function setDetailCardsForType(type) {
+  var isKnown = type === 'KNOWN';
+  document.getElementById('knownFixCard').style.display = isKnown ? 'block' : 'none';
+  document.getElementById('fixSightsCard').style.display = isKnown ? 'none' : 'block';
+  document.getElementById('availableSightsCard').style.display = isKnown ? 'none' : 'block';
+  document.getElementById('fixPlotCard').style.display = isKnown ? 'none' : 'block';
+  // The "Save Position" button here is specifically for committing whichever
+  // LOP-solver method is currently selected -- meaningless for a Known Fix,
+  // which is already persisted the moment its own "Save Position" (in the
+  // Known Position card above) is used. Hidden rather than relabeled, so
+  // there's exactly one "Save Position" action for a Known Fix, not two
+  // that do different things.
+  document.getElementById('fixUseSaveRow').style.display = isKnown ? 'none' : 'block';
+  document.getElementById('fixUseBlurb').textContent = isKnown
+    ? 'The position and time entered above.'
+    : 'Uses whichever method (least-squares or bisectors) is currently selected above. "Save ' +
+      'Position" is a deliberate action -- toggling methods doesn’t save anything on its own, ' +
+      'so switching to compare doesn’t silently change what’s stored for this fix.';
+}
+
+/**
+ * Fills the Known Position form from the fix's currently-saved
+ * resolvedPosition (via SightCalc.decimalToDM, the inverse of the deg/min
+ * entry it was built from), or clears it for a fix that's never had a
+ * position entered yet. Same field shape/ids as passages.html's Starting
+ * Position form, read the same way by onSaveKnownFixPosition below.
+ */
+function renderKnownFixForm(fix) {
+  var pos = fix.resolvedPosition;
+  if (!pos) {
+    document.getElementById('knownFixDate').value = '';
+    document.getElementById('knownFixTimeH').value = '';
+    document.getElementById('knownFixTimeM').value = '';
+    document.getElementById('knownFixTz').value = -4;
+    document.getElementById('knownFixLatDeg').value = '';
+    document.getElementById('knownFixLatMin').value = '';
+    document.getElementById('knownFixLatNS').value = 'N';
+    document.getElementById('knownFixLonDeg').value = '';
+    document.getElementById('knownFixLonMin').value = '';
+    document.getElementById('knownFixLonEW').value = 'W';
+    return;
+  }
+
+  var tzOffset = fix.resolvedPositionTzOffset || 0;
+  var local = SightCalc.utcMsToLocalDateTime(new Date(pos.time).getTime(), tzOffset);
+  var lat = SightCalc.decimalToDM(pos.lat);
+  var lon = SightCalc.decimalToDM(pos.lon);
+
+  document.getElementById('knownFixDate').value = local.dateStr;
+  document.getElementById('knownFixTimeH').value = String(Math.floor(local.secOfDay / 3600)).padStart(2, '0');
+  document.getElementById('knownFixTimeM').value = String(Math.floor((local.secOfDay % 3600) / 60)).padStart(2, '0');
+  document.getElementById('knownFixTz').value = tzOffset;
+  document.getElementById('knownFixLatDeg').value = lat.deg;
+  document.getElementById('knownFixLatMin').value = lat.min;
+  document.getElementById('knownFixLatNS').value = pos.lat < 0 ? 'S' : 'N';
+  document.getElementById('knownFixLonDeg').value = lon.deg;
+  document.getElementById('knownFixLonMin').value = lon.min;
+  document.getElementById('knownFixLonEW').value = pos.lon < 0 ? 'W' : 'E';
+}
+
+/**
+ * Parses the Known Position form and saves it as this fix's resolvedPosition
+ * -- the direct-entry counterpart to cacheResolvedPosition()'s LOP-solver
+ * output. sourceType KNOWN, sourceId this fix's own id, same as any other
+ * hand-entered position in the app (see calc.js's makePosition/
+ * POSITION_SOURCE_TYPES). resolvedPositionMethod is intentionally left
+ * unset -- that field means "which LOP-crossing method," which doesn't
+ * apply here.
+ */
+function onSaveKnownFixPosition() {
+  var dateVal = document.getElementById('knownFixDate').value;
+  var latDegVal = document.getElementById('knownFixLatDeg').value;
+  var lonDegVal = document.getElementById('knownFixLonDeg').value;
+
+  if (!dateVal || latDegVal === '' || lonDegVal === '') {
+    showToast('Enter a date and both latitude and longitude.', true);
+    return;
+  }
+
+  var latDeg = parseFloat(latDegVal), lonDeg = parseFloat(lonDegVal);
+  if (isNaN(latDeg) || isNaN(lonDeg)) {
+    showToast('Enter both latitude and longitude.', true);
+    return;
+  }
+
+  var pos = SightCalc.signedPositionFromRecord({
+    latDeg: latDeg,
+    latMin: parseFloat(document.getElementById('knownFixLatMin').value) || 0,
+    latNS: document.getElementById('knownFixLatNS').value,
+    lonDeg: lonDeg,
+    lonMin: parseFloat(document.getElementById('knownFixLonMin').value) || 0,
+    lonEW: document.getElementById('knownFixLonEW').value
+  });
+  var tzOffset = parseFloat(document.getElementById('knownFixTz').value) || 0;
+  var h = parseInt(document.getElementById('knownFixTimeH').value, 10) || 0;
+  var m = parseInt(document.getElementById('knownFixTimeM').value, 10) || 0;
+  var utcMs = SightCalc.localDateTimeToUtcMs(dateVal, h * 3600 + m * 60, tzOffset);
+
+  currentFix.resolvedPosition = SightCalc.makePosition(new Date(utcMs).toISOString(), pos.lat, pos.lon, SightCalc.POSITION_SOURCE_TYPES.KNOWN, currentFix.id);
+  currentFix.resolvedPositionTzOffset = tzOffset;
+  currentFix.resolvedPositionMethod = null;
+
+  FixStorage.save(currentFix).then(function () {
+    showToast('Saved known position.');
+    openFix(currentFix.id);
+  }).catch(function (err) {
+    console.error(err);
+    showToast('Could not save (storage may be full or unavailable).', true);
   });
 }
 
