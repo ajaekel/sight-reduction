@@ -137,6 +137,13 @@
       <button class="btn-secondary btn-danger-outline" id="btnDeletePassage" type="button">Delete This Passage</button>
     </div>
 
+    <div class="card" id="passageChartCard" style="display: none;">
+      <div class="section-title">Plot</div>
+      <div class="chart-wrap" id="passageChartWrap">
+        <div id="passageChartContainer"></div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="section-title">Starting Position</div>
       <div id="passageStartingPosition" class="cache-summary-text">None set.</div>
@@ -174,6 +181,10 @@
 
 <script src="js/calc.js"></script>
 <script src="js/storage.js"></script>
+<script src="js/chart.js"></script>
+<script src="js/chartPanZoom.js"></script>
+<script src="js/chartFullscreen.js"></script>
+<script src="js/chartInteraction.js"></script>
 <script src="js/fixStorage.js"></script>
 <script src="js/drlegStorage.js"></script>
 <script src="js/passageStorage.js"></script>

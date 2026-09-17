@@ -14,6 +14,12 @@
 
 var currentPassage = null;
 var passageRenderToken = 0;
+var passageViewport = null; // {originLat, originLon, scale} | null -- see chartPanZoom.js
+var passageAutoScaleNM = null;
+var passageAutoOriginLat = null;
+var passageAutoOriginLon = null;
+var lastPassageRecords = null; // cached {sights, fixes, drLegs} so getPassageSelectionDetail can look a selected record up without a fresh fetch
+var passageSelection = null; // {type, recordId, part} | null -- see chartInteraction.js
 
 function passageIdFromHash() {
   var m = /^#passage=(.+)$/.exec(location.hash);
@@ -298,7 +304,139 @@ function removeFromPassage(entry) {
   });
 }
 
+/**
+ * Renders (or hides, if there's nothing to show) the Plot card -- the same
+ * pattern as fixes.js/drleg.js/app.js's own chart-display functions, just
+ * fetching a Passage's full membership instead of one Fix's sights or one
+ * DR leg's endpoints. Called from refreshPassageTimeline() so the plot
+ * always stays in sync with the timeline (assigning, removing, or
+ * recomputing anything refreshes both together, not just one).
+ */
+function renderPassagePlot() {
+  var card = document.getElementById('passageChartCard');
+  var myToken = passageRenderToken;
+  PassageStorage.getPassageRecords(currentPassage.id).then(function (records) {
+    if (myToken !== passageRenderToken) return;
+    lastPassageRecords = records;
+
+    var hasContent = records.sights.length || records.fixes.length || records.drLegs.length || currentPassage.startingPosition;
+    if (!hasContent) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = 'block';
+
+    var result = SightChart.renderPassageChart(document.getElementById('passageChartContainer'), records, {
+      startingPosition: currentPassage.startingPosition || null,
+      selected: passageSelection,
+      viewport: passageViewport
+    });
+    passageViewport = { originLat: result.originLat, originLon: result.originLon, scale: result.scaleNM };
+    passageAutoScaleNM = result.autoScaleNM;
+    passageAutoOriginLat = result.autoOriginLat;
+    passageAutoOriginLon = result.autoOriginLon;
+  }).catch(function (err) {
+    console.error(err);
+  });
+}
+
+/** chartPanZoom.js's own callbacks -- see fixes.js's matching pair for the full contract. */
+function getPassageViewport() {
+  return {
+    originLat: passageViewport ? passageViewport.originLat : passageAutoOriginLat,
+    originLon: passageViewport ? passageViewport.originLon : passageAutoOriginLon,
+    scale: passageViewport ? passageViewport.scale : passageAutoScaleNM,
+    autoScale: passageAutoScaleNM,
+    autoOriginLat: passageAutoOriginLat,
+    autoOriginLon: passageAutoOriginLon
+  };
+}
+
+function onPassageViewportChange(viewport) {
+  passageViewport = viewport;
+  renderPassagePlot();
+}
+
+/**
+ * chartInteraction.js's own callbacks. Reuses sightSummary/fixSummary/
+ * drLegSummary (already built for the timeline list) for the detail text,
+ * and openUnderlyingRecord's own navigation targets (hash-based handoffs
+ * to fixes.html/drleg.html, sessionStorage for index.html) for "Open" --
+ * this page already had every piece needed for both; selection just
+ * connects them to the plot instead of the timeline list.
+ */
+function onPassageSelectionChange(selection) {
+  passageSelection = selection;
+  renderPassagePlot();
+}
+
+function getPassageSelectionDetail(candidate) {
+  if (!lastPassageRecords) return null;
+
+  if (candidate.type === 'passage-start') {
+    var sp = currentPassage.startingPosition;
+    if (!sp) return null;
+    return {
+      title: 'Starting Position',
+      lines: [SightCalc.formatLat(sp.lat) + ' ' + SightCalc.formatLon(sp.lon), new Date(sp.time).toLocaleString()]
+    };
+  }
+
+  if (candidate.type === 'fix') {
+    var fix = lastPassageRecords.fixes.find(function (f) { return f.id === candidate.recordId; });
+    if (!fix || !fix.resolvedPosition) return null;
+    return {
+      title: 'Fix \u2014 ' + new Date(fix.resolvedPosition.time).toLocaleTimeString(),
+      lines: [
+        (fix.resolvedPositionMethod === 'bisector' ? 'Bisectors' : 'Least-squares') + ' \u00B7 ' + (fix.activeSightIds || fix.sightIds || []).length + ' active sights',
+        SightCalc.formatLat(fix.resolvedPosition.lat) + ' ' + SightCalc.formatLon(fix.resolvedPosition.lon)
+      ],
+      openLabel: 'Open Fix',
+      onOpen: function () { location.href = 'fixes.html#fix=' + encodeURIComponent(fix.id); }
+    };
+  }
+
+  if (candidate.type === 'drleg') {
+    var leg = lastPassageRecords.drLegs.find(function (l) { return l.id === candidate.recordId; });
+    if (!leg) return null;
+    var startLocal = SightCalc.utcMsToLocalDateTime(new Date(leg.startPosition.time).getTime(), leg.tzOffset);
+    var endLocal = SightCalc.utcMsToLocalDateTime(new Date(leg.endPosition.time).getTime(), leg.tzOffset);
+    var fmtHHMM = function (secOfDay) { return String(Math.floor(secOfDay / 3600)).padStart(2, '0') + String(Math.floor((secOfDay % 3600) / 60)).padStart(2, '0'); };
+    var course = String(Math.round(leg.courseDegTrue)).padStart(3, '0');
+    var distanceNM = leg.sog * leg.durationHours;
+    return {
+      title: leg.name,
+      lines: [
+        fmtHHMM(startLocal.secOfDay) + '\u2013' + fmtHHMM(endLocal.secOfDay) + ' \u00B7 ' + course + '\u00B0T @ ' + leg.sog + ' kn \u00B7 ' + distanceNM.toFixed(1) + ' NM',
+        'Start: ' + SightCalc.formatLat(leg.startPosition.lat) + ' ' + SightCalc.formatLon(leg.startPosition.lon),
+        'End: ' + SightCalc.formatLat(leg.endPosition.lat) + ' ' + SightCalc.formatLon(leg.endPosition.lon)
+      ],
+      openLabel: 'Open DR Leg',
+      onOpen: function () { location.href = 'drleg.html#leg=' + encodeURIComponent(leg.id); }
+    };
+  }
+
+  if (candidate.type === 'sight') {
+    var sight = lastPassageRecords.sights.find(function (s) { return s.id === candidate.recordId; });
+    if (!sight) return null;
+    var lines = [sightSummary(sight)];
+    if (sight.results) lines.push('Zn ' + Math.round(sight.results.zn) + '\u00B0 \u00B7 ' + Math.abs(sight.results.interceptNM).toFixed(1) + ' NM ' + (sight.results.interceptNM >= 0 ? 'TOWARD' : 'AWAY'));
+    return {
+      title: SightCalc.formatBodyLabel(sight.body) + ' sight',
+      lines: lines,
+      openLabel: 'Open Sight',
+      onOpen: function () {
+        try { sessionStorage.setItem('ocsrLoadSightId', sight.id); } catch (e) {}
+        location.href = 'index.html';
+      }
+    };
+  }
+
+  return null;
+}
+
 function refreshPassageTimeline() {
+  renderPassagePlot();
   var myToken = passageRenderToken;
   PassageStorage.getPassageTimeline(currentPassage.id).then(function (entries) {
     if (myToken !== passageRenderToken) return;
@@ -467,6 +605,10 @@ function onDeletePassage() {
 document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('swVersion').textContent = APP_VERSION;
   initNavMenu();
+
+  var passagePanZoomApi = ChartPanZoom.wire('passageChartWrap', { getViewport: getPassageViewport, onViewportChange: onPassageViewportChange });
+  ChartFullscreen.wire('passageChartWrap', 'passageChartContainer', passagePanZoomApi);
+  ChartInteraction.wire('passageChartWrap', { getDetail: getPassageSelectionDetail, onSelectionChange: onPassageSelectionChange });
 
   document.getElementById('btnNewPassage').addEventListener('click', function () { location.hash = 'new'; });
   document.getElementById('btnBackFromNew').addEventListener('click', function () { location.hash = ''; });
