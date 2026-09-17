@@ -709,10 +709,172 @@
     return { scaleNM: scale, autoScaleNM: autoScale, autoOriginLat: autoOriginPos.lat, autoOriginLon: autoOriginPos.lon, originLat: originPos.lat, originLon: originPos.lon };
   }
 
+  /**
+   * records = { sights, fixes, drLegs } (full records, e.g. from
+   * passageStorage.js's getPassageRecords) -- everything belonging to one
+   * Passage, plotted together as a single navigation track rather than
+   * three separate charts. This is the first chart type built on top of
+   * the selection contract (chart.js stamps identity, chartInteraction.js
+   * reports it, the calling page supplies meaning) with THREE distinct
+   * selectable record types sharing one plot, which is exactly the
+   * "records <-> Navigation Plot" idea discussed for this page: each DR
+   * leg, each resolved Fix, and each Sight not yet part of any Fix is
+   * independently selectable, using the same generic hit-testing/
+   * highlighting/detail-panel machinery already proven on the Fix page --
+   * this file still has no idea what "Open DR Leg" means, only that
+   * something with type "drleg" was tapped.
+   *
+   * A Sight already claimed by one of this passage's own Fixes is drawn as
+   * part of that Fix instead (just the resolved point, not each
+   * constituent LOP -- showing every LOP for every Fix across a multi-day
+   * passage would be unreadable clutter, and the Fix page already exists
+   * for that level of detail). Only a Sight NOT in any of this passage's
+   * fixes gets its own marker here, at its AP alone (not its LOP line, for
+   * the same decluttering reason) -- it represents "an observation taken
+   * here, not yet resolved into a fix."
+   *
+   * opts = {
+   *   startingPosition: {lat, lon} | null -- the Passage's own departure
+   *     point, if set; drawn as a plain circle (a known/departure position,
+   *     same convention as a DR leg's own start when it's not itself
+   *     chained from an earlier DR position -- see renderDrLegChart).
+   *   viewport, selected -- same contract as every other chart here.
+   * }
+   */
+  function renderPassageChart(container, records, opts) {
+    opts = opts || {};
+    var selected = opts.selected || null;
+    var drLegs = records.drLegs || [];
+    var fixes = (records.fixes || []).filter(function (f) { return !!f.resolvedPosition; });
+    var fixedSightIds = {};
+    fixes.forEach(function (f) { (f.sightIds || []).forEach(function (id) { fixedSightIds[id] = true; }); });
+    var unfixedSights = (records.sights || []).filter(function (s) { return !fixedSightIds[s.id]; });
+
+    var points = [];
+    drLegs.forEach(function (leg) {
+      points.push({ lat: leg.startPosition.lat, lon: leg.startPosition.lon });
+      points.push({ lat: leg.endPosition.lat, lon: leg.endPosition.lon });
+    });
+    fixes.forEach(function (f) { points.push({ lat: f.resolvedPosition.lat, lon: f.resolvedPosition.lon }); });
+    unfixedSights.forEach(function (s) {
+      var pos = SightCalc.signedPositionFromRecord(s.position);
+      points.push({ lat: pos.lat, lon: pos.lon });
+    });
+    if (opts.startingPosition) points.push({ lat: opts.startingPosition.lat, lon: opts.startingPosition.lon });
+
+    var clipId = 'plotClipPassage';
+    if (points.length === 0) {
+      container.innerHTML =
+        '<svg viewBox="0 0 ' + SIZE + ' ' + SIZE + '" xmlns="http://www.w3.org/2000/svg" class="chart-svg" role="img" aria-label="Empty passage plot">' +
+          buildFrame(0, 0, 10, clipId) +
+        '</svg>';
+      return { scaleNM: 10, autoScaleNM: 10, originLat: 0, originLon: 0, autoOriginLat: 0, autoOriginLon: 0 };
+    }
+
+    var autoOriginLat = points.reduce(function (sum, p) { return sum + p.lat; }, 0) / points.length;
+    var autoOriginLon = points.reduce(function (sum, p) { return sum + p.lon; }, 0) / points.length;
+
+    var maxExtentNM = 0;
+    points.forEach(function (p) {
+      var off = SightCalc.offsetFromPosition(autoOriginLat, autoOriginLon, p.lat, p.lon);
+      maxExtentNM = Math.max(maxExtentNM, Math.hypot(off.x, off.y));
+    });
+    var autoScale = SightCalc.chooseNiceScale(maxExtentNM);
+
+    var originLat = opts.viewport ? opts.viewport.originLat : autoOriginLat;
+    var originLon = opts.viewport ? opts.viewport.originLon : autoOriginLon;
+    var scale = opts.viewport ? opts.viewport.scale : autoScale;
+    var pxPerNm = HALF / scale;
+
+    function pxFromLatLon(lat, lon) {
+      return toPx(SightCalc.offsetFromPosition(originLat, originLon, lat, lon), pxPerNm);
+    }
+
+    var defs = '<defs>';
+    var content = '';
+    var markers = '';
+
+    if (opts.startingPosition) {
+      var spPx = pxFromLatLon(opts.startingPosition.lat, opts.startingPosition.lon);
+      var spSelected = isSelected(selected, 'passage-start', 'start', undefined);
+      markers +=
+        (spSelected ? '<circle cx="' + spPx.x + '" cy="' + spPx.y + '" r="13" fill="var(--text)" fill-opacity="0.3"/>' : '') +
+        '<circle cx="' + spPx.x + '" cy="' + spPx.y + '" r="9" fill="transparent" pointer-events="fill" style="cursor:pointer" ' +
+          selectAttrs('passage-start', 'start', undefined, 'Starting position') + '/>' +
+        '<circle cx="' + spPx.x + '" cy="' + spPx.y + '" r="4.5" fill="var(--text)"/>' +
+        '<text x="' + (spPx.x + 8) + '" y="' + (spPx.y - 8) + '" class="chart-point-label">Start</text>';
+    }
+
+    drLegs.forEach(function (leg, i) {
+      var startPx = pxFromLatLon(leg.startPosition.lat, leg.startPosition.lon);
+      var endPx = pxFromLatLon(leg.endPosition.lat, leg.endPosition.lon);
+      var dirAngleRad = Math.atan2(endPx.y - startPx.y, endPx.x - startPx.x);
+      var color = 'var(--chart-dr)';
+      var markerId = 'passageDrArrow' + i;
+      defs += '<marker id="' + markerId + '" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="' + color + '"/></marker>';
+
+      var segSelected = isSelected(selected, 'drleg', leg.id, 'segment');
+      content +=
+        (segSelected ? '<line x1="' + startPx.x + '" y1="' + startPx.y + '" x2="' + endPx.x + '" y2="' + endPx.y + '" stroke="' + color + '" stroke-width="7" stroke-opacity="0.35"/>' : '') +
+        hitLine(startPx.x, startPx.y, endPx.x, endPx.y, selectAttrs('drleg', leg.id, 'segment', leg.name)) +
+        '<line x1="' + startPx.x + '" y1="' + startPx.y + '" x2="' + endPx.x + '" y2="' + endPx.y +
+        '" stroke="' + color + '" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#' + markerId + ')"/>';
+
+      // The endpoint is always a DR position by definition -- always a
+      // semicircle, matching renderDrLegChart's own Bowditch-derived
+      // convention (see that function's header for the citations). The
+      // start end only gets one too if it's ITSELF a DR position (chained
+      // from an earlier leg in this same passage); otherwise a plain
+      // circle, matching a fix/departure position.
+      var startIsDr = leg.startPosition.sourceType === 'DR';
+      markers += startIsDr
+        ? '<path d="' + semicirclePath(startPx.x, startPx.y, 6, dirAngleRad + Math.PI) + '" fill="var(--text)"/>'
+        : '';
+      markers += '<path d="' + semicirclePath(endPx.x, endPx.y, 6, dirAngleRad) + '" fill="' + color + '" stroke="var(--bg)" stroke-width="1"/>';
+    });
+
+    fixes.forEach(function (f) {
+      var fPx = pxFromLatLon(f.resolvedPosition.lat, f.resolvedPosition.lon);
+      var fSelected = isSelected(selected, 'fix', f.id, 'marker');
+      markers +=
+        (fSelected ? '<circle cx="' + fPx.x + '" cy="' + fPx.y + '" r="13" fill="var(--chart-fix)" fill-opacity="0.25"/>' : '') +
+        '<circle cx="' + fPx.x + '" cy="' + fPx.y + '" r="10" fill="transparent" pointer-events="fill" style="cursor:pointer" ' +
+          selectAttrs('fix', f.id, 'marker', f.name) + '/>' +
+        '<circle cx="' + fPx.x + '" cy="' + fPx.y + '" r="6" fill="none" stroke="var(--chart-fix)" stroke-width="2"/>' +
+        '<line x1="' + (fPx.x - 9) + '" y1="' + fPx.y + '" x2="' + (fPx.x + 9) + '" y2="' + fPx.y + '" stroke="var(--chart-fix)" stroke-width="1.5"/>' +
+        '<line x1="' + fPx.x + '" y1="' + (fPx.y - 9) + '" x2="' + fPx.x + '" y2="' + (fPx.y + 9) + '" stroke="var(--chart-fix)" stroke-width="1.5"/>';
+    });
+
+    unfixedSights.forEach(function (s) {
+      var pos = SightCalc.signedPositionFromRecord(s.position);
+      var sPx = pxFromLatLon(pos.lat, pos.lon);
+      var sSelected = isSelected(selected, 'sight', s.id, 'ap');
+      markers +=
+        (sSelected ? '<circle cx="' + sPx.x + '" cy="' + sPx.y + '" r="10" fill="var(--chart-az)" fill-opacity="0.3"/>' : '') +
+        '<circle cx="' + sPx.x + '" cy="' + sPx.y + '" r="6" fill="transparent" pointer-events="fill" style="cursor:pointer" ' +
+          selectAttrs('sight', s.id, 'ap', SightCalc.formatBodyLabel(s.body) + ' sight (unresolved)') + '/>' +
+        '<circle cx="' + sPx.x + '" cy="' + sPx.y + '" r="3.5" fill="var(--chart-az)"/>';
+    });
+
+    defs += '</defs>';
+    var svg =
+      '<svg viewBox="0 0 ' + SIZE + ' ' + SIZE + '" xmlns="http://www.w3.org/2000/svg" class="chart-svg" role="img" aria-label="Plot of passage track">' +
+        buildFrame(originLat, originLon, scale, clipId) +
+        defs +
+        '<g clip-path="url(#' + clipId + ')">' + content + '</g>' +
+        markers +
+      '</svg>';
+
+    container.innerHTML = svg;
+
+    return { scaleNM: scale, autoScaleNM: autoScale, originLat: originLat, originLon: originLon, autoOriginLat: autoOriginLat, autoOriginLon: autoOriginLon };
+  }
+
   global.SightChart = {
     renderSightChart: renderSightChart,
     renderMultiSightChart: renderMultiSightChart,
     renderDrLegChart: renderDrLegChart,
+    renderPassageChart: renderPassageChart,
     VIEWBOX_SIZE: SIZE, // exposed so chartPanZoom.js can map screen px <-> viewBox px without duplicating this constant
     pxPerNmForScale: function (scale) { return HALF / scale; } // the same conversion chart.js's own renders use internally, exposed so chartPanZoom.js can convert a screen-space gesture delta into an nm delta without duplicating HALF/EDGE
   };
