@@ -16,9 +16,10 @@
 * [X] Enable for DR Leg plot 
 * [X] Enable for Passage and make actionable – create/edit navigation elements from plot
 
-## Support Meridian Passage as a navigation element
+## Support remaining navigational elements
 
-* [ ] User enters sextant height (+corrections) and gets Latitude
+* [ ] Known Fix – position coordinate and datetime from any source, e.g., via VHF radio from a passing ship
+* [ ] Meridian Passage – User enters sextant height (+corrections) and gets Latitude
 
 ## Planning page
 
