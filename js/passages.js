@@ -19,7 +19,9 @@ var passageAutoScaleNM = null;
 var passageAutoOriginLat = null;
 var passageAutoOriginLon = null;
 var lastPassageRecords = null; // cached {sights, fixes, drLegs} so getPassageSelectionDetail can look a selected record up without a fresh fetch
+var lastFixSightsByFixId = null; // cached alongside it (see renderPassagePlot) -- a Fix's own constituent sights aren't necessarily ALSO individually assigned to this passage, so an LOP selection needs this separate lookup, not just lastPassageRecords.sights
 var passageSelection = null; // {type, recordId, part} | null -- see chartInteraction.js
+var passageShowLops = false; // "Show LOPs" checkbox state
 
 function passageIdFromHash() {
   var m = /^#passage=(.+)$/.exec(location.hash);
@@ -322,19 +324,43 @@ function renderPassagePlot() {
     var hasContent = records.sights.length || records.fixes.length || records.drLegs.length || currentPassage.startingPosition;
     if (!hasContent) {
       card.style.display = 'none';
-      return;
+      return Promise.resolve();
     }
     card.style.display = 'block';
 
-    var result = SightChart.renderPassageChart(document.getElementById('passageChartContainer'), records, {
-      startingPosition: currentPassage.startingPosition || null,
-      selected: passageSelection,
-      viewport: passageViewport
+    // "Show LOPs" needs each Fix's own constituent Sight records, which
+    // aren't necessarily the same as records.sights (a Fix's sights could
+    // in principle belong to this passage without every one of them ALSO
+    // being individually assigned to it, so they're fetched directly by
+    // id rather than assumed to already be in hand) -- fetched only when
+    // the checkbox is actually on, so the common case (off) stays a single
+    // fetch, not one-plus-N.
+    var fixSightsPromise = !passageShowLops
+      ? Promise.resolve(null)
+      : Promise.all(records.fixes.map(function (f) {
+          return Promise.all((f.sightIds || []).map(function (id) { return SightStorage.get(id); }))
+            .then(function (sights) { return { fixId: f.id, sights: sights.filter(Boolean) }; });
+        })).then(function (perFix) {
+          var map = {};
+          perFix.forEach(function (entry) { map[entry.fixId] = entry.sights; });
+          return map;
+        });
+
+    return fixSightsPromise.then(function (fixSightsByFixId) {
+      if (myToken !== passageRenderToken) return;
+      lastFixSightsByFixId = fixSightsByFixId;
+      var result = SightChart.renderPassageChart(document.getElementById('passageChartContainer'), records, {
+        startingPosition: currentPassage.startingPosition || null,
+        selected: passageSelection,
+        viewport: passageViewport,
+        showLops: passageShowLops,
+        fixSightsByFixId: fixSightsByFixId
+      });
+      passageViewport = { originLat: result.originLat, originLon: result.originLon, scale: result.scaleNM };
+      passageAutoScaleNM = result.autoScaleNM;
+      passageAutoOriginLat = result.autoOriginLat;
+      passageAutoOriginLon = result.autoOriginLon;
     });
-    passageViewport = { originLat: result.originLat, originLon: result.originLon, scale: result.scaleNM };
-    passageAutoScaleNM = result.autoScaleNM;
-    passageAutoOriginLat = result.autoOriginLat;
-    passageAutoOriginLon = result.autoOriginLon;
   }).catch(function (err) {
     console.error(err);
   });
@@ -416,8 +442,18 @@ function getPassageSelectionDetail(candidate) {
     };
   }
 
-  if (candidate.type === 'sight') {
+  if (candidate.type === 'sight' || candidate.type === 'lop') {
     var sight = lastPassageRecords.sights.find(function (s) { return s.id === candidate.recordId; });
+    if (!sight && lastFixSightsByFixId) {
+      // Not in the passage's own direct sights -- check every Fix's own
+      // constituent sights instead (see the module-level comment on
+      // lastFixSightsByFixId for why this second place needs checking).
+      Object.keys(lastFixSightsByFixId).some(function (fixId) {
+        var found = lastFixSightsByFixId[fixId].find(function (s) { return s.id === candidate.recordId; });
+        if (found) { sight = found; return true; }
+        return false;
+      });
+    }
     if (!sight) return null;
     var lines = [sightSummary(sight)];
     if (sight.results) lines.push('Zn ' + Math.round(sight.results.zn) + '\u00B0 \u00B7 ' + Math.abs(sight.results.interceptNM).toFixed(1) + ' NM ' + (sight.results.interceptNM >= 0 ? 'TOWARD' : 'AWAY'));
@@ -609,6 +645,10 @@ document.addEventListener('DOMContentLoaded', function () {
   var passagePanZoomApi = ChartPanZoom.wire('passageChartWrap', { getViewport: getPassageViewport, onViewportChange: onPassageViewportChange });
   ChartFullscreen.wire('passageChartWrap', 'passageChartContainer', passagePanZoomApi);
   ChartInteraction.wire('passageChartWrap', { getDetail: getPassageSelectionDetail, onSelectionChange: onPassageSelectionChange });
+  document.getElementById('togglePassageShowLops').addEventListener('change', function () {
+    passageShowLops = this.checked;
+    renderPassagePlot();
+  });
 
   document.getElementById('btnNewPassage').addEventListener('click', function () { location.hash = 'new'; });
   document.getElementById('btnBackFromNew').addEventListener('click', function () { location.hash = ''; });

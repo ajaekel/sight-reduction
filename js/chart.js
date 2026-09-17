@@ -833,6 +833,45 @@
       markers += '<path d="' + semicirclePath(endPx.x, endPx.y, 6, dirAngleRad) + '" fill="' + color + '" stroke="var(--bg)" stroke-width="1"/>';
     });
 
+    // "Show LOPs" (opts.showLops + opts.fixSightsByFixId, a map of
+    // fixId -> that fix's own constituent Sight records, fetched by the
+    // caller since this function is synchronous and can't fetch anything
+    // itself) draws each Fix's underlying LOPs for context. Reuses
+    // computeMultiLopGeometry with the SAME shared origin already in
+    // effect for this whole plot (the same origin-override mechanism
+    // every other chart here uses for pan/zoom), so a Fix's own LOPs line
+    // up correctly against everything else on a multi-day track rather
+    // than needing their own separate coordinate space. Deliberately
+    // simplified versus the Fix page's own rendering (renderMultiSightChart):
+    // no azimuth lines, no advanced/original distinction, no bisector
+    // construction, no per-sight badge/legend -- those all serve the
+    // Fix page's OWN purpose (working out a fix in detail); here the LOPs
+    // are supplementary context on an already-resolved position, so a
+    // plain, thinner line plus a label is enough, and "Open Fix" already
+    // exists for whoever wants that fuller picture.
+    if (opts.showLops && opts.fixSightsByFixId) {
+      fixes.forEach(function (f) {
+        var fixSights = opts.fixSightsByFixId[f.id];
+        if (!fixSights || !fixSights.length) return;
+        var sightsForGeo = fixSights.map(function (s) {
+          var pos = SightCalc.signedPositionFromRecord(s.position);
+          return { id: s.id, lat: pos.lat, lon: pos.lon, zn: s.results.zn, interceptNM: s.results.interceptNM, body: s.body };
+        });
+        var geo = SightCalc.computeMultiLopGeometry(sightsForGeo, { lat: originLat, lon: originLon });
+        geo.sights.forEach(function (s) {
+          var lopExtendNm = scale * 2.2;
+          var p1 = toPx({ x: s.interceptPoint.x + s.lopDirection.x * lopExtendNm, y: s.interceptPoint.y + s.lopDirection.y * lopExtendNm }, pxPerNm);
+          var p2 = toPx({ x: s.interceptPoint.x - s.lopDirection.x * lopExtendNm, y: s.interceptPoint.y - s.lopDirection.y * lopExtendNm }, pxPerNm);
+          var lopSelected = isSelected(selected, 'lop', s.id, undefined);
+          var label = SightCalc.formatBodyLabel(s.body) + ' LOP';
+          content +=
+            (lopSelected ? '<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" stroke="var(--chart-lop)" stroke-width="6" stroke-opacity="0.35"/>' : '') +
+            hitLine(p1.x, p1.y, p2.x, p2.y, selectAttrs('lop', s.id, undefined, label)) +
+            '<line x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" stroke="var(--chart-lop)" stroke-width="1.5" stroke-opacity="0.65"/>';
+        });
+      });
+    }
+
     fixes.forEach(function (f) {
       var fPx = pxFromLatLon(f.resolvedPosition.lat, f.resolvedPosition.lon);
       var fSelected = isSelected(selected, 'fix', f.id, 'marker');
