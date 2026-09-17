@@ -363,6 +363,64 @@
       assertClose('manualEventToZoneTime near-midnight wrap stays sane', r3.zoneSec, 20 * 60 + 5, 0.01);
     })();
 
+    // --- Meridian Passage (Local Apparent Noon): latitude = zenith distance
+    // ± declination, sign resolved by which side of the observer the Sun
+    // bore -- see calc.js's reduceMeridianSight for the derivation. Each case
+    // below picks Ho so that z = |lat - dec| holds exactly for the target
+    // latitude, then checks the function recovers that latitude. ---
+    (function testMeridianSameHemisphereSunSouth() {
+      // Observer 40N, Sun's declination 15N (equatorward of the observer) --
+      // the Sun bears South, and z = 40 - 15 = 25, so Ho = 90 - 25 = 65.
+      var result = SightCalc.reduceMeridianSight({
+        nonStar: { decBase: 15, decNext: 15 },
+        utcFractionOfHour: 0,
+        ho: 65,
+        sunBearsSouth: true
+      });
+      assertClose('Meridian: 40N observer, dec 15N, Sun South -> lat 40N', result.latitude, 40, 0.01);
+    })();
+
+    (function testMeridianTropicalSunNorth() {
+      // Observer 5N, Sun's declination 20N (poleward of the observer) -- the
+      // Sun bears North, and z = 20 - 5 = 15, so Ho = 90 - 15 = 75.
+      var result = SightCalc.reduceMeridianSight({
+        nonStar: { decBase: 20, decNext: 20 },
+        utcFractionOfHour: 0,
+        ho: 75,
+        sunBearsSouth: false
+      });
+      assertClose('Meridian: 5N observer, dec 20N, Sun North -> lat 5N', result.latitude, 5, 0.01);
+    })();
+
+    (function testMeridianCrossEquator() {
+      // Observer 30S, Sun's declination 45S (further south still, equatorward
+      // reasoning flips sign-wise but the same rule holds numerically: dec <
+      // lat using signed degrees, so Sun bears South) -- z = |-30 - (-45)| =
+      // 15, Ho = 75.
+      var result = SightCalc.reduceMeridianSight({
+        nonStar: { decBase: -45, decNext: -45 },
+        utcFractionOfHour: 0,
+        ho: 75,
+        sunBearsSouth: true
+      });
+      assertClose('Meridian: 30S observer, dec 45S, Sun South -> lat 30S', result.latitude, -30, 0.01);
+    })();
+
+    (function testMeridianDeclinationInterpolation() {
+      // Declination interpolation reuses interpolateLinear directly -- confirm
+      // it's actually being applied (not just decBase) by using a fraction
+      // that lands the interpolated dec, and hence the resulting latitude,
+      // partway between the base/next values.
+      var result = SightCalc.reduceMeridianSight({
+        nonStar: { decBase: 10, decNext: 11 },
+        utcFractionOfHour: 0.5,
+        ho: 80, // z = 10, dec interpolates to 10.5, Sun South -> lat = 20.5
+        sunBearsSouth: true
+      });
+      assertClose('Meridian: declination interpolates at fraction 0.5', result.interpolatedDec, 10.5, 0.001);
+      assertClose('Meridian: resulting latitude uses interpolated dec', result.latitude, 20.5, 0.01);
+    })();
+
     console.log('--- ' + pass + ' passed, ' + fail + ' failed ---');
     if (fail > 0) {
       throw new Error(fail + ' calc.js regression test(s) failed. See console above.');

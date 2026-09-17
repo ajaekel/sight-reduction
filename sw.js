@@ -7,6 +7,7 @@ var CACHE_NAME = 'ocsr-' + APP_VERSION;
 var PRECACHE_URLS = [
   './',
   './index.html',
+  './meridian.html',
   './fixes.html',
   './planning.html',
   './sights.html',
@@ -21,6 +22,8 @@ var PRECACHE_URLS = [
   './js/chartInteraction.js',
   './js/almanacCache.js',
   './js/fixStorage.js',
+  './js/meridianStorage.js',
+  './js/meridian.js',
   './js/usno.js',
   './js/stars.js',
   './js/nav.js',

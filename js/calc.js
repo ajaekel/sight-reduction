@@ -374,6 +374,48 @@
   }
 
   /**
+   * Meridian Passage (Local Apparent Noon) sight reduction, Sun only.
+   * Unlike reduceSight, this needs no assumed position at all: by
+   * definition LHA is exactly 0 at meridian passage, so the standard
+   * Marcq St Hilaire altitude-intercept method doesn't apply -- the
+   * observed altitude gives latitude directly, via zenith distance and
+   * declination alone (Bowditch's meridian-altitude sight).
+   *
+   * The one thing an assumed position would normally supply that this
+   * method has no other source for is which side of the observer the Sun
+   * bore at LAN -- z = |lat - dec| is symmetric, so the same z and dec
+   * are consistent with two different latitudes unless that's known. A
+   * real navigator always knows this from which way they faced to take
+   * the sight, so it's supplied directly as sunBearsSouth rather than
+   * derived here.
+   *
+   * input = {
+   *   nonStar: { decBase, decNext } -- signed decimal degrees, same shape
+   *     reduceSight's non-star path uses,
+   *   utcFractionOfHour: 0..1,
+   *   ho: decimal degrees, already-corrected Observed Altitude,
+   *   sunBearsSouth: boolean -- true if the Sun bore south of the
+   *     observer at meridian passage (equivalent to declination < the
+   *     resulting latitude, using signed N-positive degrees), false if
+   *     north.
+   * }
+   *
+   * Returns { interpolatedDec, zenithDistance, latitude }
+   */
+  function reduceMeridianSight(input) {
+    var ns = input.nonStar;
+    var interpolatedDec = interpolateLinear(ns.decBase, ns.decNext, input.utcFractionOfHour);
+    var zenithDistance = 90 - input.ho;
+    var latitude = input.sunBearsSouth ? (zenithDistance + interpolatedDec) : (interpolatedDec - zenithDistance);
+
+    return {
+      interpolatedDec: interpolatedDec,
+      zenithDistance: zenithDistance,
+      latitude: latitude
+    };
+  }
+
+  /**
    * Pure geometry for plotting a single sight: AP, the azimuth line toward the
    * body's GP, and the resulting Line of Position (LOP). Everything is returned
    * in nautical miles on a North-up, East-positive/North-positive plane centered
@@ -1148,6 +1190,7 @@
     interpolateGha: interpolateGha,
     interpolateLinear: interpolateLinear,
     reduceSight: reduceSight,
+    reduceMeridianSight: reduceMeridianSight,
     computeLopGeometry: computeLopGeometry,
     chooseNiceScale: chooseNiceScale,
     decimalToDM: decimalToDM,
