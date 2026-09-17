@@ -109,23 +109,39 @@
    */
   function renderSightChart(container, opts) {
     var geo = SightCalc.computeLopGeometry(opts.zn, opts.interceptNM);
-    var scale = SightCalc.chooseNiceScale(opts.interceptNM);
+
+    // opts.viewport = {originLat, originLon, scale} (optional, semantic
+    // zoom/pan -- see chartPanZoom.js and the matching comment in
+    // renderMultiSightChart): when given, used instead of always
+    // auto-centering on the AP itself. geo's own points are relative to
+    // the AP (geo.ap is always {0,0}), so re-expressing them relative to a
+    // DIFFERENT origin just means adding the AP's own offset from that
+    // origin to each of them first.
+    var autoScale = SightCalc.chooseNiceScale(opts.interceptNM);
+    var originLat = opts.viewport ? opts.viewport.originLat : opts.apLat;
+    var originLon = opts.viewport ? opts.viewport.originLon : opts.apLon;
+    var scale = opts.viewport ? opts.viewport.scale : autoScale;
     var pxPerNm = HALF / scale;
 
-    var apPx = toPx(geo.ap, pxPerNm);
-    var azEndPx = toPx({ x: geo.azimuthUnit.x * scale, y: geo.azimuthUnit.y * scale }, pxPerNm);
+    var apOffsetFromOrigin = SightCalc.offsetFromPosition(originLat, originLon, opts.apLat, opts.apLon);
+    function reexpress(nmPoint) {
+      return { x: nmPoint.x + apOffsetFromOrigin.x, y: nmPoint.y + apOffsetFromOrigin.y };
+    }
+
+    var apPx = toPx(reexpress(geo.ap), pxPerNm);
+    var azEndPx = toPx(reexpress({ x: geo.azimuthUnit.x * scale, y: geo.azimuthUnit.y * scale }), pxPerNm);
 
     var lopExtendNm = scale * 2.2;
-    var lopP1Px = toPx({
+    var lopP1Px = toPx(reexpress({
       x: geo.interceptPoint.x + geo.lopDirection.x * lopExtendNm,
       y: geo.interceptPoint.y + geo.lopDirection.y * lopExtendNm
-    }, pxPerNm);
-    var lopP2Px = toPx({
+    }), pxPerNm);
+    var lopP2Px = toPx(reexpress({
       x: geo.interceptPoint.x - geo.lopDirection.x * lopExtendNm,
       y: geo.interceptPoint.y - geo.lopDirection.y * lopExtendNm
-    }, pxPerNm);
+    }), pxPerNm);
 
-    var interceptPx = toPx(geo.interceptPoint, pxPerNm);
+    var interceptPx = toPx(reexpress(geo.interceptPoint), pxPerNm);
     var znLabel = pad3(opts.zn) + '\u00B0';
     var interceptAbs = Math.abs(opts.interceptNM).toFixed(1);
     var interceptDir = opts.interceptNM >= 0 ? 'TOWARD' : 'AWAY';
@@ -136,7 +152,7 @@
     var clipId = 'plotClipSingle';
     var svg =
       '<svg viewBox="0 0 ' + SIZE + ' ' + SIZE + '" xmlns="http://www.w3.org/2000/svg" class="chart-svg" role="img" aria-label="Plot of assumed position, azimuth, and line of position">' +
-        buildFrame(opts.apLat, opts.apLon, scale, clipId) +
+        buildFrame(originLat, originLon, scale, clipId) +
         '<defs><marker id="azArrow" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="var(--chart-az)"/></marker></defs>' +
         '<g clip-path="url(#' + clipId + ')">' +
           '<line x1="' + lopP1Px.x + '" y1="' + lopP1Px.y + '" x2="' + lopP2Px.x + '" y2="' + lopP2Px.y + '" stroke="var(--chart-lop)" stroke-width="2.5"/>' +
@@ -150,7 +166,12 @@
 
     container.innerHTML = svg;
 
-    return { scaleNM: scale, znLabel: znLabel, interceptText: interceptAbs + ' nm ' + interceptDir };
+    return {
+      scaleNM: scale, autoScaleNM: autoScale,
+      originLat: originLat, originLon: originLon,
+      autoOriginLat: opts.apLat, autoOriginLon: opts.apLon,
+      znLabel: znLabel, interceptText: interceptAbs + ' nm ' + interceptDir
+    };
   }
 
   /**
@@ -300,7 +321,31 @@
       return out;
     });
 
-    var multiGeo = SightCalc.computeMultiLopGeometry(withColor);
+    // The TRUE auto-fit origin -- the average of the sights' own positions,
+    // matching what computeMultiLopGeometry computes internally when no
+    // origin override is given. Computed directly here (not by calling
+    // computeMultiLopGeometry a second time without the override, which
+    // would needlessly redo all the per-sight geometry) specifically so
+    // "reset to fit" has a real origin to reset TO, even while a viewport
+    // override is currently active -- multiGeo.originLat/Lon below reflects
+    // whichever origin is actually in effect, which is the override once
+    // one exists, not the auto-fit position.
+    var autoOriginLat = withColor.length ? withColor.reduce(function (sum, s) { return sum + s.lat; }, 0) / withColor.length : 0;
+    var autoOriginLon = withColor.length ? withColor.reduce(function (sum, s) { return sum + s.lon; }, 0) / withColor.length : 0;
+
+    // opts.viewport = {originLat, originLon, scale} (all optional, semantic
+    // zoom/pan -- see chartPanZoom.js): when given, this render uses THAT
+    // geographic viewport instead of always auto-fitting to the data. Every
+    // point below is computed relative to whichever origin is actually in
+    // effect, so panning/zooming genuinely re-derives positions rather than
+    // visually stretching a fixed-scale render -- which is what actually
+    // lets two close-but-distinct points resolve into visually separate
+    // ones as you zoom in, since their pixel separation grows with pxPerNm
+    // while marker/stroke sizes stay fixed pixel values, unlike a CSS
+    // transform (where separation and marker size scale together and stay
+    // in the same proportion at any zoom level).
+    var originOverride = opts.viewport ? { lat: opts.viewport.originLat, lon: opts.viewport.originLon } : null;
+    var multiGeo = SightCalc.computeMultiLopGeometry(withColor, originOverride);
     var fixResult = SightCalc.resolveMultiLopFix(multiGeo.sights);
 
     // Which point (if any) is actually drawn/reported as "the Fix" is
@@ -325,7 +370,11 @@
       });
     }
 
-    var scale = SightCalc.chooseNiceScale(maxExtentNM);
+    // The auto-fit scale is always computed (even under a viewport
+    // override) so it can be handed back to the caller as the "reset to
+    // fit" baseline -- see the returned autoFit below.
+    var autoScale = SightCalc.chooseNiceScale(maxExtentNM);
+    var scale = opts.viewport ? opts.viewport.scale : autoScale;
     var pxPerNm = HALF / scale;
 
     var clipId = 'plotClipMulti';
@@ -536,7 +585,7 @@
 
     container.innerHTML = svg;
 
-    return { scaleNM: scale, legend: legend, fix: fix };
+    return { scaleNM: scale, autoScaleNM: autoScale, autoOriginLat: autoOriginLat, autoOriginLon: autoOriginLon, originLat: multiGeo.originLat, originLon: multiGeo.originLon, legend: legend, fix: fix };
   }
 
   /**
@@ -588,13 +637,24 @@
     var startOffset = SightCalc.offsetFromPosition(opts.startLat, opts.startLon, opts.startLat, opts.startLon); // {0,0}, kept explicit for clarity
     var endOffsetFromStart = SightCalc.offsetFromPosition(opts.startLat, opts.startLon, opts.endLat, opts.endLon);
     var midOffsetFromStart = { x: (startOffset.x + endOffsetFromStart.x) / 2, y: (startOffset.y + endOffsetFromStart.y) / 2 };
-    var midPos = SightCalc.positionFromOffset(opts.startLat, opts.startLon, midOffsetFromStart);
+    var autoOriginPos = SightCalc.positionFromOffset(opts.startLat, opts.startLon, midOffsetFromStart);
 
-    // Re-expressed relative to the midpoint (the new origin), not the start.
-    var startNm = { x: startOffset.x - midOffsetFromStart.x, y: startOffset.y - midOffsetFromStart.y };
-    var endNm = { x: endOffsetFromStart.x - midOffsetFromStart.x, y: endOffsetFromStart.y - midOffsetFromStart.y };
+    // opts.viewport = {originLat, originLon, scale} (optional, semantic
+    // zoom/pan -- see chartPanZoom.js and the matching comment in
+    // renderMultiSightChart): when given, used instead of always
+    // auto-centering on the track's own midpoint.
+    var originPos = opts.viewport ? { lat: opts.viewport.originLat, lon: opts.viewport.originLon } : autoOriginPos;
+    var originOffsetFromStart = SightCalc.offsetFromPosition(opts.startLat, opts.startLon, originPos.lat, originPos.lon);
 
-    var scale = SightCalc.chooseNiceScale(Math.hypot(endNm.x, endNm.y));
+    // Re-expressed relative to whichever origin is actually in effect, not
+    // always the midpoint.
+    var startNm = { x: startOffset.x - originOffsetFromStart.x, y: startOffset.y - originOffsetFromStart.y };
+    var endNm = { x: endOffsetFromStart.x - originOffsetFromStart.x, y: endOffsetFromStart.y - originOffsetFromStart.y };
+
+    // Auto-fit scale is always computed (even under a viewport override) so
+    // it's available as the "reset to fit" baseline via the return value.
+    var autoScale = SightCalc.chooseNiceScale(Math.hypot(startOffset.x - midOffsetFromStart.x, startOffset.y - midOffsetFromStart.y));
+    var scale = opts.viewport ? opts.viewport.scale : autoScale;
     var pxPerNm = HALF / scale;
 
     var startPx = toPx(startNm, pxPerNm);
@@ -630,7 +690,7 @@
     // chart instead.
     var svg =
       '<svg viewBox="0 0 ' + SIZE + ' ' + SIZE + '" xmlns="http://www.w3.org/2000/svg" class="chart-svg" role="img" aria-label="Plot of dead reckoning track">' +
-        buildFrame(midPos.lat, midPos.lon, scale, clipId) +
+        buildFrame(originPos.lat, originPos.lon, scale, clipId) +
         '<defs><marker id="drLegArrow" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="' + color + '"/></marker></defs>' +
         '<g clip-path="url(#' + clipId + ')">' +
           '<line x1="' + startPx.x + '" y1="' + startPx.y + '" x2="' + endPx.x + '" y2="' + endPx.y +
@@ -646,12 +706,14 @@
 
     container.innerHTML = svg;
 
-    return { scaleNM: scale };
+    return { scaleNM: scale, autoScaleNM: autoScale, autoOriginLat: autoOriginPos.lat, autoOriginLon: autoOriginPos.lon, originLat: originPos.lat, originLon: originPos.lon };
   }
 
   global.SightChart = {
     renderSightChart: renderSightChart,
     renderMultiSightChart: renderMultiSightChart,
-    renderDrLegChart: renderDrLegChart
+    renderDrLegChart: renderDrLegChart,
+    VIEWBOX_SIZE: SIZE, // exposed so chartPanZoom.js can map screen px <-> viewBox px without duplicating this constant
+    pxPerNmForScale: function (scale) { return HALF / scale; } // the same conversion chart.js's own renders use internally, exposed so chartPanZoom.js can convert a screen-space gesture delta into an nm delta without duplicating HALF/EDGE
   };
 })(window);

@@ -11,12 +11,20 @@ var currentFix = null;
 var fixRenderToken = 0;
 var lastChartInput = null; // cached so toggling azimuth/bisectors doesn't need to re-fetch sights
 var currentSelection = null; // {type, recordId, part} | null -- see chartInteraction.js; independent of pan/zoom/fullscreen state
+var fixChartFullscreenApi = null; // set once wired -- lets a selection's "Open" action exit fullscreen (see getFixSelectionDetail's 'fix' case)
+var fixViewport = null; // {originLat, originLon, scale} | null -- see chartPanZoom.js; null means "auto-fit," set once a gesture (or reset) establishes one
+var fixAutoScaleNM = null; // the CURRENT auto-fit scale, tracked separately from fixViewport since it needs to stay live even while a viewport override is active (chartPanZoom.js's zoom-out bound)
+var fixAutoOriginLat = null; // ditto, the true auto-fit origin -- what "reset to fit" resets TO
+var fixAutoOriginLon = null;
+var fixAutoOriginLat = null; // ditto, the true auto-fit origin -- what "reset to fit" resets TO
+var fixAutoOriginLon = null;
 var bisectorMethodSelected = false; // false = least-squares, true = method of bisectors
 
 document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('swVersion').textContent = APP_VERSION;
   initNavMenu();
-  ChartFullscreen.wire('fixChartWrap', 'fixChartContainer');
+  var fixPanZoomApi = ChartPanZoom.wire('fixChartWrap', { getViewport: getFixViewport, onViewportChange: onFixViewportChange });
+  fixChartFullscreenApi = ChartFullscreen.wire('fixChartWrap', 'fixChartContainer', fixPanZoomApi);
   ChartInteraction.wire('fixChartWrap', { getDetail: getFixSelectionDetail, onSelectionChange: onFixSelectionChange });
 
   document.getElementById('btnNewFix').addEventListener('click', onNewFixClick);
@@ -748,12 +756,23 @@ function renderCurrentPlot() {
     showBisectors: bisectorMethodSelected,
     fixTimeLabel: fixTimeLabel,
     selected: currentSelection,
-    fixId: currentFix.id
+    fixId: currentFix.id,
+    viewport: fixViewport // null until a pan/zoom gesture (or reset) has set one -- renderMultiSightChart auto-fits when this is null
   };
 
   var container = document.getElementById('fixChartContainer');
   var result = SightChart.renderMultiSightChart(container, plotInput, opts);
   cacheResolvedPosition(result.fix, plotInput);
+
+  // Always synced from what was ACTUALLY just rendered (the override if one
+  // was given, otherwise the fresh auto-fit) -- so chartPanZoom.js's own
+  // getViewport() callback (see the wiring in DOMContentLoaded below)
+  // always reflects the current state, and further gestures build on top
+  // of this render rather than a stale one.
+  fixViewport = { originLat: result.originLat, originLon: result.originLon, scale: result.scaleNM };
+  fixAutoScaleNM = result.autoScaleNM;
+  fixAutoOriginLat = result.autoOriginLat;
+  fixAutoOriginLon = result.autoOriginLon;
 
   var legendEl = document.getElementById('fixChartLegend');
   legendEl.innerHTML = '';
@@ -787,6 +806,33 @@ function renderCurrentPlot() {
  * chart.js draw the newly-selected element emphasized; that's the one
  * place these two files' concerns touch.
  */
+/**
+ * chartPanZoom.js's own callbacks -- see its file header for the full
+ * contract. getFixViewport supplies both the active viewport (wherever
+ * the user has panned/zoomed to, or null before any gesture) and the
+ * current auto-fit baseline (scale + true origin), kept distinct since
+ * "reset to fit" needs the latter, not wherever the view currently is.
+ * onFixViewportChange just re-renders at the new viewport -- the same
+ * renderCurrentPlot() every other chart update already goes through, so a
+ * pan/zoom step is treated identically to toggling azimuth lines or
+ * switching Fix method, not a special case.
+ */
+function getFixViewport() {
+  return {
+    originLat: fixViewport ? fixViewport.originLat : fixAutoOriginLat,
+    originLon: fixViewport ? fixViewport.originLon : fixAutoOriginLon,
+    scale: fixViewport ? fixViewport.scale : fixAutoScaleNM,
+    autoScale: fixAutoScaleNM,
+    autoOriginLat: fixAutoOriginLat,
+    autoOriginLon: fixAutoOriginLon
+  };
+}
+
+function onFixViewportChange(viewport) {
+  fixViewport = viewport;
+  renderCurrentPlot();
+}
+
 function onFixSelectionChange(selection) {
   currentSelection = selection;
   renderCurrentPlot();
@@ -808,8 +854,15 @@ function getFixSelectionDetail(candidate) {
       lines: [
         (bisectorMethodSelected ? 'Bisectors' : 'Least-squares') + ' \u00B7 ' + getActiveSightIds(currentFix).size + ' active sights',
         SightCalc.formatLat(currentFix.resolvedPosition.lat) + ' ' + SightCalc.formatLon(currentFix.resolvedPosition.lon)
-      ]
-      // No onOpen -- we're already looking at this fix's own page; nowhere else to send "Open" to.
+      ],
+      // "Open" here can't mean "navigate to a different page" -- this IS
+      // that fix's own page already. It means "show me the full page,"
+      // i.e. exit the zoomed plot back to the normal view where the rest
+      // of this fix's own details (sights list, save/export) are visible.
+      openLabel: 'Open Fix',
+      onOpen: function () {
+        if (fixChartFullscreenApi) fixChartFullscreenApi.exit();
+      }
     };
   }
 

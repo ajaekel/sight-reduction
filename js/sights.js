@@ -46,6 +46,13 @@ function onImportJson(evt) {
         throw new Error('File does not look like a sight record.');
       }
       parsed.id = null;
+      // title is storage metadata (attached only at SightStorage.save()
+      // time), never part of a Sight's own data -- a JSON export can't
+      // carry one, so every import needs it computed fresh, always, not
+      // just when a title "happens" to be missing (see SightCalc.computeAutoName).
+      // This path saves straight to storage with no naming prompt, unlike
+      // the New Sight page's Save button, so it's set automatically here.
+      parsed.title = SightCalc.computeAutoName(parsed);
       SightStorage.save(parsed).then(function () {
         showToast('Imported sight from ' + file.name);
         refreshSavedList();

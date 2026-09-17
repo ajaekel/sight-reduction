@@ -11,6 +11,10 @@
  */
 
 var _drMode = 'duration'; // 'duration' | 'endtime'
+var drViewport = null; // {originLat, originLon, scale} | null -- see chartPanZoom.js; null means "auto-fit," set once a gesture (or reset) establishes one
+var drAutoScaleNM = null;
+var drAutoOriginLat = null;
+var drAutoOriginLon = null;
 
 // Provenance of the START position, per calc.js's Position.sourceType/sourceId
 // (see makePosition's own comment for the full reasoning). 'KNOWN'/null
@@ -278,6 +282,28 @@ function formatDrTrackLabel(r) {
 }
 
 /** Renders (or hides, if there's nothing valid to show) the Plot card. */
+/**
+ * chartPanZoom.js's own callbacks -- see fixes.js's matching pair (and
+ * chartPanZoom.js's own file header) for the full contract; identical
+ * shape here, just for this page's single DR leg chart instead of a
+ * multi-sight one.
+ */
+function getDrLegViewport() {
+  return {
+    originLat: drViewport ? drViewport.originLat : drAutoOriginLat,
+    originLon: drViewport ? drViewport.originLon : drAutoOriginLon,
+    scale: drViewport ? drViewport.scale : drAutoScaleNM,
+    autoScale: drAutoScaleNM,
+    autoOriginLat: drAutoOriginLat,
+    autoOriginLon: drAutoOriginLon
+  };
+}
+
+function onDrLegViewportChange(viewport) {
+  drViewport = viewport;
+  renderDrLegChartDisplay(window._lastDrResult);
+}
+
 function renderDrLegChartDisplay(r) {
   var card = document.getElementById('drLegChartCard');
   if (!r) {
@@ -287,15 +313,23 @@ function renderDrLegChartDisplay(r) {
   card.style.display = 'block';
   var startLocal = SightCalc.utcMsToLocalDateTime(new Date(r.startPosition.time).getTime(), r.tzOffset);
   var endLocal = SightCalc.utcMsToLocalDateTime(new Date(r.endPosition.time).getTime(), r.tzOffset);
-  SightChart.renderDrLegChart(document.getElementById('drLegChartContainer'), {
+  var result = SightChart.renderDrLegChart(document.getElementById('drLegChartContainer'), {
     startLat: r.startPosition.lat,
     startLon: r.startPosition.lon,
     endLat: r.endPosition.lat,
     endLon: r.endPosition.lon,
     startSourceType: r.startPosition.sourceType,
     startTimeLabel: fmtHHMM(startLocal.secOfDay),
-    endTimeLabel: fmtHHMM(endLocal.secOfDay)
+    endTimeLabel: fmtHHMM(endLocal.secOfDay),
+    viewport: drViewport // null until a pan/zoom gesture (or reset) has set one -- renderDrLegChart auto-fits (centers on the track's midpoint) when this is null
   });
+  // Always synced from what was ACTUALLY just rendered, same reasoning as
+  // fixes.js's equivalent sync -- further gestures build on this render,
+  // not a stale one, and "reset to fit" always has a real target.
+  drViewport = { originLat: result.originLat, originLon: result.originLon, scale: result.scaleNM };
+  drAutoScaleNM = result.autoScaleNM;
+  drAutoOriginLat = result.autoOriginLat;
+  drAutoOriginLon = result.autoOriginLon;
   // Displayed as a caption below the chart, not drawn inside the SVG --
   // see the comment in chart.js's renderDrLegChart for why: this caption
   // routinely runs 40-55+ characters, which doesn't fit gracefully inside
@@ -729,6 +763,9 @@ function showToast(msg, isError) {
 document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('swVersion').textContent = APP_VERSION;
   initNavMenu();
+
+  var drPanZoomApi = ChartPanZoom.wire('drLegChartWrap', { getViewport: getDrLegViewport, onViewportChange: onDrLegViewportChange });
+  ChartFullscreen.wire('drLegChartWrap', 'drLegChartContainer', drPanZoomApi);
 
   document.getElementById('modeDuration').addEventListener('click', function () { setDrMode('duration'); });
   document.getElementById('modeEndTime').addEventListener('click', function () { setDrMode('endtime'); });

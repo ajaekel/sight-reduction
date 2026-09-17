@@ -124,7 +124,7 @@
     <div class="form-group">
       <label>Timezone Offset (UTC Offset in Hours)</label>
       <div class="input-row">
-        <input type="number" step="any" id="tzOffset" placeholder="-4" value="-4">
+        <input type="number" step="any" id="tzOffset" placeholder="-4" value="-4" onfocus="this.select()">
       </div>
       <label style="font-size: 0.75rem; margin-top:2px;">e.g., -4 for EDT, -5 for EST, +0 for UTC</label>
     </div>
@@ -430,7 +430,9 @@
   <!-- SIGHT PLOT CARD -->
   <div class="card" id="chartCard" style="display: none;">
     <div class="section-title">Plot</div>
-    <div class="chart-wrap" id="chartContainer"></div>
+    <div class="chart-wrap" id="chartWrap">
+      <div id="chartContainer"></div>
+    </div>
     <div class="chart-legend">
       <span class="chart-legend-item"><span class="chart-swatch az"></span> Azimuth to body</span>
       <span class="chart-legend-item"><span class="chart-swatch lop"></span> Line of Position (LOP)</span>
@@ -481,6 +483,8 @@
 <script src="js/calc.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/chart.js"></script>
+<script src="js/chartPanZoom.js"></script>
+<script src="js/chartFullscreen.js"></script>
 <script src="js/almanacCache.js"></script>
 <script src="js/fixStorage.js"></script>
 <script src="js/usno.js"></script>
