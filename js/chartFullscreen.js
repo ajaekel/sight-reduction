@@ -2,8 +2,9 @@
  * chartFullscreen.js
  * Adds a full-screen toggle to a chart's outer wrapper -- an unobtrusive
  * expand button in the corner, a full-viewport overlay while active,
- * Escape or a backdrop click to exit, and (when a contentId is given)
- * pan/zoom wired via chartPanZoom.js, active only while fullscreen.
+ * Escape or a backdrop click to exit, and (when a panZoomApi is given)
+ * enabling/disabling pan/zoom and wiring its reset button, active only
+ * while fullscreen.
  *
  * Deliberately a pure presentation layer, wired onto the OUTER wrapper
  * (e.g. "fixChartWrap"), never the inner element chart.js actually
@@ -18,24 +19,28 @@
  * looks at what's inside the wrapper, only resizes/repositions the
  * wrapper itself.
  *
- * Usage: wireChartFullscreen(wrapId, contentId) -- contentId is optional;
- * pass it (chart.js's actual render-target element, the one whose
- * children get replaced but which is itself never replaced) to also get
- * pan/zoom for free. Safe to call more than once on the same id
- * (idempotent) in case a page's init path could run twice.
+ * Usage: wireChartFullscreen(wrapId, contentId, panZoomApi) -- contentId
+ * is currently unused by this file directly (kept for callers/backward
+ * compatibility) but panZoomApi is where pan/zoom integration actually
+ * happens: pass the object ChartPanZoom.wire(...) already returned (wired
+ * separately by the calling page, since chartPanZoom.js now needs
+ * page-specific getViewport/onViewportChange callbacks to genuinely
+ * re-render the chart -- it can no longer wire itself generically the way
+ * a CSS-transform-based version could). This file just calls
+ * panZoomApi.setEnabled()/reset() at the right moments; it doesn't need
+ * to know how the callbacks were configured. Safe to call more than once
+ * on the same id (idempotent) in case a page's init path could run twice.
  */
 (function (global) {
   'use strict';
 
-  function wireChartFullscreen(wrapId, contentId) {
+  function wireChartFullscreen(wrapId, contentId, panZoomApi) {
     var wrap = document.getElementById(wrapId);
-    if (!wrap) return;
-    if (wrap.dataset.fullscreenWired) return;
+    if (!wrap) return null;
+    if (wrap.dataset.fullscreenWired) return wrap._fullscreenApi || null;
     wrap.dataset.fullscreenWired = 'true';
 
     wrap.classList.add('chart-wrap-fs-host');
-
-    var panZoom = contentId ? ChartPanZoom.wire(wrapId, contentId) : null;
 
     var btn = document.createElement('button');
     btn.type = 'button';
@@ -45,7 +50,7 @@
     wrap.appendChild(btn);
 
     var resetBtn = null;
-    if (panZoom) {
+    if (panZoomApi) {
       resetBtn = document.createElement('button');
       resetBtn.type = 'button';
       resetBtn.className = 'chart-fs-reset';
@@ -54,7 +59,7 @@
       resetBtn.style.display = 'none';
       resetBtn.addEventListener('click', function (e) {
         e.stopPropagation(); // don't let this also register as a backdrop click and exit fullscreen
-        panZoom.reset();
+        panZoomApi.reset();
       });
       wrap.appendChild(resetBtn);
     }
@@ -65,8 +70,8 @@
       btn.setAttribute('aria-label', on ? 'Exit full screen' : 'Expand chart to full screen');
       // Prevents the page underneath from scrolling while the overlay is open.
       document.body.classList.toggle('chart-fs-open', on);
-      if (panZoom) {
-        panZoom.setEnabled(on); // also resets the view when turned off, so re-entering always starts fresh
+      if (panZoomApi) {
+        panZoomApi.setEnabled(on); // also resets the view when turned on, so entering always starts from the fit view
         if (resetBtn) resetBtn.style.display = on ? '' : 'none';
       }
     }
@@ -93,6 +98,14 @@
         setFullscreen(false);
       }
     });
+
+    // Exposed so a caller can exit programmatically -- e.g. a selected
+    // element's own "Open" action (chartInteraction.js's getDetail),
+    // where "open the thing I'm already looking at" reasonably means
+    // "show me the full page, not just the zoomed plot."
+    var api = { exit: function () { setFullscreen(false); }, isFullscreen: function () { return wrap.classList.contains('chart-wrap-fullscreen'); } };
+    wrap._fullscreenApi = api;
+    return api;
   }
 
   global.ChartFullscreen = { wire: wireChartFullscreen };

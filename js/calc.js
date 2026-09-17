@@ -477,14 +477,23 @@
    *   }]
    * }
    */
-  function computeMultiLopGeometry(sights) {
+  /**
+   * originOverride (optional): {lat, lon} to use as the origin instead of
+   * the average of the input sights' own positions. Needed for semantic
+   * zoom/pan -- re-deriving every point's pixel position from a
+   * caller-chosen geographic viewport, rather than always the best-fit
+   * origin computed from the data -- since without this, every render
+   * would recenter itself on the data's own average regardless of where
+   * the user had panned to, undoing the pan on every redraw.
+   */
+  function computeMultiLopGeometry(sights, originOverride) {
     if (!sights || sights.length === 0) {
       return { originLat: 0, originLon: 0, maxExtentNM: 0, sights: [] };
     }
 
     var n = sights.length;
-    var originLat = sights.reduce(function (sum, s) { return sum + s.lat; }, 0) / n;
-    var originLon = sights.reduce(function (sum, s) { return sum + s.lon; }, 0) / n;
+    var originLat = originOverride ? originOverride.lat : (sights.reduce(function (sum, s) { return sum + s.lat; }, 0) / n);
+    var originLon = originOverride ? originOverride.lon : (sights.reduce(function (sum, s) { return sum + s.lon; }, 0) / n);
     var originLatRad = rad(originLat);
     var cosOriginLat = Math.cos(originLatRad);
 

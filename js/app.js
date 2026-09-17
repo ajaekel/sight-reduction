@@ -148,6 +148,10 @@ function initApp() {
   });
   initStarCombo();
   initNavMenu();
+
+  var chartPanZoomApi = ChartPanZoom.wire('chartWrap', { getViewport: getChartViewport, onViewportChange: onChartViewportChange });
+  ChartFullscreen.wire('chartWrap', 'chartContainer', chartPanZoomApi);
+
   document.getElementById('planetSelect').addEventListener('change', function () {
     updateHeaders();
     refreshLiveCalculations();
@@ -328,6 +332,16 @@ function handleBodyTypeChange() {
     limbSelect.style.display = 'block';
     if (!limbSelect.value) limbSelect.value = 'lower';
   }
+
+  // Forces the browser to actually apply the display changes above right
+  // now, synchronously, rather than potentially leaving them pending until
+  // some later reflow -- reading a layout-triggering property is the
+  // standard way to force this. Belt-and-suspenders: every test I can run
+  // already shows the DOM state ending up correct, so this targets a
+  // *rendering* timing gap rather than a logic bug, on the chance that's
+  // what's actually happening in a real browser but not in a test
+  // environment without a full layout engine.
+  void nameContainer.offsetHeight;
 
   updateHeaders();
 }
@@ -531,8 +545,16 @@ function addObservationLine(autoFocus) {
   refreshLiveCalculations();
 
   if (autoFocus) {
+    // Synchronous, not deferred -- correcting my own earlier change here.
+    // iOS Safari's rule for actually summoning the keyboard on .focus() is
+    // roughly the OPPOSITE of what a requestAnimationFrame deferral
+    // assumed: the LESS delay between the user's tap and the .focus() call,
+    // the MORE likely iOS is to treat it as part of that same trusted user
+    // gesture and honor it. Deferring to the next frame moves the call
+    // outside that window instead of inside it. .click() on a text input
+    // was never a real mechanism for summoning a mobile keyboard either, so
+    // it's still dropped.
     th.focus();
-    th.click();
     th.select();
   }
 }
@@ -1237,19 +1259,66 @@ function formatBodyLabel(body) {
   return SightCalc.formatBodyLabel(body);
 }
 
+var lastChartOpts = null; // cached {zn, interceptNM, apLat, apLon, apLabel, bodyLabel} so a pan/zoom gesture (see onChartViewportChange) can re-render with the same sight geometry but a new viewport, without needing the full state/result/apString/built call chain again
+var chartViewport = null; // {originLat, originLon, scale} | null -- see chartPanZoom.js; null means "auto-fit," set once a gesture (or reset) establishes one
+var chartAutoScaleNM = null;
+var chartAutoOriginLat = null;
+var chartAutoOriginLon = null;
+
+/**
+ * chartPanZoom.js's own callbacks -- see fixes.js/drleg.js's matching
+ * pairs (and chartPanZoom.js's own file header) for the full contract.
+ */
+function getChartViewport() {
+  return {
+    originLat: chartViewport ? chartViewport.originLat : chartAutoOriginLat,
+    originLon: chartViewport ? chartViewport.originLon : chartAutoOriginLon,
+    scale: chartViewport ? chartViewport.scale : chartAutoScaleNM,
+    autoScale: chartAutoScaleNM,
+    autoOriginLat: chartAutoOriginLat,
+    autoOriginLon: chartAutoOriginLon
+  };
+}
+
+function onChartViewportChange(viewport) {
+  chartViewport = viewport;
+  if (!lastChartOpts) return;
+  var container = document.getElementById('chartContainer');
+  var opts = { zn: lastChartOpts.zn, interceptNM: lastChartOpts.interceptNM, apLat: lastChartOpts.apLat, apLon: lastChartOpts.apLon, apLabel: lastChartOpts.apLabel, bodyLabel: lastChartOpts.bodyLabel, viewport: viewport };
+  SightChart.renderSightChart(container, opts);
+}
+
 function renderChart(state, result, apString, built) {
   var container = document.getElementById('chartContainer');
   var bodyLabel = formatBodyLabel(state.body);
   var lonSigned = (state.position.lonEW === 'W') ? -built.lonTotal : built.lonTotal;
 
-  var chartInfo = SightChart.renderSightChart(container, {
+  lastChartOpts = {
     zn: result.zn,
     interceptNM: result.interceptNM,
     apLat: built.lat,
     apLon: lonSigned,
     apLabel: apString,
     bodyLabel: bodyLabel
+  };
+
+  var chartInfo = SightChart.renderSightChart(container, {
+    zn: lastChartOpts.zn,
+    interceptNM: lastChartOpts.interceptNM,
+    apLat: lastChartOpts.apLat,
+    apLon: lastChartOpts.apLon,
+    apLabel: lastChartOpts.apLabel,
+    bodyLabel: lastChartOpts.bodyLabel,
+    viewport: chartViewport
   });
+
+  // Always synced from what was ACTUALLY just rendered (the override if
+  // one was given, otherwise the fresh auto-fit) -- same reasoning as
+  // fixes.js/drleg.js's equivalent sync.
+  chartViewport = { originLat: chartInfo.originLat, originLon: chartInfo.originLon, scale: chartInfo.scaleNM };
+  chartAutoScaleNM = chartInfo.autoScaleNM;
+  chartAutoOriginLat = chartInfo.autoOriginLat;
+  chartAutoOriginLon = chartInfo.autoOriginLon;
 
   document.getElementById('chartCaption').innerText =
     'AP ' + apString + '  \u00B7  Zn ' + chartInfo.znLabel + '  \u00B7  Intercept ' + chartInfo.interceptText +
@@ -1567,51 +1636,34 @@ function showToast(message, isError) {
  * record's title and the Export filename base, and updates live on screen
  * (see updateAutoNamePreview) as those fields change -- no prompt, ever.
  */
-function computeAutoName(state) {
-  var pad2 = function (n) { return String(n).padStart(2, '0'); };
-  var now = new Date();
-
-  var dateStr = state.date || now.toISOString().split('T')[0];
-
-  var avg = SightCalc.averageObservations(state.observations);
-  var timeStr;
-  if (avg) {
-    var corr = state.corrections || {};
-    var sign = (corr.clockErrorDirection === 'fast') ? -1 : 1;
-    var correctedSec = ((avg.avgLocalSec + sign * (corr.clockErrorSec || 0)) % 86400 + 86400) % 86400;
-    var h = Math.floor(correctedSec / 3600);
-    var m = Math.floor((correctedSec % 3600) / 60);
-    var s = Math.floor(correctedSec % 60);
-    timeStr = pad2(h) + '.' + pad2(m) + '.' + pad2(s);
-  } else {
-    timeStr = pad2(now.getHours()) + '.' + pad2(now.getMinutes()) + '.' + pad2(now.getSeconds());
-  }
-
-  // Sun/Moon are themselves proper nouns and get capitalized; "star"/"planet"
-  // are just category words, so they stay lowercase -- only the actual name
-  // that follows (Arcturus, Venus, etc.) is the proper noun there.
-  var rawType = (state.body && state.body.type) || 'sight';
-  var properTypeNames = { sun: 'Sun', moon: 'Moon' };
-  var typeStr = properTypeNames[rawType] || rawType;
-  var nameStr = ((state.body && state.body.name) || '').trim();
-
-  var parts = [dateStr, timeStr, typeStr];
-  if (nameStr) parts.push(nameStr);
-
-  // Strip characters that are illegal (or awkward) in filenames on common filesystems.
-  return parts.join(' ').replace(/[\\/:*?"<>|]/g, '_');
-}
-
 /** Keeps the on-screen "Save name" preview (next to the Save/Export buttons) in sync. */
+/**
+ * Keeps the on-screen "Save name" preview (next to the Save/Export buttons)
+ * in sync. Wrapped in try/catch deliberately: this is a cosmetic preview,
+ * not load-bearing for anything else -- but it's called from
+ * refreshLiveCalculations(), which runs from many places including
+ * initApp() and addObservationLine(), both of which have real,
+ * load-bearing work queued AFTER this call in the same synchronous
+ * function. A failure here (e.g. a version mismatch where calc.js is
+ * missing a function app.js expects -- exactly what happened once already)
+ * would otherwise silently abort everything queued after it in the same
+ * call stack, with symptoms in completely unrelated features (the Limb
+ * field never showing on load, "Add Observation" never focusing its new
+ * row) that give no hint the actual failure was here.
+ */
 function updateAutoNamePreview() {
   var el = document.getElementById('autoNamePreview');
   if (!el) return;
-  el.textContent = computeAutoName(collectFormState());
+  try {
+    el.textContent = SightCalc.computeAutoName(collectFormState());
+  } catch (e) {
+    console.error('updateAutoNamePreview failed (non-fatal, preview left as-is):', e);
+  }
 }
 
 function onSaveSight() {
   var state = collectFormState();
-  var autoName = computeAutoName(state);
+  var autoName = SightCalc.computeAutoName(state);
 
   var name = prompt('Save sight as:', autoName);
   if (name === null) return; // cancelled
@@ -1685,7 +1737,7 @@ function onExportJson() {
   var state = collectFormState();
   if (window._lastResult) state.results = window._lastResult;
 
-  var autoName = computeAutoName(state);
+  var autoName = SightCalc.computeAutoName(state);
   var name = prompt('Export sight as:', autoName);
   if (name === null) return; // cancelled
   name = name.trim() || autoName;
