@@ -178,6 +178,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('drLegEventSelect').addEventListener('change', updateDrLegButton);
   document.getElementById('btnCalcEventPosition').addEventListener('click', onCalcEventPosition);
   document.getElementById('btnEventPosToDrLeg').addEventListener('click', onEventPosToDrLeg);
+  document.getElementById('btnEventPosToSight').addEventListener('click', onEventPosToSight);
 
   wireDigitBox('eventPosStartTimeH', 2, 0, 23, 'eventPosStartTimeM');
   wireDigitBox('eventPosStartTimeM', 2, 0, 59, null);
@@ -801,7 +802,7 @@ function renderEventPositionResult(result, startPos, dateVal, tz, course, sog, e
 
   document.getElementById('eventPositionResult').style.display = 'block';
 
-  _lastEventPositionResult = { result: result, startPos: startPos, dateVal: dateVal, tz: tz, course: course, sog: sog, startZoneSec: startZoneSec };
+  _lastEventPositionResult = { result: result, startPos: startPos, dateVal: dateVal, tz: tz, course: course, sog: sog, startZoneSec: startZoneSec, finalPos: finalPos };
 }
 
 /**
@@ -829,6 +830,23 @@ function onEventPosToDrLeg() {
   };
   sessionStorage.setItem('ocsrSolvedLegHandoff', JSON.stringify(handoff));
   location.href = 'drleg.html';
+}
+
+/**
+ * Sends the solved DR position -- at the event's own moment, not the leg's
+ * start time -- to the New Sight page as its AP, via the same
+ * 'ocsrApHandoff' Position-aware shape that Planning's own "Send AP + event
+ * time to DR Leg" flow and index.html's applyPendingHandoff() already fully
+ * support. sourceType is DR since this position was computed, not observed.
+ */
+function onEventPosToSight() {
+  var r = _lastEventPositionResult;
+  if (!r || !r.result.solved) return;
+
+  var eventUtcMs = SightCalc.localDateTimeToUtcMs(r.dateVal, 0, r.tz) + r.result.eventDayOffset * 86400000 + r.result.eventZoneSec * 1000;
+  var position = SightCalc.makePosition(new Date(eventUtcMs).toISOString(), r.finalPos.latDeg, r.finalPos.lonDeg, SightCalc.POSITION_SOURCE_TYPES.DR, null);
+  sessionStorage.setItem('ocsrApHandoff', JSON.stringify({ position: position, tzOffset: r.tz }));
+  location.href = 'index.html';
 }
 
 function onStartSight() {

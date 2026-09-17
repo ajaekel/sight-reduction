@@ -325,49 +325,50 @@
   <div class="save-export-row">
     <button class="btn-secondary" id="btnToDrLeg" type="button" disabled>Send to DR Leg</button>
   </div>
-</div>
 
-<div class="card" id="eventPositionCard" style="margin-top: 16px;">
-  <div class="section-title">Where will I be at this event?</div>
-  <div class="cache-summary-text" style="margin-bottom: 8px;">
-    Uses the AP above as the starting position, plus a start time, course, and speed, to find the position and moment this event actually happens along that track.
-  </div>
+  <div class="card" id="eventPositionCard" style="margin-top: 16px;">
+    <div class="section-title">Where will I be at this event?</div>
+    <div class="cache-summary-text" style="margin-bottom: 8px;">
+      Uses the AP above as the starting position, plus a start time, course, and speed, to find the position and moment this event actually happens along that track.
+    </div>
 
-  <div class="form-group">
-    <div class="body-inline-row">
-      <div class="body-inline-col">
-        <label>Start Time (24h)</label>
-        <span class="time-hm">
-          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="eventPosStartTimeH" placeholder="14">
-          <span>:</span>
-          <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="eventPosStartTimeM" placeholder="00">
-        </span>
-      </div>
-      <div class="body-inline-col" style="flex: 1;">
-        <label>SOG (knots)</label>
-        <input type="text" inputmode="decimal" id="eventPosSog" placeholder="6.0" onfocus="this.select()">
-      </div>
-      <div class="body-inline-col" style="flex: 1;">
-        <label>Course (&deg; True)</label>
-        <input type="text" inputmode="decimal" id="eventPosCourse" placeholder="090" onfocus="this.select()">
+    <div class="form-group">
+      <div class="body-inline-row">
+        <div class="body-inline-col">
+          <label>Start Time (24h)</label>
+          <span class="time-hm">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="eventPosStartTimeH" placeholder="14">
+            <span>:</span>
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" class="time-box" id="eventPosStartTimeM" placeholder="00">
+          </span>
+        </div>
+        <div class="body-inline-col" style="flex: 1;">
+          <label>SOG (knots)</label>
+          <input type="text" inputmode="decimal" id="eventPosSog" placeholder="6.0" onfocus="this.select()">
+        </div>
+        <div class="body-inline-col" style="flex: 1;">
+          <label>Course (&deg; True)</label>
+          <input type="text" inputmode="decimal" id="eventPosCourse" placeholder="090" onfocus="this.select()">
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="save-export-row">
-    <button class="btn-secondary" id="btnCalcEventPosition" type="button" disabled>Calculate position at event</button>
-  </div>
+    <div class="save-export-row">
+      <button class="btn-secondary" id="btnCalcEventPosition" type="button" disabled>Calculate position at event</button>
+    </div>
 
-  <div id="eventPositionStatus" class="usno-status" style="display: none;"></div>
+    <div id="eventPositionStatus" class="usno-status" style="display: none;"></div>
 
-  <div class="summary-box" id="eventPositionResult" style="margin-top: 12px; display: none;">
-    <div id="eventPosResultTitle" style="font-weight: bold; margin-bottom: 4px;"></div>
-    <div><strong>DR position:</strong> <span id="eventPosResultPosition"></span></div>
-    <div><strong>Duration:</strong> <span id="eventPosResultDuration"></span></div>
-    <div><strong>Course/Speed:</strong> <span id="eventPosResultCourseSpeed"></span></div>
-    <div style="color: #aaa; font-size: 0.8rem;" id="eventPosResultConverged"></div>
-    <div class="save-export-row" style="margin-top: 8px;">
-      <button class="btn-secondary" id="btnEventPosToDrLeg" type="button">Send to DR Leg</button>
+    <div class="summary-box" id="eventPositionResult" style="margin-top: 12px; display: none;">
+      <div id="eventPosResultTitle" style="font-weight: bold; margin-bottom: 4px;"></div>
+      <div><strong>DR position:</strong> <span id="eventPosResultPosition"></span></div>
+      <div><strong>Duration:</strong> <span id="eventPosResultDuration"></span></div>
+      <div><strong>Course/Speed:</strong> <span id="eventPosResultCourseSpeed"></span></div>
+      <div style="color: #aaa; font-size: 0.8rem;" id="eventPosResultConverged"></div>
+      <div class="save-export-row" style="margin-top: 8px;">
+        <button class="btn-secondary" id="btnEventPosToDrLeg" type="button">Send to DR Leg</button>
+        <button class="btn-secondary" id="btnEventPosToSight" type="button">New Sight from DR Position</button>
+      </div>
     </div>
   </div>
 </div>
