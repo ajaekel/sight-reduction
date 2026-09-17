@@ -3,7 +3,7 @@
 ## Support passage
 
 * [X] Chronological record of navigation
-* [ ] Add plot
+* [X] Add plot
 
 ## Support full-screen plotting (Desktop mode)
 
@@ -12,9 +12,9 @@
   * [ ] Collapsible control panels
   * [ ] Adjust visualization variables
   * [ ] Background layer selection: map, satellite
-* [ ] Enable for Sight plot
-* [ ] Enable for DR Leg plot 
-* [ ] Enable for Passage and make actionable – create/edit navigation elements from plot
+* [X] Enable for Sight plot
+* [X] Enable for DR Leg plot 
+* [X] Enable for Passage and make actionable – create/edit navigation elements from plot
 
 ## Support Meridian Passage as a navigation element
 

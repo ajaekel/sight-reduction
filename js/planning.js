@@ -176,6 +176,14 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('btnStartSight').addEventListener('click', onStartSight);
   document.getElementById('btnToDrLeg').addEventListener('click', onToDrLeg);
   document.getElementById('drLegEventSelect').addEventListener('change', updateDrLegButton);
+  document.getElementById('btnCalcEventPosition').addEventListener('click', onCalcEventPosition);
+  document.getElementById('btnEventPosToDrLeg').addEventListener('click', onEventPosToDrLeg);
+
+  wireDigitBox('eventPosStartTimeH', 2, 0, 23, 'eventPosStartTimeM');
+  wireDigitBox('eventPosStartTimeM', 2, 0, 59, null);
+  ['eventPosStartTimeH', 'eventPosStartTimeM', 'eventPosSog', 'eventPosCourse'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', updateEventPositionButton);
+  });
 
   // Digit-box behavior (filtering/validation/auto-advance) for every H/M pair...
   PLANNING_FIELD_IDS.forEach(function (id) {
@@ -352,39 +360,64 @@ function computeManualTransit(fieldId, lon, tz, adjFieldId) {
   return SightCalc.manualEventToZoneTime(t, lon, tz);
 }
 
+/**
+ * Computes ONE named event's zone time (the same key names _planningResults
+ * uses) at an ARBITRARY position -- the same Manual-mode pipeline
+ * refreshManualResults() uses for the current AP, factored out so the
+ * event-position solver (further below) can ask "what time does this event
+ * happen at this position" for any position along a DR track, not just
+ * whatever's currently in the AP fields. refreshManualResults() itself now
+ * calls this too, for the current AP, so there's exactly one place this
+ * logic lives.
+ */
+function computeManualEventAtPosition(eventFieldId, lat, lon, tz) {
+  var latSign = lat < 0 ? -1 : 1;
+  var refAbove = latSign * parseFloat(document.getElementById('refLatAboveSun').value);
+  var refBelow = latSign * parseFloat(document.getElementById('refLatBelowSun').value);
+
+  if (eventFieldId === 'resSunrise') {
+    var sunriseLmt = interpolatedLmt('sunriseTimeBelow', 'sunriseTimeAbove', refBelow, refAbove, lat);
+    return sunriseLmt === null ? null : SightCalc.manualEventToZoneTime(sunriseLmt, lon, tz);
+  }
+  if (eventFieldId === 'resSunset') {
+    var sunsetLmt = interpolatedLmt('sunsetTimeBelow', 'sunsetTimeAbove', refBelow, refAbove, lat);
+    return sunsetLmt === null ? null : SightCalc.manualEventToZoneTime(sunsetLmt, lon, tz);
+  }
+  if (eventFieldId === 'resSunTransit') {
+    var transitLmt = parseTimeField('sunTransitTime');
+    return transitLmt === null ? null : SightCalc.manualEventToZoneTime(transitLmt, lon, tz);
+  }
+  if (eventFieldId === 'resCivilTwilightAM' || eventFieldId === 'resCivilTwilightPM' ||
+      eventFieldId === 'resNauticalTwilightAM' || eventFieldId === 'resNauticalTwilightPM') {
+    var tTransitLmt = parseTimeField('sunTransitTime');
+    if (tTransitLmt === null) return null;
+    var tSunriseLmt = interpolatedLmt('sunriseTimeBelow', 'sunriseTimeAbove', refBelow, refAbove, lat);
+    var tSunsetLmt = interpolatedLmt('sunsetTimeBelow', 'sunsetTimeAbove', refBelow, refAbove, lat);
+    var twilight = SightCalc.computeTwilightTimes(lat, tTransitLmt, tSunriseLmt, tSunsetLmt);
+    if (!twilight) return null;
+    var twilightKey = { resCivilTwilightAM: 'civilAM', resCivilTwilightPM: 'civilPM', resNauticalTwilightAM: 'nauticalAM', resNauticalTwilightPM: 'nauticalPM' }[eventFieldId];
+    var twilightSec = twilight[twilightKey];
+    return (twilightSec === null || twilightSec === undefined) ? null : SightCalc.manualEventToZoneTime(twilightSec, lon, tz);
+  }
+  if (eventFieldId === 'resMoonrise') return computeManualRiseSet('moonriseTimeBelow', 'moonriseTimeAbove', refBelow, refAbove, lat, lon, tz, 'moonriseTimeBelowAdj', 'moonriseTimeAboveAdj');
+  if (eventFieldId === 'resMoonset') return computeManualRiseSet('moonsetTimeBelow', 'moonsetTimeAbove', refBelow, refAbove, lat, lon, tz, 'moonsetTimeBelowAdj', 'moonsetTimeAboveAdj');
+  if (eventFieldId === 'resMoonTransit') return computeManualTransit('moonTransitTime', lon, tz, 'moonTransitTimeAdj');
+  return null;
+}
+
 function refreshManualResults() {
   var pos = getPlanningPosition();
   if (!pos) { clearResults(); return; }
 
   var tz = parseFloat(document.getElementById('planTzOffset').value) || 0;
 
-  // Reference latitude bands are entered as a plain 0-90 magnitude (matching the
-  // almanac page) -- the hemisphere is inferred from the AP's own latitude, since
-  // a real navigator wouldn't be reading a band from the opposite hemisphere.
-  var latSign = pos.lat < 0 ? -1 : 1;
-  var refAbove = latSign * parseFloat(document.getElementById('refLatAboveSun').value);
-  var refBelow = latSign * parseFloat(document.getElementById('refLatBelowSun').value);
-
-  var sunriseLmt = interpolatedLmt('sunriseTimeBelow', 'sunriseTimeAbove', refBelow, refAbove, pos.lat);
-  var sunsetLmt = interpolatedLmt('sunsetTimeBelow', 'sunsetTimeAbove', refBelow, refAbove, pos.lat);
-  var transitLmt = parseTimeField('sunTransitTime');
-
-  setResult('resSunrise', sunriseLmt === null ? null : SightCalc.manualEventToZoneTime(sunriseLmt, pos.lon, tz));
-  setResult('resSunset', sunsetLmt === null ? null : SightCalc.manualEventToZoneTime(sunsetLmt, pos.lon, tz));
-  setResult('resSunTransit', transitLmt === null ? null : SightCalc.manualEventToZoneTime(transitLmt, pos.lon, tz));
-
-  // Civil/Nautical Twilight are derived from the Sun data already entered above
-  // (see calc.js's computeTwilightTimes) -- no separate almanac lookup needed.
-  var twilight = transitLmt === null ? null : SightCalc.computeTwilightTimes(pos.lat, transitLmt, sunriseLmt, sunsetLmt);
-  var toZone = function (sec) { return sec === null || sec === undefined ? null : SightCalc.manualEventToZoneTime(sec, pos.lon, tz); };
-  setResult('resCivilTwilightAM', twilight ? toZone(twilight.civilAM) : null);
-  setResult('resCivilTwilightPM', twilight ? toZone(twilight.civilPM) : null);
-  setResult('resNauticalTwilightAM', twilight ? toZone(twilight.nauticalAM) : null);
-  setResult('resNauticalTwilightPM', twilight ? toZone(twilight.nauticalPM) : null);
-
-  setResult('resMoonrise', computeManualRiseSet('moonriseTimeBelow', 'moonriseTimeAbove', refBelow, refAbove, pos.lat, pos.lon, tz, 'moonriseTimeBelowAdj', 'moonriseTimeAboveAdj'));
-  setResult('resMoonset', computeManualRiseSet('moonsetTimeBelow', 'moonsetTimeAbove', refBelow, refAbove, pos.lat, pos.lon, tz, 'moonsetTimeBelowAdj', 'moonsetTimeAboveAdj'));
-  setResult('resMoonTransit', computeManualTransit('moonTransitTime', pos.lon, tz, 'moonTransitTimeAdj'));
+  [
+    'resSunrise', 'resSunset', 'resSunTransit',
+    'resCivilTwilightAM', 'resCivilTwilightPM', 'resNauticalTwilightAM', 'resNauticalTwilightPM',
+    'resMoonrise', 'resMoonset', 'resMoonTransit'
+  ].forEach(function (eventFieldId) {
+    setResult(eventFieldId, computeManualEventAtPosition(eventFieldId, pos.lat, pos.lon, tz));
+  });
 }
 
 // ---------------------------------------------------------------------
@@ -502,6 +535,7 @@ function refreshPlanning() {
   if (_planningMode === 'manual') refreshManualResults();
   // Auto-fill results only ever populate from an explicit button click.
   updateDrLegButton();
+  updateEventPositionButton();
 }
 
 /**
@@ -537,7 +571,268 @@ function onToDrLeg() {
   location.href = 'drleg.html';
 }
 
+/**
+ * Auto-fill's equivalent of computeManualEventAtPosition: extracts ONE
+ * named event's zone time from a raw USNO rstt/oneday response (see
+ * renderRsttResult, which this factors the same mapping out of). lat is
+ * only needed for the derived Nautical Twilight case (computeTwilightTimes
+ * needs it; USNO's response itself doesn't report Nautical Twilight at
+ * all -- see fetchRiseSetTransit's own comment on this).
+ */
+function computeAutofillEventAtPosition(eventFieldId, rsttResult, lat) {
+  var directField = {
+    resSunrise: 'sunrise', resSunset: 'sunset', resSunTransit: 'sunTransit',
+    resCivilTwilightAM: 'civilTwilightAM', resCivilTwilightPM: 'civilTwilightPM',
+    resMoonrise: 'moonrise', resMoonset: 'moonset', resMoonTransit: 'moonTransit'
+  }[eventFieldId];
+  if (directField) {
+    var sec = parseHHMM(rsttResult[directField]);
+    return sec === null ? null : { zoneSec: sec, dayOffset: 0 };
+  }
+  var transitSec = parseHHMM(rsttResult.sunTransit);
+  if (transitSec === null) return null;
+  var twilight = SightCalc.computeTwilightTimes(lat, transitSec, parseHHMM(rsttResult.sunrise), parseHHMM(rsttResult.sunset));
+  if (!twilight) return null;
+  var twilightKey = { resNauticalTwilightAM: 'nauticalAM', resNauticalTwilightPM: 'nauticalPM' }[eventFieldId];
+  var twilightSec = twilight[twilightKey];
+  return (twilightSec === null || twilightSec === undefined) ? null : { zoneSec: twilightSec, dayOffset: 0 };
+}
+
+/**
+ * Builds the getEventTimeAtDuration callback SightCalc.solveEventPosition
+ * needs, for Manual mode: a synchronous, purely local function, since
+ * Manual mode's almanac interpolation already has everything it needs
+ * without any network involvement. Position at each duration comes from
+ * SightCalc.drPosition (the same DR math the DR Leg page itself uses via
+ * computeDrLeg); the event's time at that position reuses
+ * computeManualEventAtPosition unchanged -- exactly what the Results box
+ * already computes for the current AP, just repeated at wherever the DR
+ * track has gotten to.
+ */
+function buildManualEventTimeAtDuration(eventFieldId, startLatDeg, startLonDeg, courseDegTrue, sog, tz) {
+  return function (durationHours) {
+    var pos = SightCalc.drPosition(startLatDeg, startLonDeg, courseDegTrue, sog * durationHours);
+    return computeManualEventAtPosition(eventFieldId, pos.latDeg, pos.lonDeg, tz);
+  };
+}
+
+/**
+ * Builds the same kind of callback for Auto-fill mode -- but since USNO
+ * answers for one exact lat/lon at a time (unlike Manual mode's built-in
+ * latitude interpolation), it can't be called fresh on every solver
+ * iteration without hammering the network. Instead: fetch USNO ONCE at
+ * the starting position (giving a first rough duration estimate -- the
+ * fixed-point method's own first guess, computed here rather than inside
+ * the solver, precisely so it can double as this acquire step's own
+ * target for the second sample) and ONCE more at the position that
+ * estimate implies, then build a straight-line model between those two
+ * samples. The solve itself then runs entirely against that local model,
+ * with no further network calls. Works entirely in absolute UTC
+ * milliseconds internally (rather than juggling separate zoneSec/dayOffset
+ * pairs relative to two different dates) specifically to avoid a subtle
+ * class of bug: the second sample's own calendar date, in zone time, can
+ * differ from the first if the rough estimate spans into the next day,
+ * and mixing "dayOffset relative to date A" with "dayOffset relative to
+ * date B" without a common absolute axis is exactly how that kind of
+ * error creeps in unnoticed.
+ *
+ * Returns a Promise resolving to the callback, or to null if the event
+ * does not occur at the starting position/date at all (checked upfront so
+ * the caller can report that plainly rather than the solver discovering
+ * it less directly).
+ */
+function acquireAutofillEventTimeAtDuration(eventFieldId, startLatDeg, startLonDeg, startZoneSec, dateVal, tz, courseDegTrue, sog) {
+  function fetchEventAbsoluteMs(dateStr, lat, lon) {
+    return SightUsno.fetchRiseSetTransit(dateStr, lat, lon, tz).then(function (result) {
+      var event = computeAutofillEventAtPosition(eventFieldId, result, lat);
+      if (!event) return null;
+      return SightCalc.localDateTimeToUtcMs(dateStr, event.zoneSec, tz) + event.dayOffset * 86400000;
+    });
+  }
+
+  function nextCalendarDateStr(dateStr) {
+    // Midnight of dateStr (in zone time), plus 24 real hours, converted
+    // back to a zone-time date string -- not a plain calendar-string
+    // increment, so this still lands correctly across a DST-style zone
+    // change if tzOffset itself changes (this app takes a fixed numeric
+    // offset per leg, but the arithmetic stays correct either way since
+    // it's anchored to an absolute instant, not to string manipulation).
+    return SightCalc.utcMsToLocalDateTime(SightCalc.localDateTimeToUtcMs(dateStr, 0, tz) + 86400000, tz).dateStr;
+  }
+
+  // The event fetched for a given calendar date might already be earlier
+  // than afterUtcMs -- an entirely ordinary case (e.g. asking for the next
+  // sunset from an evening start, or the next moonrise from just after
+  // this morning's). When that happens, the actual next occurrence is on
+  // the FOLLOWING date instead; Auto-fill mode can simply ask USNO for
+  // that date directly (unlike Manual mode, which only has one date's
+  // worth of typed-in almanac data and genuinely cannot answer this).
+  // Bounded to one retry: a normal DR-leg-scale question never needs more,
+  // and further retries would risk masking a real polar day/night case as
+  // a slow, silent chain of fetches instead of a clear answer.
+  function fetchNextOccurrence(dateStr, lat, lon, afterUtcMs) {
+    return fetchEventAbsoluteMs(dateStr, lat, lon).then(function (absMs) {
+      if (absMs !== null && absMs >= afterUtcMs) return absMs;
+      var nextDateStr = nextCalendarDateStr(dateStr);
+      return fetchEventAbsoluteMs(nextDateStr, lat, lon);
+    });
+  }
+
+  var startUtcMs = SightCalc.localDateTimeToUtcMs(dateVal, startZoneSec, tz);
+
+  return fetchNextOccurrence(dateVal, startLatDeg, startLonDeg, startUtcMs).then(function (t0AbsoluteMs) {
+    if (t0AbsoluteMs === null) return null;
+
+    var d0Hours = (t0AbsoluteMs - startUtcMs) / 3600000;
+    // The second sample point to fetch -- if the first guess already
+    // implies a negative or wildly long duration, sampling right back at
+    // the start is a safe, harmless fallback; the caller's
+    // solveEventPosition call surfaces the real problem either way, this
+    // acquire step doesn't need to pre-empt it.
+    var sampleHours = (d0Hours > 0 && d0Hours < 120) ? d0Hours : 1;
+    var pos1 = SightCalc.drPosition(startLatDeg, startLonDeg, courseDegTrue, sog * sampleHours);
+    var sampleUtcMs = startUtcMs + sampleHours * 3600000;
+    var sampleLocal = SightCalc.utcMsToLocalDateTime(sampleUtcMs, tz);
+
+    return fetchNextOccurrence(sampleLocal.dateStr, pos1.latDeg, pos1.lonDeg, startUtcMs).then(function (t1AbsoluteMs) {
+      if (t1AbsoluteMs === null) return null;
+
+      var slopeMsPerHour = (t1AbsoluteMs - t0AbsoluteMs) / sampleHours;
+      var startOfDateValMs = SightCalc.localDateTimeToUtcMs(dateVal, 0, tz);
+
+      return function (durationHours) {
+        var eventAbsoluteMs = t0AbsoluteMs + slopeMsPerHour * durationHours;
+        var local = SightCalc.utcMsToLocalDateTime(eventAbsoluteMs, tz);
+        var dayOffset = Math.round((SightCalc.localDateTimeToUtcMs(local.dateStr, 0, tz) - startOfDateValMs) / 86400000);
+        return { zoneSec: local.secOfDay, dayOffset: dayOffset };
+      };
+    });
+  });
+}
+
+// ---------------------------------------------------------------------
+// "Where will I be at this event?" -- the event-position solver's UI
+// ---------------------------------------------------------------------
+
+var _lastEventPositionResult = null; // cached for onEventPosToDrLeg -- see its own comment
+
+function setEventPositionStatus(msg, kind) {
+  var el = document.getElementById('eventPositionStatus');
+  el.textContent = msg;
+  el.className = 'usno-status' + (kind ? ' ' + kind : '');
+  el.style.display = msg ? 'block' : 'none';
+}
+
+function updateEventPositionButton() {
+  var pos = getPlanningPosition();
+  var dateVal = document.getElementById('planDate').value;
+  var tz = parseFloat(document.getElementById('planTzOffset').value);
+  var startZoneSec = parseHHMM(getFieldValue('eventPosStartTime'));
+  var sog = parseFloat(document.getElementById('eventPosSog').value);
+  var course = parseFloat(document.getElementById('eventPosCourse').value);
+  document.getElementById('btnCalcEventPosition').disabled =
+    !(pos && dateVal && !isNaN(tz) && startZoneSec !== null && !isNaN(sog) && !isNaN(course));
+}
+
+function onCalcEventPosition() {
+  var pos = getPlanningPosition();
+  var dateVal = document.getElementById('planDate').value;
+  var tz = parseFloat(document.getElementById('planTzOffset').value);
+  var startZoneSec = parseHHMM(getFieldValue('eventPosStartTime'));
+  var sog = parseFloat(document.getElementById('eventPosSog').value);
+  var course = parseFloat(document.getElementById('eventPosCourse').value);
+  var eventFieldId = document.getElementById('drLegEventSelect').value;
+  if (!pos || !dateVal || isNaN(tz) || startZoneSec === null || isNaN(sog) || isNaN(course)) return;
+
+  document.getElementById('eventPositionResult').style.display = 'none';
+  _lastEventPositionResult = null;
+
+  // Manual mode's callback is built and ready synchronously (no network
+  // involved at all); Auto-fill's needs its own acquire phase first (see
+  // acquireAutofillEventTimeAtDuration's own comment) -- wrapping the
+  // synchronous case in Promise.resolve lets both paths share the same
+  // .then() below rather than branching the whole rest of this function.
+  var callbackPromise;
+  if (_planningMode === 'manual') {
+    setEventPositionStatus('', '');
+    callbackPromise = Promise.resolve(buildManualEventTimeAtDuration(eventFieldId, pos.lat, pos.lon, course, sog, tz));
+  } else {
+    setEventPositionStatus('Fetching from USNO\u2026', 'loading');
+    callbackPromise = acquireAutofillEventTimeAtDuration(eventFieldId, pos.lat, pos.lon, startZoneSec, dateVal, tz, course, sog);
+  }
+
+  callbackPromise.then(function (getEventTimeAtDuration) {
+    if (!getEventTimeAtDuration) {
+      setEventPositionStatus('This event does not occur at the starting position on this date.', 'error');
+      return;
+    }
+    var result = SightCalc.solveEventPosition(startZoneSec, getEventTimeAtDuration);
+    renderEventPositionResult(result, pos, dateVal, tz, course, sog, eventFieldId, startZoneSec);
+  }).catch(function (err) {
+    console.error(err);
+    setEventPositionStatus(err && err.message ? err.message : 'Could not fetch data from USNO.', 'error');
+  });
+}
+
+function renderEventPositionResult(result, startPos, dateVal, tz, course, sog, eventFieldId, startZoneSec) {
+  if (!result.solved) {
+    var messages = {
+      'no-event': 'This event does not occur along this track.',
+      'already-passed': 'This event\u2019s next occurrence, even from the unmoved starting position, is earlier than the start time \u2014 try a later start time or a different event.',
+      'no-convergence': 'Could not find a stable answer. This can happen at very high latitudes, or near a seasonal boundary where this event\u2019s timing changes very quickly with position.'
+    };
+    setEventPositionStatus(messages[result.reason] || 'Could not calculate this.', 'error');
+    return;
+  }
+  setEventPositionStatus('', '');
+
+  var finalPos = SightCalc.drPosition(startPos.lat, startPos.lon, course, sog * result.durationHours);
+  var eventLabel = document.getElementById('drLegEventSelect').selectedOptions[0].textContent;
+
+  document.getElementById('eventPosResultTitle').textContent = eventLabel + ' ' + formatResultTime(result.eventZoneSec, result.eventDayOffset);
+  document.getElementById('eventPosResultPosition').textContent = SightCalc.formatLat(finalPos.latDeg) + ', ' + SightCalc.formatLon(finalPos.lonDeg);
+
+  var hours = Math.floor(result.durationHours);
+  var minutes = Math.round((result.durationHours - hours) * 60);
+  if (minutes === 60) { hours += 1; minutes = 0; }
+  document.getElementById('eventPosResultDuration').textContent = hours + 'h ' + minutes + 'm';
+  document.getElementById('eventPosResultCourseSpeed').textContent = String(Math.round(course)).padStart(3, '0') + '\u00B0T @ ' + sog + ' kn';
+  document.getElementById('eventPosResultConverged').textContent = 'Converged in ' + result.iterations + ' iteration' + (result.iterations === 1 ? '' : 's') + '.';
+
+  document.getElementById('eventPositionResult').style.display = 'block';
+
+  _lastEventPositionResult = { result: result, startPos: startPos, dateVal: dateVal, tz: tz, course: course, sog: sog, startZoneSec: startZoneSec };
+}
+
+/**
+ * Sends the solved leg to DR Leg as a COMPLETE leg (start, course, speed,
+ * duration) -- not just a start position, which is what the existing
+ * "Send AP + event time" button above sends. See applyPendingSolvedLegHandoff
+ * in js/drleg.js for the receiving side. sourceId stays null: like
+ * onToDrLeg's own handoff, Planning's AP is a hand-entered field with no
+ * record of its own to point back to.
+ */
+function onEventPosToDrLeg() {
+  var r = _lastEventPositionResult;
+  if (!r || !r.result.solved) return;
+
+  var startUtcMs = SightCalc.localDateTimeToUtcMs(r.dateVal, r.startZoneSec, r.tz);
+  var startPosition = SightCalc.makePosition(new Date(startUtcMs).toISOString(), r.startPos.lat, r.startPos.lon, SightCalc.POSITION_SOURCE_TYPES.KNOWN, null);
+
+  var handoff = {
+    startPosition: startPosition,
+    tzOffset: r.tz,
+    sog: r.sog,
+    courseDegTrue: r.course,
+    durationHours: r.result.durationHours,
+    sentFrom: 'Planning'
+  };
+  sessionStorage.setItem('ocsrSolvedLegHandoff', JSON.stringify(handoff));
+  location.href = 'drleg.html';
+}
+
 function onStartSight() {
+
   var pos = getPlanningPosition();
   var dateVal = document.getElementById('planDate').value;
   if (!pos || !dateVal) return;

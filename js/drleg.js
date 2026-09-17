@@ -569,40 +569,55 @@ function onSaveLeg() {
  * time was itself derived from a whole-minute HH:MM field when the leg was
  * first computed, so it's already exact on a minute boundary.
  */
+/**
+ * Fills every DR-leg input field from a fully-specified leg (start
+ * position+time, tz, sog, course, duration) -- shared by onLoadLeg
+ * (loading a saved record) and applyPendingSolvedLegHandoff (receiving a
+ * solved leg from Planning's "where will I be at this event?" feature),
+ * so both fill an identical set of fields the identical way rather than
+ * risking two near-copies drifting apart. Deliberately does NOT touch
+ * _drMode/call setDrMode itself -- the two callers need this at different
+ * points (onLoadLeg runs post-init, after a button click, and needs
+ * setDrMode's own UI-sync/recompute; applyPendingSolvedLegHandoff runs
+ * DURING init, where the init sequence's own end-of-function UI sync
+ * already does that once, and calling setDrMode here too would just
+ * recompute everything twice).
+ */
+function fillLegFields(startPosition, tzOffset, sog, courseDegTrue, durationHours) {
+  var dm = positionToDegMinFields(startPosition);
+  document.getElementById('drLatDeg').value = dm.latDeg;
+  document.getElementById('drLatMin').value = dm.latMin;
+  document.getElementById('drLatNS').value = dm.latNS;
+  document.getElementById('drLonDeg').value = dm.lonDeg;
+  document.getElementById('drLonMin').value = dm.lonMin;
+  document.getElementById('drLonEW').value = dm.lonEW;
+
+  var local = SightCalc.utcMsToLocalDateTime(new Date(startPosition.time).getTime(), tzOffset);
+  var pad2 = function (n) { return String(n).padStart(2, '0'); };
+  document.getElementById('drStartDate').value = local.dateStr;
+  setFieldValue('drStartTime', pad2(Math.floor(local.secOfDay / 3600)) + ':' + pad2(Math.floor((local.secOfDay % 3600) / 60)));
+  document.getElementById('drTzOffset').value = tzOffset;
+
+  document.getElementById('drSog').value = sog;
+  document.getElementById('drCourse').value = courseDegTrue;
+
+  var hours = Math.floor(durationHours);
+  var minutes = Math.round((durationHours - hours) * 60);
+  if (minutes === 60) { hours += 1; minutes = 0; }
+  document.getElementById('drDurationHours').value = hours;
+  document.getElementById('drDurationMinutes').value = minutes;
+  document.getElementById('drEndDate').value = '';
+  setFieldValue('drEndTime', '');
+
+  _drStartPositionType = startPosition.sourceType || 'KNOWN';
+  _drStartSourceId = startPosition.sourceId || null;
+}
+
 function onLoadLeg(legId) {
   DrLegStorage.get(legId).then(function (leg) {
     if (!leg) { showToast('Could not find that saved leg.', true); return; }
 
-    var dm = positionToDegMinFields(leg.startPosition);
-    document.getElementById('drLatDeg').value = dm.latDeg;
-    document.getElementById('drLatMin').value = dm.latMin;
-    document.getElementById('drLatNS').value = dm.latNS;
-    document.getElementById('drLonDeg').value = dm.lonDeg;
-    document.getElementById('drLonMin').value = dm.lonMin;
-    document.getElementById('drLonEW').value = dm.lonEW;
-
-    var local = SightCalc.utcMsToLocalDateTime(new Date(leg.startPosition.time).getTime(), leg.tzOffset);
-    var pad2 = function (n) { return String(n).padStart(2, '0'); };
-    document.getElementById('drStartDate').value = local.dateStr;
-    setFieldValue('drStartTime', pad2(Math.floor(local.secOfDay / 3600)) + ':' + pad2(Math.floor((local.secOfDay % 3600) / 60)));
-    document.getElementById('drTzOffset').value = leg.tzOffset;
-
-    document.getElementById('drSog').value = leg.sog;
-    document.getElementById('drCourse').value = leg.courseDegTrue;
-
-    var hours = Math.floor(leg.durationHours);
-    var minutes = Math.round((leg.durationHours - hours) * 60);
-    if (minutes === 60) { hours += 1; minutes = 0; }
-    document.getElementById('drDurationHours').value = hours;
-    document.getElementById('drDurationMinutes').value = minutes;
-    document.getElementById('drEndDate').value = '';
-    setFieldValue('drEndTime', '');
-
-    // Set BEFORE switching mode, so the recompute triggered by setDrMode
-    // below already reflects the reloaded leg's own provenance.
-    _drStartPositionType = leg.startPosition.sourceType || 'KNOWN';
-    _drStartSourceId = leg.startPosition.sourceId || null;
-
+    fillLegFields(leg.startPosition, leg.tzOffset, leg.sog, leg.courseDegTrue, leg.durationHours);
     setDrMode('duration'); // updates the toggle UI, persists the form, and recomputes
     showToast('Loaded "' + leg.name + '".');
   }).catch(function (err) {
@@ -610,6 +625,34 @@ function onLoadLeg(legId) {
     showToast('Could not load that saved leg.', true);
   });
 }
+
+/**
+ * Receives a fully-solved DR leg from Planning's "where will I be at this
+ * event?" feature (sessionStorage key 'ocsrSolvedLegHandoff'). Unlike
+ * applyPendingDrLegStartHandoff (which only ever carries a START
+ * position), this carries the ENTIRE leg -- start, course, speed, AND
+ * duration -- since that feature's whole point is answering "how long do
+ * I run, on what track" rather than just "where do I start from." Called
+ * during init, alongside applyPendingDrLegStartHandoff; the two use
+ * different sessionStorage keys, so there's no ambiguity about which one
+ * (if either) actually has a pending handoff to apply.
+ */
+function applyPendingSolvedLegHandoff() {
+  var raw;
+  try { raw = sessionStorage.getItem('ocsrSolvedLegHandoff'); } catch (e) { return false; }
+  if (!raw) return false;
+  sessionStorage.removeItem('ocsrSolvedLegHandoff'); // one-time consume, even if parsing fails below
+
+  var h;
+  try { h = JSON.parse(raw); } catch (e) { return false; }
+  if (!h || !h.startPosition || typeof h.durationHours !== 'number') return false;
+
+  fillLegFields(h.startPosition, h.tzOffset, h.sog, h.courseDegTrue, h.durationHours);
+  _drMode = 'duration'; // see fillLegFields' own comment on why this doesn't call setDrMode directly here
+  showToast('DR leg filled in from ' + (h.sentFrom || 'another page') + '.');
+  return true;
+}
+
 
 function onDeleteLeg(id) {
   if (!confirm('Delete this saved DR leg? This cannot be undone.')) return;
@@ -808,6 +851,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
   var restored = restoreForm();
   var handoffApplied = applyPendingDrLegStartHandoff(); // overrides the restored/default start position above if Fix just sent one
+  var solvedHandoffApplied = applyPendingSolvedLegHandoff(); // overrides start/course/speed/duration above if Planning's event-position solver just sent a complete leg
+  handoffApplied = handoffApplied || solvedHandoffApplied;
   if (!restored && !handoffApplied) {
     var now = new Date();
     document.getElementById('drStartDate').valueAsDate = now;

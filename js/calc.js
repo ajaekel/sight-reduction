@@ -986,7 +986,84 @@
    * instant either way, so the caller never has to branch on which one was
    * the input.
    */
+  /**
+   * Answers an ordinary-sounding navigation question that's actually a
+   * fixed-point problem underneath: "if I hold this course and speed from
+   * here, where will I be when [event] happens?" Position is a function of
+   * elapsed duration (the DR track); the event's time is a function of
+   * position; neither can be solved for independently, since the DR track
+   * doesn't know how long to run until it knows when the event happens,
+   * and the event's time depends on where the track has gotten to by then.
+   *
+   * Resolved by fixed-point iteration (successive substitution, not
+   * exposed to the user as such -- the user is just asking "where will I
+   * be," this is how that gets answered): guess a duration, see where that
+   * puts the vessel, find when the event happens THERE, and repeat. This
+   * converges quickly in the overwhelming majority of real cases, because
+   * a vessel's speed is almost always slow relative to how much an
+   * event's time actually shifts with position -- moving a typical DR
+   * leg's distance shifts a rise/set time by at most a few minutes at
+   * most latitudes and seasons, so each iteration's correction shrinks
+   * fast. It can fail to converge, or the event may not occur at all, at
+   * high latitudes or near the seasonal boundary where an event stops
+   * happening altogether -- both are reported explicitly below rather
+   * than returned as a plausible-looking wrong answer.
+   *
+   * startZoneSec: the starting time-of-day, in zone time, seconds since
+   *   midnight on the nominal date getEventTimeAtDuration's answers are
+   *   relative to (see that parameter's own note on dayOffset).
+   * getEventTimeAtDuration: function(durationHours) -> {zoneSec,
+   *   dayOffset} | null. The ONLY way this function learns an event's
+   *   time -- it has no idea whether that answer came from Manual mode's
+   *   latitude interpolation or a cached USNO fetch, and doesn't need to;
+   *   see planning.js for the two very different ways of building this
+   *   callback (Manual: a direct, synchronous local computation at
+   *   whatever position that duration implies; Auto-fill: a linear model
+   *   built from two USNO fetches acquired up front, so the iteration
+   *   itself never touches the network). null means the event does not
+   *   occur that day at that position (e.g. polar day/night). dayOffset
+   *   matches manualEventToZoneTime's own convention: the returned
+   *   zone-time date's offset, in days, from the nominal date.
+   * opts.maxIterations (default 20), opts.toleranceSeconds (default 5),
+   *   opts.maxDurationHours (default 120 -- a generous sanity bound to
+   *   catch runaway divergence, not a real constraint on legitimate use).
+   *
+   * Returns { solved: true, durationHours, iterations, eventZoneSec,
+   *   eventDayOffset } or { solved: false, reason: 'no-event' |
+   *   'already-passed' | 'no-convergence', iterations }. 'already-passed'
+   *   means the selected event's next occurrence, even at the unmoved
+   *   starting position, is already earlier than the given start time --
+   *   e.g. asking for today's sunrise from an afternoon start.
+   */
+  function solveEventPosition(startZoneSec, getEventTimeAtDuration, opts) {
+    opts = opts || {};
+    var maxIterations = opts.maxIterations || 20;
+    var toleranceSeconds = (opts.toleranceSeconds !== undefined) ? opts.toleranceSeconds : 5;
+    var maxDurationHours = opts.maxDurationHours || 120;
+
+    var durationHours = 0; // first guess: the event's own time at the UNMOVED starting position
+    var prevDurationHours = null;
+
+    for (var i = 1; i <= maxIterations; i++) {
+      var event = getEventTimeAtDuration(durationHours);
+      if (!event) return { solved: false, reason: 'no-event', iterations: i };
+
+      var impliedDurationHours = (event.dayOffset * 86400 + event.zoneSec - startZoneSec) / 3600;
+
+      if (prevDurationHours !== null && Math.abs(impliedDurationHours - durationHours) * 3600 < toleranceSeconds) {
+        return { solved: true, durationHours: impliedDurationHours, iterations: i, eventZoneSec: event.zoneSec, eventDayOffset: event.dayOffset };
+      }
+      if (impliedDurationHours < 0) return { solved: false, reason: 'already-passed', iterations: i };
+      if (impliedDurationHours > maxDurationHours) return { solved: false, reason: 'no-convergence', iterations: i };
+
+      prevDurationHours = durationHours;
+      durationHours = impliedDurationHours;
+    }
+    return { solved: false, reason: 'no-convergence', iterations: maxIterations };
+  }
+
   function computeDrLeg(input) {
+
     var durationHours = input.durationHours;
     var endUtcMs = input.endUtcMs;
 
@@ -1066,6 +1143,7 @@
     makePosition: makePosition,
     drPosition: drPosition,
     computeDrLeg: computeDrLeg,
+    solveEventPosition: solveEventPosition,
     advancePositionByLeg: advancePositionByLeg,
     interpolateGha: interpolateGha,
     interpolateLinear: interpolateLinear,
