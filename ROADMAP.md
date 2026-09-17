@@ -20,6 +20,12 @@
 
 * [ ] User enters sextant height (+corrections) and gets Latitude
 
+## Planning page
+
+* [X] Sunset/sunrise for the AP
+* [ ] For the Moon, include it's percentage, i.e., from "new" to "full"
+* [ ] Add a data point to Sights, how many minutes after/before sunset/sunrise/meridian passage of Sun/Moon
+
 ## Autofill vs Manual modes
 
 * [X] Add button to retrieve data with USNO API call
@@ -85,12 +91,6 @@
   * [ ] Enable common table actions: sort, filter
   * [ ] Allow multi-select and replication ovlerflow menu actions at with menu bar buttons
   * [ ] Batch actions: import, export, delete
-
-## Planning page
-
-* [X] Sunset/sunrise for the AP
-* [ ] For the Moon, include it's percentage, i.e., from "new" to "full"
-* [ ] Add a data point to Sights, how many minutes after/before sunset/sunrise/meridian passage of Sun/Moon
 
 ## Offline reliability
 
