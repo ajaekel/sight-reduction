@@ -475,11 +475,19 @@ function tryComputeAutomaticCorrections() {
   // 2. Altitude Correction = refraction (always -) combined with
   // semi-diameter (Sun: a flat mean; Moon: from the most recent Section 3
   // fetch; anything else: no meaningful disk, SD=0 -- refraction only).
+  //
+  // Ha is only trusted once a REAL height has been typed -- collectObservations()
+  // includes a row (and defaults its still-blank height to 0) as soon as ANY
+  // of its fields has something in it, which is right for showing a live
+  // Hs/Ha preview while typing but wrong here: a fake Hs=0 would compute a
+  // real-looking (just wrong) refraction/Ho before the user has entered
+  // anything to observe. hasAnyHeightEntered() gates on the height field
+  // itself, not just "some field has something in it".
   var observations = collectObservations();
   var avg = SightCalc.averageObservations(observations);
   var ieMin = parseFloat(document.getElementById('ieMin').value) || 0;
   var ieSign = document.getElementById('ieSign').value;
-  var ha = avg ? SightCalc.computeHa(avg.avgHsDeg, { ieMin: ieMin, ieSign: ieSign, dipMin: dip }) : null;
+  var ha = (avg && hasAnyHeightEntered()) ? SightCalc.computeHa(avg.avgHsDeg, { ieMin: ieMin, ieSign: ieSign, dipMin: dip }) : null;
 
   var sd = 0;
   var moonNeedsFetch = false;
@@ -493,28 +501,33 @@ function tryComputeAutomaticCorrections() {
     }
   }
 
+  // Deliberately all-or-nothing: if the Moon's semi-diameter isn't
+  // available yet, this does NOT show a refraction-only partial number --
+  // a bare number sitting next to a warning invites exactly the "which one
+  // do I trust" confusion the warning was meant to prevent. Either the
+  // field shows the real, complete computed value, or it shows the same
+  // untouched placeholder the page starts with, with the note explaining why.
+  var altCorrReady = ha !== null && !moonNeedsFetch;
   var altCorrNoteEl = document.getElementById('altCorrAutoNote');
-  if (ha !== null) {
+  if (altCorrReady) {
     var refraction = SightCalc.computeRefractionArcmin(ha);
     var combined = SightCalc.combineRefractionAndSemiDiameter(refraction, sd, limb);
     document.getElementById('altCorrMin').value = combined.altCorrMin.toFixed(1);
     setToggleUI('altCorrSign', 'altCorrPlusBtn', '+', 'altCorrMinusBtn', combined.altCorrSign);
-
-    if (moonNeedsFetch) {
-      altCorrNoteEl.textContent = 'Section 3’s almanac data is required to calculate semi-diameter (currently treated as 0).';
-      altCorrNoteEl.style.display = 'block';
-    } else {
-      altCorrNoteEl.style.display = 'none';
-    }
+    altCorrNoteEl.style.display = 'none';
   } else {
-    altCorrNoteEl.textContent = 'Enter an observation time and height to compute.';
+    document.getElementById('altCorrMin').value = '0.0';
+    setToggleUI('altCorrSign', 'altCorrPlusBtn', '+', 'altCorrMinusBtn', '+');
+    altCorrNoteEl.textContent = ha === null
+      ? 'Enter an observation time and height to compute.'
+      : 'Section 3’s almanac data is required to calculate semi-diameter (currently shown as 0).';
     altCorrNoteEl.style.display = 'block';
   }
 
   // 3. Additional Alt Corr = parallax in altitude, Moon/Venus only --
   // derived from USNO's own Hc-based parallax, re-applied at the real Ha
   // (see calc.js's deriveMoonHorizontalParallaxArcmin for why that
-  // indirection is needed).
+  // indirection is needed). Same all-or-nothing treatment as Alt Corr above.
   if (bodyNeedsAddlCorr()) {
     var addAltCorrNoteEl = document.getElementById('addAltCorrAutoNote');
     if (ha !== null && _lastAlmanacExtra && typeof _lastAlmanacExtra.paArcmin === 'number' && typeof _lastAlmanacExtra.hcDeg === 'number') {
@@ -526,16 +539,28 @@ function tryComputeAutomaticCorrections() {
     } else {
       document.getElementById('addAltCorrMin').value = '0.0';
       setToggleUI('addAltCorrSign', 'addAltCorrPlusBtn', '+', 'addAltCorrMinusBtn', '+');
-      // Moon needs Section 3's data for BOTH parallax and semi-diameter
-      // (see moonNeedsFetch above); Venus never has a semi-diameter
-      // correction in this app (USNO itself returns sd=0 for planets), so
-      // only mention what's actually still missing for the current body.
-      addAltCorrNoteEl.textContent = bodyType === 'moon'
-        ? 'Section 3’s almanac data is required to calculate parallax and semi-diameter.'
-        : 'Section 3’s almanac data is required to calculate parallax.';
+      if (ha === null) {
+        addAltCorrNoteEl.textContent = 'Enter an observation time and height to compute.';
+      } else {
+        // Moon needs Section 3's data for BOTH parallax and semi-diameter
+        // (see moonNeedsFetch above); Venus never has a semi-diameter
+        // correction in this app (USNO itself returns sd=0 for planets), so
+        // only mention what's actually still missing for the current body.
+        addAltCorrNoteEl.textContent = bodyType === 'moon'
+          ? 'Section 3’s almanac data is required to calculate parallax and semi-diameter.'
+          : 'Section 3’s almanac data is required to calculate parallax.';
+      }
       addAltCorrNoteEl.style.display = 'block';
     }
   }
+}
+
+/** True once at least one observation row's own Height field (not just any field in the row) has something in it -- see tryComputeAutomaticCorrections's own comment on why collectObservations()'s coarser per-row check isn't enough here. */
+function hasAnyHeightEntered() {
+  var rows = document.querySelectorAll('.observation-item');
+  return Array.prototype.some.call(rows, function (row) {
+    return row.querySelector('.s-deg').value.trim() !== '' || row.querySelector('.s-min').value.trim() !== '';
+  });
 }
 
 /**
