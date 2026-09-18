@@ -80,6 +80,14 @@
    * observer's real apparent altitude -- see that same calc.js comment for
    * why pa specifically can't be used as-is and has to be converted to the
    * altitude-independent horizontal parallax first.
+   *
+   * sd/pa come back from the live API in DECIMAL DEGREES (confirmed against
+   * a real response: Moon sd=0.262208, pa=0.689213 at a moment where the
+   * true values are ~15.7' and ~41.3' -- both exactly degrees*60), unlike
+   * gha/dec/hc which are already in the degrees this app uses throughout --
+   * so these two, and only these two, are converted to arcminutes right
+   * here, once, so every caller downstream can treat sd/pa as genuinely
+   * "arcminutes" the way their names say.
    */
   function normalizeUsnoData(rawList) {
     var map = {};
@@ -91,8 +99,8 @@
         gha: entry.almanac_data.gha,
         dec: entry.almanac_data.dec,
         hc: entry.almanac_data.hc,
-        sd: ac.sd,
-        pa: ac.pa
+        sd: typeof ac.sd === 'number' ? ac.sd * 60 : ac.sd,
+        pa: typeof ac.pa === 'number' ? ac.pa * 60 : ac.pa
       };
     });
     return map;

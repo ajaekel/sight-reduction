@@ -277,13 +277,27 @@
       assertClose('USNO planet GHA base', fillPlanet.ghaBaseDeg, 44.5, 0.001);
 
       // hc/sd/pa (used by Automatic Altitude Corrections) pass through from
-      // the BASE hour only, verbatim -- not derived or interpolated here.
-      var baseMoon = mkMap([{ name: 'Moon', dec: 5.0, gha: 100.0, hc: 62.3, sd: 15.9, pa: 51.2 }]);
-      var nextMoon = mkMap([{ name: 'Moon', dec: 5.2, gha: 115.0, hc: 63.1, sd: 15.9, pa: 51.0 }]);
+      // the BASE hour only, not derived or interpolated -- but sd/pa DO get
+      // converted degrees -> arcminutes in normalizeUsnoData (hc does not,
+      // it's already in degrees like gha/dec). Values below are real numbers
+      // captured from a live USNO response (Moon, 2026-10-09 16:33:33Z):
+      // hc=44.008226, sd=0.262208, pa=0.689213 (all raw degrees from the API).
+      var baseMoon = mkMap([{ name: 'Moon', dec: 5.0, gha: 100.0, hc: 44.008226, sd: 0.262208, pa: 0.689213 }]);
+      var nextMoon = mkMap([{ name: 'Moon', dec: 5.2, gha: 115.0, hc: 45.0, sd: 0.26, pa: 0.68 }]);
       var fillMoon = SightUsno.assembleFill({ type: 'moon', name: null }, baseMoon, nextMoon);
-      assertClose('USNO moon hcDeg passes through from base hour', fillMoon.hcDeg, 62.3, 0.001);
-      assertClose('USNO moon sdArcmin passes through from base hour', fillMoon.sdArcmin, 15.9, 0.001);
-      assertClose('USNO moon paArcmin passes through from base hour', fillMoon.paArcmin, 51.2, 0.001);
+      assertClose('USNO moon hcDeg passes through from base hour, NOT converted (already degrees)', fillMoon.hcDeg, 44.008226, 0.0001);
+      assertClose('USNO moon sdArcmin is the raw degrees value * 60', fillMoon.sdArcmin, 0.262208 * 60, 0.001);
+      assertClose('USNO moon paArcmin is the raw degrees value * 60', fillMoon.paArcmin, 0.689213 * 60, 0.001);
+      // Sanity-anchor to the real-world magnitude this represents: the
+      // Moon's true semi-diameter is roughly 15-16' -- if this test's
+      // constant ever silently regressed to reading raw degrees as if they
+      // were already arcminutes, sdArcmin would read ~0.26' instead, well
+      // outside this range.
+      if (fillMoon.sdArcmin > 10 && fillMoon.sdArcmin < 20) {
+        pass++; console.log('PASS: converted Moon SD is in the real ~15-16\' range (' + fillMoon.sdArcmin.toFixed(2) + '\')');
+      } else {
+        fail++; console.error('FAIL: converted Moon SD implausible: ' + fillMoon.sdArcmin);
+      }
 
       var threw = false;
       try { SightUsno.assembleFill({ type: 'star', name: 'Nonexistentia' }, baseStar, nextStar); }

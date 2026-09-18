@@ -464,10 +464,15 @@ function tryComputeAutomaticCorrections() {
   var ha = avg ? SightCalc.computeHa(avg.avgHsDeg, { ieMin: ieMin, ieSign: ieSign, dipMin: dip }) : null;
 
   var sd = 0;
+  var moonNeedsFetch = false;
   if (bodyType === 'sun') {
     sd = SightCalc.SUN_SEMI_DIAMETER_ARCMIN;
-  } else if (bodyType === 'moon' && _lastAlmanacExtra && typeof _lastAlmanacExtra.sdArcmin === 'number') {
-    sd = _lastAlmanacExtra.sdArcmin;
+  } else if (bodyType === 'moon') {
+    if (_lastAlmanacExtra && typeof _lastAlmanacExtra.sdArcmin === 'number') {
+      sd = _lastAlmanacExtra.sdArcmin;
+    } else {
+      moonNeedsFetch = true;
+    }
   }
 
   if (ha !== null) {
@@ -478,7 +483,8 @@ function tryComputeAutomaticCorrections() {
 
     var breakdown = 'Refraction −' + refraction.toFixed(1) + "'";
     if (sd) breakdown += ' · Semi-diameter ' + (limb === 'upper' ? '−' : '+') + sd.toFixed(1) + "' (" + (limb === 'upper' ? 'upper' : 'lower') + ' limb)';
-    breakdown += ' · Total ' + (combined.altCorrSign === '-' ? '−' : '+') + combined.altCorrMin.toFixed(1) + "'";
+    breakdown += ' · Alt Corr subtotal ' + (combined.altCorrSign === '-' ? '−' : '+') + combined.altCorrMin.toFixed(1) + "' (Ho also adds Add’l Corr below, when shown)";
+    if (moonNeedsFetch) breakdown += ' — semi-diameter needs Section 3’s almanac data (currently treated as 0).';
     document.getElementById('altCorrAutoBreakdown').textContent = breakdown;
   } else {
     document.getElementById('altCorrAutoBreakdown').textContent = 'Enter an observation time and height to compute.';
@@ -497,7 +503,13 @@ function tryComputeAutomaticCorrections() {
     } else {
       document.getElementById('addAltCorrMin').value = '0.0';
       document.getElementById('addAltCorrSign').value = '+';
-      document.getElementById('addAltCorrAutoDisplay').textContent = 'Fetch Section 3’s almanac data first to compute parallax.';
+      // Moon needs Section 3's data for BOTH parallax and semi-diameter
+      // (see moonNeedsFetch above); Venus never has a semi-diameter
+      // correction in this app (USNO itself returns sd=0 for planets), so
+      // only mention what's actually still missing for the current body.
+      document.getElementById('addAltCorrAutoDisplay').textContent = bodyType === 'moon'
+        ? 'Section 3’s almanac data is required to calculate parallax and semi-diameter.'
+        : 'Section 3’s almanac data is required to calculate parallax.';
     }
   }
 }
