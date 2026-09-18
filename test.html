@@ -133,13 +133,79 @@
       else { fail++; console.error('FAIL: expected 01:02:03, got ' + t3); }
     })();
 
-    // --- computeHa: Hs corrected for IE and Dip only (no refraction yet) ---
+    // --- computeHa: Hs corrected for IE and Dip only ---
     (function testComputeHa() {
       var ha = SightCalc.computeHa(31.5, {
         ieMin: 2.0, ieSign: 'on',  // -2.0'
         dipMin: 3.8                 // always -3.8'
       });
       assertClose('Ha (IE + Dip only)', ha, 31.5 + (-2.0 - 3.8) / 60, 0.0001);
+    })();
+
+    // --- Automatic Altitude Corrections: Dip from height of eye, matched
+    // against standard Nautical Almanac Dip table reference values. ---
+    (function testComputeDipFromHeight() {
+      assertClose('Dip at 9ft (table ref ~2.9\')', SightCalc.computeDipFromHeight(9, 'ft'), 2.9, 0.1);
+      // This app's own long-standing dipMin placeholder value is "3.8" for
+      // its example -- confirms the formula matches what the app already
+      // implicitly assumed a typical height of eye gives.
+      assertClose('Dip at 15ft matches app\'s own placeholder (~3.8\')', SightCalc.computeDipFromHeight(15, 'ft'), 3.8, 0.1);
+      assertClose('Dip at 2.7432m (=9ft) matches feet result', SightCalc.computeDipFromHeight(2.7432, 'm'), 2.9, 0.1);
+      assertClose('Dip at 0 height is 0', SightCalc.computeDipFromHeight(0, 'ft'), 0, 0.001);
+    })();
+
+    // --- Automatic Altitude Corrections: refraction (Bennett's formula),
+    // matched against standard Nautical Almanac refraction table reference
+    // values (a few tenths of an arcminute is the formula's own known
+    // accuracy, well within this feature's few-arcminute tolerance). ---
+    (function testComputeRefraction() {
+      assertClose('Refraction near zenith (Ha=90) is ~0', SightCalc.computeRefractionArcmin(90), 0, 0.05);
+      assertClose('Refraction at Ha=45 (table ref ~1.0\')', SightCalc.computeRefractionArcmin(45), 1.0, 0.1);
+      assertClose('Refraction at Ha=10 (table ref ~5.3\')', SightCalc.computeRefractionArcmin(10), 5.3, 0.2);
+      assertClose('Refraction near horizon (table ref ~33-34\')', SightCalc.computeRefractionArcmin(0.1), 33.2, 1.0);
+    })();
+
+    // --- Automatic Altitude Corrections: refraction + semi-diameter
+    // combine, honoring limb (lower limb ADDS SD, upper limb SUBTRACTS
+    // it -- the true center is on the opposite side of the observed edge
+    // from where you'd expect if you just measured the edge itself). ---
+    (function testCombineRefractionAndSemiDiameter() {
+      var lower = SightCalc.combineRefractionAndSemiDiameter(1.0, 16.0, 'lower');
+      assertClose('Lower limb: +SD - refraction = +15.0\'', lower.altCorrMin, 15.0, 0.001);
+      if (lower.altCorrSign === '+') { pass++; console.log('PASS: lower limb sign is +'); } else { fail++; console.error('FAIL: lower limb sign expected +, got ' + lower.altCorrSign); }
+
+      var upper = SightCalc.combineRefractionAndSemiDiameter(1.0, 16.0, 'upper');
+      assertClose('Upper limb: -SD - refraction = -17.0\' (magnitude)', upper.altCorrMin, 17.0, 0.001);
+      if (upper.altCorrSign === '-') { pass++; console.log('PASS: upper limb sign is -'); } else { fail++; console.error('FAIL: upper limb sign expected -, got ' + upper.altCorrSign); }
+
+      // The swing between lower and upper limb (2x SD ≈ 32') is what the
+      // app's manual "-30' Moon Upper-Limb Correction" quick-reference
+      // approximates -- confirms the automatic per-limb calculation is
+      // consistent with that existing manual convention.
+      var swing = (lower.altCorrSign === '-' ? -lower.altCorrMin : lower.altCorrMin) -
+                  (upper.altCorrSign === '-' ? -upper.altCorrMin : upper.altCorrMin);
+      assertClose('Lower-vs-upper swing is ~2x SD (~32\'), matching the manual -30\' approximation', swing, 32.0, 1.0);
+    })();
+
+    // --- Automatic Altitude Corrections: Moon horizontal parallax backed
+    // out of USNO's own Hc-based "pa" value, then correctly re-applied at
+    // the observer's real Ha -- see calc.js's own comment on why this
+    // avoids mixing Hc-based and Ha-based quantities. ---
+    (function testMoonParallax() {
+      // pa = HP*cos(hc) -- if pa=54' at hc=60deg, HP = 54/cos(60) = 108'.
+      var hp = SightCalc.deriveMoonHorizontalParallaxArcmin(54.0, 60);
+      assertClose('Derived HP from pa=54\' at hc=60°', hp, 108.0, 0.01);
+
+      // Re-applying at the SAME altitude recovers the original pa exactly
+      // (sanity check that the two functions are true inverses of each other).
+      var paRecovered = SightCalc.computeParallaxInAltitudeArcmin(hp, 60);
+      assertClose('Re-applying HP at the same altitude recovers the original pa', paRecovered, 54.0, 0.01);
+
+      // Applying the SAME derived HP at a DIFFERENT (higher) Ha gives a
+      // smaller parallax correction -- parallax shrinks toward the zenith.
+      var paAtHigherAlt = SightCalc.computeParallaxInAltitudeArcmin(hp, 80);
+      if (paAtHigherAlt < paRecovered) { pass++; console.log('PASS: parallax decreases at higher altitude (' + paAtHigherAlt.toFixed(2) + ' < ' + paRecovered.toFixed(2) + ')'); }
+      else { fail++; console.error('FAIL: expected parallax to decrease at higher altitude'); }
     })();
 
     // --- LOP geometry: due-north azimuth, positive (TOWARD) intercept ---
@@ -185,8 +251,8 @@
         return SightUsno.normalizeUsnoData(entries.map(function (e) {
           return {
             object: e.name, nav_star_number: e.num || null,
-            almanac_data: { dec: e.dec, gha: e.gha, hc: 0, zn: 0 },
-            altitude_corrections: { isCorrected: true, pa: 0, refr: 0, sd: 0, sum: 0 }
+            almanac_data: { dec: e.dec, gha: e.gha, hc: e.hc || 0, zn: 0 },
+            altitude_corrections: { isCorrected: true, pa: e.pa || 0, refr: 0, sd: e.sd || 0, sum: 0 }
           };
         }));
       }
@@ -209,6 +275,15 @@
       var nextPlanet = mkMap([{ name: 'Jupiter', dec: 22.1, gha: 59.5 }]);
       var fillPlanet = SightUsno.assembleFill({ type: 'planet', name: 'Jupiter' }, basePlanet, nextPlanet);
       assertClose('USNO planet GHA base', fillPlanet.ghaBaseDeg, 44.5, 0.001);
+
+      // hc/sd/pa (used by Automatic Altitude Corrections) pass through from
+      // the BASE hour only, verbatim -- not derived or interpolated here.
+      var baseMoon = mkMap([{ name: 'Moon', dec: 5.0, gha: 100.0, hc: 62.3, sd: 15.9, pa: 51.2 }]);
+      var nextMoon = mkMap([{ name: 'Moon', dec: 5.2, gha: 115.0, hc: 63.1, sd: 15.9, pa: 51.0 }]);
+      var fillMoon = SightUsno.assembleFill({ type: 'moon', name: null }, baseMoon, nextMoon);
+      assertClose('USNO moon hcDeg passes through from base hour', fillMoon.hcDeg, 62.3, 0.001);
+      assertClose('USNO moon sdArcmin passes through from base hour', fillMoon.sdArcmin, 15.9, 0.001);
+      assertClose('USNO moon paArcmin passes through from base hour', fillMoon.paArcmin, 51.2, 0.001);
 
       var threw = false;
       try { SightUsno.assembleFill({ type: 'star', name: 'Nonexistentia' }, baseStar, nextStar); }

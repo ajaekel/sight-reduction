@@ -86,6 +86,7 @@
 
 ## UX/UI improvements
 
+* [ ] Ensure values are cleared from the form when edits to their dependencies result in changes.
 * [ ] Establish consistent defaulting rules for date/time/timezone/position fields.
 * [ ] Make lat/lon position rendition consistent (outliers: Passages > New, Fixes > New Known Fix)
 * [ ] Put star SHA and declination on the same line

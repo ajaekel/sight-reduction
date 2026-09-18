@@ -101,6 +101,104 @@
     return ha + (altCorr + addAltCorr) / 60;
   }
 
+  /**
+   * Automatic/computed Altitude Corrections -- an alternate way to arrive
+   * at the SAME corrections object computeHa/computeHo already expect
+   * (dipMin, altCorrMin/altCorrSign, addAltCorrMin/addAltCorrSign), computed
+   * directly from observer height and body geometry instead of typed in
+   * from a printed Almanac. Deliberately kept as plain formulas producing
+   * the existing fields, not a new calculation path -- computeHa/computeHo/
+   * reduceSight and every downstream consumer (Fix, saved records, exports)
+   * stay completely unaware that a value was computed rather than typed.
+   * A few arcminutes of accuracy is the explicit target here, matching
+   * what a sextant reading itself supports -- these are NOT full-precision
+   * ephemeris formulas.
+   */
+
+  /**
+   * Dip of the sea horizon, in arcminutes (always subtracted -- see
+   * computeHa, which already hardcodes that sign). Standard formula (matches
+   * the Nautical Almanac's own Dip table to within about 0.1-0.2'):
+   * Dip(') = 1.76 * sqrt(height in meters).
+   */
+  function computeDipFromHeight(height, unit) {
+    var h = height || 0;
+    if (h <= 0) return 0;
+    var heightM = unit === 'ft' ? h * 0.3048 : h;
+    return 1.76 * Math.sqrt(heightM);
+  }
+
+  /**
+   * Atmospheric refraction at apparent altitude Ha, in arcminutes (always
+   * subtracted -- refraction makes a body appear HIGHER than it truly is).
+   * Bennett's formula (1982), standard atmosphere (10°C, 1010mb) assumed
+   * -- the same assumption the Nautical Almanac's own refraction table
+   * uses by default, and matches it to within a few tenths of an arcminute
+   * from the horizon to the zenith. haDeg is clamped just above the
+   * horizon to avoid the singularity exactly at/below it (a real sight is
+   * never taken with the body actually on the horizon).
+   */
+  function computeRefractionArcmin(haDeg) {
+    var h = Math.max(haDeg, 0.1);
+    var denomDeg = h + 7.31 / (h + 4.4);
+    return 1 / Math.tan(rad(denomDeg));
+  }
+
+  /** Sun's semi-diameter, in arcminutes -- varies ~15.8' to ~16.3' over the year (Earth's elliptical orbit); a flat mean is well within this feature's few-arcminute tolerance. */
+  var SUN_SEMI_DIAMETER_ARCMIN = 16.0;
+
+  /**
+   * The Moon's semi-diameter and parallax-in-altitude vary far more than
+   * the Sun's (with lunar distance, roughly 14.7'-16.8' for SD and
+   * 53.9'-61.5' for horizontal parallax) -- too much for a flat constant,
+   * so these are derived from the SAME USNO almanac lookup already being
+   * fetched for GHA/Dec (see usno.js's assembleFill, which now also
+   * surfaces each body's raw sd/pa/hc), not a separate ephemeris.
+   *
+   * USNO's own "pa" (parallax in altitude) is computed at Hc -- the
+   * theoretical altitude at the ASSUMED position -- not at Ha, the
+   * observer's actual apparent altitude from their real sextant reading
+   * (see usno.js's file header for why those are deliberately kept
+   * separate elsewhere in this app). Parallax in altitude is
+   * altitude-DEPENDENT (PA = HP·cos(altitude)), so using USNO's Hc-based
+   * "pa" directly at Ha would mix two different quantities. Instead, the
+   * altitude-INDEPENDENT horizontal parallax (HP, the value an Almanac's
+   * own Moon page tabulates) is backed out of USNO's own Hc-based value --
+   * pa = HP·cos(Hc), so HP = pa / cos(Hc) -- and then re-applied at the
+   * real Ha. Semi-diameter itself needs no such adjustment: it's the
+   * body's true angular size, a function of distance (time) only, not of
+   * which altitude it's observed at, so USNO's "sd" is used as-is.
+   */
+  function deriveMoonHorizontalParallaxArcmin(paArcminAtHc, hcDeg) {
+    var hc = Math.max(hcDeg, 0.1);
+    return (paArcminAtHc || 0) / Math.cos(rad(hc));
+  }
+
+  /** Parallax in altitude at the observer's actual apparent altitude Ha, given horizontal parallax HP (both arcminutes) -- always ADDED (parallax makes a nearby body appear LOWER than it truly is). */
+  function computeParallaxInAltitudeArcmin(hpArcmin, haDeg) {
+    return (hpArcmin || 0) * Math.cos(rad(haDeg));
+  }
+
+  /**
+   * Combines refraction and semi-diameter into the single signed "Alt Corr"
+   * value computeHo expects, honoring limb: a LOWER-limb sight measured the
+   * bottom edge, so the true center is ABOVE it (+SD); an UPPER-limb sight
+   * measured the top edge, so the center is BELOW it (-SD). Refraction is
+   * always subtracted. semiDiameterArcmin is 0 for bodies with no
+   * meaningful disk (star, or a planet other than the Sun/Moon).
+   *
+   * Returns { altCorrMin, altCorrSign } -- ready to drop straight into the
+   * corrections object computeHo already expects.
+   */
+  function combineRefractionAndSemiDiameter(refractionArcmin, semiDiameterArcmin, limb) {
+    var sdSigned = limb === 'upper' ? -(semiDiameterArcmin || 0) : (semiDiameterArcmin || 0);
+    var totalSigned = sdSigned - (refractionArcmin || 0);
+    return {
+      altCorrMin: Math.abs(totalSigned),
+      altCorrSign: totalSigned < 0 ? '-' : '+'
+    };
+  }
+
   /** Local seconds-of-day -> UTC seconds-of-day, wrapped into [0, 86400). */
   function utcSecondsFromLocal(avgLocalSec, tzOffsetHours) {
     return ((avgLocalSec - (tzOffsetHours || 0) * 3600) % 86400 + 86400) % 86400;
@@ -1175,6 +1273,12 @@
     averageObservations: averageObservations,
     computeHa: computeHa,
     computeHo: computeHo,
+    computeDipFromHeight: computeDipFromHeight,
+    computeRefractionArcmin: computeRefractionArcmin,
+    SUN_SEMI_DIAMETER_ARCMIN: SUN_SEMI_DIAMETER_ARCMIN,
+    deriveMoonHorizontalParallaxArcmin: deriveMoonHorizontalParallaxArcmin,
+    computeParallaxInAltitudeArcmin: computeParallaxInAltitudeArcmin,
+    combineRefractionAndSemiDiameter: combineRefractionAndSemiDiameter,
     utcSecondsFromLocal: utcSecondsFromLocal,
     localFromUtcSeconds: localFromUtcSeconds,
     interpolateByLatitude: interpolateByLatitude,

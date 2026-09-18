@@ -11,6 +11,8 @@
  */
 
 var observationCount = 0;
+var _correctionsMode = 'manual'; // 'manual' | 'auto' -- see setCorrectionsMode/tryComputeAutomaticCorrections
+var _lastAlmanacExtra = null; // { hcDeg, sdArcmin, paArcmin } from the most recent Section 3 fetch, non-star only -- see applyUsnoFill
 
 document.addEventListener('DOMContentLoaded', initApp);
 
@@ -154,7 +156,19 @@ function initApp() {
 
   document.getElementById('planetSelect').addEventListener('change', function () {
     updateHeaders();
+    updateCorrectionsVisibility(); // Add'l Corr only shows for Venus among planets
     refreshLiveCalculations();
+  });
+  document.getElementById('limbSelect').addEventListener('change', function () {
+    updateCorrectionsVisibility(); // limb reminder / Moon Upper-Limb card / auto SD sign
+    refreshLiveCalculations();
+  });
+
+  document.getElementById('corrModeManual').addEventListener('click', function () { setCorrectionsMode('manual'); });
+  document.getElementById('corrModeAuto').addEventListener('click', function () { setCorrectionsMode('auto'); });
+  ['heightEyeValue', 'heightEyeUnit'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', refreshLiveCalculations);
+    document.getElementById(id).addEventListener('change', refreshLiveCalculations);
   });
 
   document.getElementById('btnAddSight').addEventListener('click', function () {
@@ -344,6 +358,148 @@ function handleBodyTypeChange() {
   void nameContainer.offsetHeight;
 
   updateHeaders();
+  updateCorrectionsVisibility();
+}
+
+// ---------------------------------------------------------------------
+// SEXTANT ALTITUDE CORRECTIONS -- Manual (typed from a printed Almanac) vs
+// Automatic (computed directly). One shared mode toggle for the whole
+// section (Dip / Alt Corr / Add'l Corr / Moon Upper-Limb move together).
+// Automatic mode computes the SAME dipMin/altCorrMin/altCorrSign/
+// addAltCorrMin/addAltCorrSign fields Manual mode has always used --
+// see calc.js's own comment on tryComputeAutomaticCorrections's formulas --
+// so computeHa/computeHo/reduceSight/collectFormState/saved records and
+// every other downstream consumer stay completely unchanged either way;
+// only WHERE those fields' values come from differs.
+// ---------------------------------------------------------------------
+
+/** True only for the one planet the Nautical Almanac's own Additional Correction table covers alongside the Moon (its parallax is large enough near inferior conjunction to matter; the others' isn't). */
+function isVenusSelected() {
+  return document.getElementById('bodyType').value === 'planet' && document.getElementById('planetSelect').value === 'Venus';
+}
+
+/** Add'l Corr (horizontal/altitude parallax) is only meaningful for the Moon and Venus -- see calc.js's reduceMeridianSight-adjacent comment on deriveMoonHorizontalParallaxArcmin for why it matters so much more for the Moon specifically. */
+function bodyNeedsAddlCorr() {
+  return document.getElementById('bodyType').value === 'moon' || isVenusSelected();
+}
+
+function setCorrectionsMode(mode) {
+  _correctionsMode = mode;
+  document.getElementById('corrModeManual').setAttribute('aria-pressed', mode === 'manual' ? 'true' : 'false');
+  document.getElementById('corrModeAuto').setAttribute('aria-pressed', mode === 'auto' ? 'true' : 'false');
+  updateCorrectionsVisibility();
+  refreshLiveCalculations();
+}
+
+/**
+ * Shows/hides every Sextant Altitude Corrections subsection for the
+ * current mode + body type + limb -- called whenever any of those change
+ * (mode toggle, body type, limb, planet name). Pure visibility/labeling;
+ * the actual computed values are written by tryComputeAutomaticCorrections,
+ * called separately from refreshLiveCalculations().
+ */
+function updateCorrectionsVisibility() {
+  var isAuto = _correctionsMode === 'auto';
+  var bodyType = document.getElementById('bodyType').value;
+  var isSunOrMoon = bodyType === 'sun' || bodyType === 'moon';
+  var limb = document.getElementById('limbSelect').value || 'lower';
+  var needsAddl = bodyNeedsAddlCorr();
+
+  // 1. Dip
+  document.getElementById('dipManualCol').style.display = isAuto ? 'none' : 'block';
+  document.getElementById('dipAutoCol').style.display = isAuto ? 'block' : 'none';
+
+  // 2. Alt Corr -- manual mode shows a Limb reminder (Sun/Moon only, never
+  // a second editable Limb input); automatic mode shows the computed
+  // refraction+SD breakdown instead of the raw editable fields.
+  document.getElementById('altCorrManualGroup').style.display = isAuto ? 'none' : 'block';
+  document.getElementById('altCorrAutoGroup').style.display = isAuto ? 'block' : 'none';
+  document.getElementById('altCorrLimbReminderCol').style.display = (!isAuto && isSunOrMoon) ? 'block' : 'none';
+  if (!isAuto && isSunOrMoon) {
+    document.getElementById('altCorrLimbReminder').textContent = limb === 'upper' ? 'Upper' : 'Lower';
+  }
+
+  // 3. Add'l Corr -- Moon/Venus only, either mode.
+  document.getElementById('addAltCorrCard').style.display = needsAddl ? 'block' : 'none';
+  document.getElementById('addAltCorrManualRow').style.display = (needsAddl && !isAuto) ? 'flex' : 'none';
+  document.getElementById('addAltCorrAutoDisplay').style.display = (needsAddl && isAuto) ? 'block' : 'none';
+
+  // 4. Moon Upper-Limb Correction -- manual mode, Moon, upper limb only;
+  // automatic mode folds this into the semi-diameter sign instead (see
+  // tryComputeAutomaticCorrections), so it's never shown there.
+  var showMoonUpperLimb = !isAuto && bodyType === 'moon' && limb === 'upper';
+  document.getElementById('moonUpperLimbCard').style.display = showMoonUpperLimb ? 'block' : 'none';
+}
+
+/**
+ * Computes Dip/Alt Corr/Add'l Corr directly and writes them into the SAME
+ * fields Manual mode types into (dipMin, altCorrMin/Sign, addAltCorrMin/
+ * Sign) -- a no-op when _correctionsMode isn't 'auto'. Order matters: Dip
+ * must be written before Ha can be computed, and Ha before refraction can
+ * be computed from it, so this runs as its own early pass, before
+ * updateAverages()/tryAutoCalculateReduction() (which read these same
+ * fields via the unchanged computeHa/computeHo) -- see
+ * refreshLiveCalculations().
+ */
+function tryComputeAutomaticCorrections() {
+  if (_correctionsMode !== 'auto') return;
+
+  var bodyType = document.getElementById('bodyType').value;
+  var limb = document.getElementById('limbSelect').value || 'lower';
+
+  // 1. Dip from height of eye.
+  var heightVal = parseFloat(document.getElementById('heightEyeValue').value) || 0;
+  var heightUnit = document.getElementById('heightEyeUnit').value;
+  var dip = SightCalc.computeDipFromHeight(heightVal, heightUnit);
+  document.getElementById('dipMin').value = dip.toFixed(1);
+  document.getElementById('computedDipDisplay').textContent = dip.toFixed(1) + "'";
+
+  // 2. Alt Corr = refraction (always -) combined with semi-diameter (Sun:
+  // a flat mean; Moon: from the most recent Section 3 fetch; anything
+  // else: no meaningful disk, SD=0 -- refraction only).
+  var observations = collectObservations();
+  var avg = SightCalc.averageObservations(observations);
+  var ieMin = parseFloat(document.getElementById('ieMin').value) || 0;
+  var ieSign = document.getElementById('ieSign').value;
+  var ha = avg ? SightCalc.computeHa(avg.avgHsDeg, { ieMin: ieMin, ieSign: ieSign, dipMin: dip }) : null;
+
+  var sd = 0;
+  if (bodyType === 'sun') {
+    sd = SightCalc.SUN_SEMI_DIAMETER_ARCMIN;
+  } else if (bodyType === 'moon' && _lastAlmanacExtra && typeof _lastAlmanacExtra.sdArcmin === 'number') {
+    sd = _lastAlmanacExtra.sdArcmin;
+  }
+
+  if (ha !== null) {
+    var refraction = SightCalc.computeRefractionArcmin(ha);
+    var combined = SightCalc.combineRefractionAndSemiDiameter(refraction, sd, limb);
+    document.getElementById('altCorrMin').value = combined.altCorrMin.toFixed(1);
+    document.getElementById('altCorrSign').value = combined.altCorrSign;
+
+    var breakdown = 'Refraction −' + refraction.toFixed(1) + "'";
+    if (sd) breakdown += ' · Semi-diameter ' + (limb === 'upper' ? '−' : '+') + sd.toFixed(1) + "' (" + (limb === 'upper' ? 'upper' : 'lower') + ' limb)';
+    breakdown += ' · Total ' + (combined.altCorrSign === '-' ? '−' : '+') + combined.altCorrMin.toFixed(1) + "'";
+    document.getElementById('altCorrAutoBreakdown').textContent = breakdown;
+  } else {
+    document.getElementById('altCorrAutoBreakdown').textContent = 'Enter an observation time and height to compute.';
+  }
+
+  // 3. Add'l Corr = parallax in altitude, Moon/Venus only -- derived from
+  // USNO's own Hc-based parallax, re-applied at the real Ha (see calc.js's
+  // deriveMoonHorizontalParallaxArcmin for why that indirection is needed).
+  if (bodyNeedsAddlCorr()) {
+    if (ha !== null && _lastAlmanacExtra && typeof _lastAlmanacExtra.paArcmin === 'number' && typeof _lastAlmanacExtra.hcDeg === 'number') {
+      var hp = SightCalc.deriveMoonHorizontalParallaxArcmin(_lastAlmanacExtra.paArcmin, _lastAlmanacExtra.hcDeg);
+      var paAtHa = SightCalc.computeParallaxInAltitudeArcmin(hp, ha);
+      document.getElementById('addAltCorrMin').value = paAtHa.toFixed(1);
+      document.getElementById('addAltCorrSign').value = '+'; // parallax always raises the observed altitude toward Ho -- see calc.js's own comment
+      document.getElementById('addAltCorrAutoDisplay').textContent = 'Parallax in altitude: +' + paAtHa.toFixed(1) + "'";
+    } else {
+      document.getElementById('addAltCorrMin').value = '0.0';
+      document.getElementById('addAltCorrSign').value = '+';
+      document.getElementById('addAltCorrAutoDisplay').textContent = 'Fetch Section 3’s almanac data first to compute parallax.';
+    }
+  }
 }
 
 /**
@@ -693,7 +849,15 @@ function collectFormState() {
       dipMin: num('dipMin'),
       altCorrMin: num('altCorrMin'), altCorrSign: g('altCorrSign').value,
       addAltCorrMin: num('addAltCorrMin'), addAltCorrSign: g('addAltCorrSign').value,
-      clockErrorSec: num('clockErrorSec'), clockErrorDirection: _clockErrorDirection
+      clockErrorSec: num('clockErrorSec'), clockErrorDirection: _clockErrorDirection,
+      // Automatic mode's own inputs -- dipMin/altCorrMin/addAltCorrMin above
+      // are always the EFFECTIVE values used for Ha/Ho regardless of mode
+      // (see tryComputeAutomaticCorrections); these two only matter for
+      // restoring the Height of Eye field itself on Load, and for
+      // re-deriving Automatic mode's outputs if corrections are
+      // recalculated after loading.
+      correctionsMode: _correctionsMode,
+      heightEyeValue: num('heightEyeValue'), heightEyeUnit: g('heightEyeUnit').value
     },
     almanac: {
       star: {
@@ -744,6 +908,14 @@ function applyFormState(state) {
   setVal('addAltCorrMin', c.addAltCorrMin); setVal('addAltCorrSign', c.addAltCorrSign || '+');
   setVal('clockErrorSec', c.clockErrorSec || 0);
   setClockErrorDirection(c.clockErrorDirection === 'slow' ? 'slow' : 'fast'); // older saved records have neither field -- default matches a fresh page
+
+  setVal('heightEyeValue', c.heightEyeValue);
+  setVal('heightEyeUnit', c.heightEyeUnit || 'ft');
+  // Older saved records have no correctionsMode at all -- default to manual
+  // so a record saved before this feature existed keeps showing exactly
+  // the typed dipMin/altCorrMin/addAltCorrMin values it was saved with,
+  // rather than silently recomputing them.
+  setCorrectionsMode(c.correctionsMode === 'auto' ? 'auto' : 'manual');
 
   var a = state.almanac || {};
   var st = a.star || {};
@@ -1249,6 +1421,7 @@ function tryAutoCalculateReduction() {
 
 /** The single entry point every relevant input listener calls. */
 function refreshLiveCalculations() {
+  tryComputeAutomaticCorrections(); // must run before updateAverages/tryAutoCalculateReduction -- see its own comment
   updateAverages();
   tryAutoFillAlmanacFromCache();
   tryAutoCalculateReduction();
@@ -1346,7 +1519,9 @@ function clearAllData() {
   window._currentTitle = null;
   _almanacFieldsContext = null;
   _autoFillLoopGuard = { signature: null, count: 0 };
+  _lastAlmanacExtra = null;
   setClockErrorDirection('fast');
+  setCorrectionsMode('manual');
   updateHeaders();
   refreshLiveCalculations();
 }
@@ -1393,11 +1568,18 @@ function applyUsnoFill(bodyType, fill) {
     fillDegMin('ghaAriesNextDeg', 'ghaAriesNextMin', null, fill.ghaAriesNextDeg);
     fillDegMin('shaDeg', 'shaMin', null, fill.shaDeg);
     fillDegMin('decStarDeg', 'decStarMin', 'decStarNS', fill.decDeg, fill.decSign);
+    _lastAlmanacExtra = null; // no hc/sd/pa for stars -- Automatic corrections has nothing to use here anyway
   } else {
     fillDegMin('ghaBaseDeg', 'ghaBaseMin', null, fill.ghaBaseDeg);
     fillDegMin('ghaNextDeg', 'ghaNextMin', null, fill.ghaNextDeg);
     fillDegMin('decBaseDeg', 'decBaseMin', 'decBaseNS', fill.decBaseDeg, fill.decBaseSign);
     fillDegMin('decNextDeg', 'decNextMin', 'decNextNS', fill.decNextDeg, fill.decNextSign);
+    // Retained for Automatic Altitude Corrections (see tryComputeAutomaticCorrections)
+    // -- Section 3's own fields only ever show/use GHA/Dec, so hc/sd/pa need
+    // a place to live between "the fetch that produced them" and "the
+    // corrections calc that needs them" -- see usno.js's assembleFill for
+    // where these come from.
+    _lastAlmanacExtra = { hcDeg: fill.hcDeg, sdArcmin: fill.sdArcmin, paArcmin: fill.paArcmin };
   }
 
   _almanacFieldsContext = currentAlmanacContextKey();

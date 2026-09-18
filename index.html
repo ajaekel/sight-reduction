@@ -167,6 +167,14 @@
 
     <div class="sub-title" style="margin-top: 18px;">Sextant Altitude Corrections</div>
 
+    <div class="plot-controls" style="margin-bottom: 10px;">
+      <div class="method-picker" role="group" aria-label="Altitude corrections mode">
+        <button type="button" class="method-btn" id="corrModeManual" aria-pressed="true">Manual</button>
+        <button type="button" class="method-btn" id="corrModeAuto" aria-pressed="false">Automatic</button>
+      </div>
+    </div>
+
+    <!-- 0. Index Error -- unchanged in both modes -->
     <div class="form-group">
       <div class="body-inline-row">
         <div class="body-inline-col almanac-col-border">
@@ -179,11 +187,24 @@
             </select>
           </div>
         </div>
-        <div class="body-inline-col">
+
+        <!-- 1. Dip -->
+        <div class="body-inline-col" id="dipManualCol">
           <label>Dip (Min, always &minus;)</label>
           <div class="input-row">
             <input type="text" inputmode="decimal" id="dipMin" placeholder="3.8" value="0.0" onfocus="this.select()">
           </div>
+        </div>
+        <div class="body-inline-col" id="dipAutoCol" style="display:none;">
+          <label>Height of Eye (always &minus;)</label>
+          <div class="input-row">
+            <input type="text" inputmode="decimal" id="heightEyeValue" placeholder="9" onfocus="this.select()">
+            <select id="heightEyeUnit">
+              <option value="ft">ft</option>
+              <option value="m">m</option>
+            </select>
+          </div>
+          <label style="font-size: 0.7rem; margin-top: 2px;">Computed Dip: <span id="computedDipDisplay">--.-'</span></label>
         </div>
       </div>
     </div>
@@ -192,7 +213,8 @@
       <div><strong>H (Apparent Altitude):</strong> <span id="computedHa">--&deg; --.-'</span></div>
     </div>
 
-    <div class="form-group">
+    <!-- 2. Alt Corr (refraction + semi-diameter) -->
+    <div class="form-group" id="altCorrManualGroup">
       <div class="body-inline-row">
         <div class="body-inline-col almanac-col-border">
           <label>Alt Corr (Min / +/-)</label>
@@ -204,6 +226,19 @@
             </select>
           </div>
         </div>
+        <div class="body-inline-col" id="altCorrLimbReminderCol" style="display:none;">
+          <label>Limb (from Section 1)</label>
+          <div class="cache-summary-text" id="altCorrLimbReminder" style="margin-top: 6px;">--</div>
+        </div>
+      </div>
+    </div>
+    <div class="form-group" id="altCorrAutoGroup" style="display:none;">
+      <div class="cache-summary-text" id="altCorrAutoBreakdown">--</div>
+    </div>
+
+    <!-- 3. Add'l Corr (horizontal/altitude parallax) -- Moon and Venus only -->
+    <div class="form-group" id="addAltCorrCard" style="display:none;">
+      <div class="body-inline-row" id="addAltCorrManualRow">
         <div class="body-inline-col">
           <label>Add'l Corr (Min / +/-)</label>
           <div class="input-row">
@@ -214,6 +249,18 @@
             </select>
           </div>
         </div>
+      </div>
+      <div class="cache-summary-text" id="addAltCorrAutoDisplay" style="display:none;">--</div>
+    </div>
+
+    <!-- 4. Moon Upper-Limb Correction -- manual mode, Moon + upper limb only -->
+    <div class="form-group" id="moonUpperLimbCard" style="display:none;">
+      <div class="summary-box">
+        <div><strong>Moon Upper-Limb Correction:</strong> <span id="moonUpperLimbValue">-30.0'</span></div>
+        <p class="cache-blurb" style="margin: 6px 0 0;">
+          The semi-diameter correction in the Almanac is based on the lower limb; this correction
+          accounts for an upper-limb observation.
+        </p>
       </div>
     </div>
 

@@ -67,15 +67,32 @@
     return (s || '').trim().toLowerCase();
   }
 
-  /** Pure: raw USNO properties.data array -> normalized { [lowercaseName]: {name,gha,dec} } map. */
+  /**
+   * Pure: raw USNO properties.data array -> normalized
+   * { [lowercaseName]: {name,gha,dec,hc,sd,pa} } map.
+   *
+   * hc/sd/pa (from entry.almanac_data.hc and entry.altitude_corrections.sd/pa)
+   * are surfaced alongside gha/dec for the Automatic Altitude Corrections
+   * feature (see calc.js's deriveMoonHorizontalParallaxArcmin) -- undefined
+   * when the raw entry doesn't carry them (a caller that doesn't need them,
+   * e.g. plain GHA/Dec interpolation, just ignores the extra fields, same
+   * as always). hc/pa are computed by USNO at the ASSUMED position, not the
+   * observer's real apparent altitude -- see that same calc.js comment for
+   * why pa specifically can't be used as-is and has to be converted to the
+   * altitude-independent horizontal parallax first.
+   */
   function normalizeUsnoData(rawList) {
     var map = {};
     (rawList || []).forEach(function (entry) {
       if (!entry || !entry.object || !entry.almanac_data) return;
+      var ac = entry.altitude_corrections || {};
       map[normalizeName(entry.object)] = {
         name: entry.object,
         gha: entry.almanac_data.gha,
-        dec: entry.almanac_data.dec
+        dec: entry.almanac_data.dec,
+        hc: entry.almanac_data.hc,
+        sd: ac.sd,
+        pa: ac.pa
       };
     });
     return map;
@@ -146,7 +163,14 @@
       decBaseDeg: Math.abs(baseObj.dec),
       decBaseSign: baseObj.dec >= 0 ? 'N' : 'S',
       decNextDeg: Math.abs(nextObj.dec),
-      decNextSign: nextObj.dec >= 0 ? 'N' : 'S'
+      decNextSign: nextObj.dec >= 0 ? 'N' : 'S',
+      // Base-hour only (not interpolated) -- hc/sd/pa change slowly enough
+      // within one hour that this is well within the few-arcminute
+      // tolerance Automatic Altitude Corrections targets; undefined if the
+      // raw response didn't carry them.
+      hcDeg: baseObj.hc,
+      sdArcmin: baseObj.sd,
+      paArcmin: baseObj.pa
     };
   }
 
