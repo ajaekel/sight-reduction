@@ -417,11 +417,21 @@ function updateCorrectionsVisibility() {
   if (!isAuto) document.getElementById('altCorrAutoNote').style.display = 'none';
 
   // 3. Additional Alt Corr -- Moon/Venus only, either mode; Automatic mode
-  // disables the fields the same way.
+  // disables the fields the same way. For the Moon specifically, a reminder
+  // of the Section 1 Limb choice sits where a generic composition caption
+  // used to -- Venus has no limb concept, so nothing shows there for it.
   document.getElementById('addAltCorrCol').style.display = needsAddl ? 'block' : 'none';
   document.getElementById('addAltCorrMin').disabled = isAuto;
   document.getElementById('addAltCorrSign').disabled = isAuto;
   if (!isAuto || !needsAddl) document.getElementById('addAltCorrAutoNote').style.display = 'none';
+
+  var limbReminderEl = document.getElementById('addAltCorrLimbReminder');
+  if (bodyType === 'moon') {
+    limbReminderEl.textContent = (limb === 'upper' ? 'Upper' : 'Lower') + ' Limb (from Section 1)';
+    limbReminderEl.style.display = 'block';
+  } else {
+    limbReminderEl.style.display = 'none';
+  }
 
   // 4. Moon Upper-Limb Correction -- manual mode, Moon, upper limb only;
   // automatic mode folds this into the semi-diameter sign instead (see

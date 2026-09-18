@@ -181,7 +181,7 @@
           <label>IE (Min / On-Off Arc)</label>
           <div class="input-row">
             <input type="text" inputmode="decimal" id="ieMin" placeholder="2.0" value="0.0" onfocus="this.select()">
-            <select id="ieSign" class="select-compact">
+            <select id="ieSign" class="select-fit">
               <option value="on">On (-)</option>
               <option value="off">Off (+)</option>
             </select>
@@ -196,15 +196,23 @@
           </div>
         </div>
         <div class="body-inline-col" id="dipAutoCol" style="display:none;">
-          <label>Height of Eye</label>
-          <div class="input-row">
-            <input type="text" inputmode="decimal" id="heightEyeValue" class="narrow-input" placeholder="9" onfocus="this.select()">
-            <select id="heightEyeUnit" class="select-compact">
-              <option value="ft">ft</option>
-              <option value="m">m</option>
-            </select>
-            <label style="font-size: 0.75rem; color: #aaa; margin: 0 2px 0 6px;">Dip</label>
-            <input type="text" id="computedDipDisplay" class="narrow-input" value="--.-'" disabled>
+          <div class="body-inline-row">
+            <div class="body-inline-col">
+              <label>Height of Eye</label>
+              <div class="input-row">
+                <input type="text" inputmode="decimal" id="heightEyeValue" class="narrow-input" placeholder="9" onfocus="this.select()">
+                <select id="heightEyeUnit" class="select-fit">
+                  <option value="ft">ft</option>
+                  <option value="m">m</option>
+                </select>
+              </div>
+            </div>
+            <div class="body-inline-col">
+              <label>Dip</label>
+              <div class="input-row">
+                <input type="text" id="computedDipDisplay" class="narrow-input readonly-display" value="--.-'" disabled>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -218,7 +226,6 @@
     <div class="form-group">
       <div class="body-inline-row">
         <div class="body-inline-col almanac-col-border">
-          <label class="composition-label">Refraction, and semi-diameter where applicable</label>
           <label>Altitude Correction (Min / +/-)</label>
           <div class="input-row">
             <input type="text" inputmode="decimal" id="altCorrMin" placeholder="12.4" value="0.0" onfocus="this.select()">
@@ -232,7 +239,7 @@
 
         <!-- 3. Additional Alt Corr (horizontal/altitude parallax) -- Moon and Venus only -->
         <div class="body-inline-col" id="addAltCorrCol" style="display:none;">
-          <label class="composition-label">Parallax, where applicable</label>
+          <div class="cache-summary-text" id="addAltCorrLimbReminder" style="display:none; margin-bottom: 2px;">--</div>
           <label>Additional Alt Corr (Min / +/-)</label>
           <div class="input-row">
             <input type="text" inputmode="decimal" id="addAltCorrMin" placeholder="0.2" value="0.0" onfocus="this.select()">

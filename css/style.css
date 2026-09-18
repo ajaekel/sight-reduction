@@ -341,14 +341,27 @@ label {
   font-size: 0.92rem;
 }
 
-/* Small static caption above a corrections field explaining what it's
-   composed of (e.g. "Refraction, and semi-diameter where applicable"). */
-.composition-label {
-  font-weight: normal;
-  font-size: 0.75rem;
-  color: #aaa;
-  display: block;
-  margin-bottom: 2px;
+/* A <select> that must stay legible next to a sibling that ISN'T also
+   flex:1 (e.g. a plain input, or .narrow-input's flex:0 0 56px) -- unlike
+   .select-compact (flex:1; min-width:0, meant for siblings that are ALSO
+   flex:1 and share space proportionally, e.g. Section 1's Deg/Min/N-S
+   trio), this one refuses to shrink below its own option text at all, so
+   e.g. "Off (+)" never gets squeezed toward unreadable/unclickable. */
+.select-fit {
+  flex: 0 0 auto;
+  width: auto !important;
+  padding: 8px 10px;
+  text-align: center;
+  font-size: 0.92rem;
+}
+
+/* A field whose value is computed, not typed -- disabled already blocks
+   editing, but browsers' own disabled styling is subtle; this makes it
+   unmistakable at a glance. */
+.readonly-display {
+  font-style: italic;
+  opacity: 0.75;
+  cursor: default;
 }
 
 
