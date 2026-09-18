@@ -71,7 +71,16 @@
           savedAt: record.savedAt,
           date: record.date,
           title: record.title || '',
-          bodyLabel: bodyLabel(record.body)
+          bodyLabel: bodyLabel(record.body),
+          // True for a record another feature generated purely as an internal
+          // representation (currently: Meridian Passage's "Add to a Fix" --
+          // see js/meridian.js's buildMirrorSightRecord) rather than something
+          // the user directly created as a Sight. Carried in the index (not
+          // just the full record) so sights.js/fixes.js's "Add a Saved Sight"
+          // picker can filter these out without fetching every full record --
+          // an internal record isn't a Sight the user should see, load, or
+          // edit as one, even though it's stored the same way under the hood.
+          internal: !!record.internal
         });
         writeIndex(idx);
 

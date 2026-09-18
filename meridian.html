@@ -22,8 +22,8 @@
       <div class="nav-menu" id="navMenu">
         <div class="nav-menu-header">Sights</div>
         <a href="index.html" class="nav-menu-item nav-menu-sub">New Sight</a>
-        <a href="meridian.html" class="nav-menu-item nav-menu-sub">Meridian Passage</a>
         <a href="sights.html" class="nav-menu-item nav-menu-sub">Sights</a>
+        <a href="meridian.html" class="nav-menu-item">Meridian Passage</a>
         <a href="fixes.html" class="nav-menu-item">Fixes</a>
         <a href="planning.html" class="nav-menu-item">Planning</a>
         <a href="drleg.html" class="nav-menu-item">DR Leg</a>
@@ -49,15 +49,6 @@
   <div class="save-export-row">
     <button class="btn-secondary" id="btnAddToFixTop">Add to a Fix</button>
     <button class="btn-secondary" id="btnSendToDrLegTop">Send to DR Leg</button>
-  </div>
-
-  <!-- SAVED MERIDIAN PASSAGES (this page's own list -- MeridianStorage isn't SightStorage, so these don't appear on the Sights page) -->
-  <div class="card">
-    <details id="savedMeridianDetails">
-      <summary class="section-title cache-summary-toggle">Saved Meridian Passages</summary>
-      <div class="saved-list" id="savedMeridianList"></div>
-      <div class="empty-note" id="savedMeridianEmpty">No Meridian Passage sights saved on this device yet.</div>
-    </details>
   </div>
 
   <!-- SECTION 1: TRIP INFO -->
@@ -317,6 +308,16 @@
       <button class="btn-secondary" id="btnConfirmAddToFix">Add</button>
       <button class="btn-secondary" id="btnCancelAddToFix">Cancel</button>
     </div>
+  </div>
+
+  <!-- SAVED MERIDIAN PASSAGES -- the primary way to retrieve a saved one
+       (MeridianStorage isn't SightStorage, so these don't appear on the
+       Sights page). Always visible, matching drleg.html's "Saved DR Legs"
+       card at the bottom of its page. -->
+  <div class="card" style="margin-top: 16px;">
+    <div class="section-title">Saved Meridian Passages (this device)</div>
+    <div class="saved-list" id="savedMeridianList"></div>
+    <div class="empty-note" id="savedMeridianEmpty">No Meridian Passage sights saved on this device yet.</div>
   </div>
 
   <input type="file" id="fileImportJson" accept="application/json,.json" style="display: none;">

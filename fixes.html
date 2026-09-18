@@ -24,8 +24,8 @@
           <div class="nav-menu" id="navMenu">
             <div class="nav-menu-header">Sights</div>
             <a href="index.html" class="nav-menu-item nav-menu-sub">New sight</a>
-            <a href="meridian.html" class="nav-menu-item nav-menu-sub">Meridian Passage</a>
             <a href="sights.html" class="nav-menu-item nav-menu-sub">Sights</a>
+            <a href="meridian.html" class="nav-menu-item">Meridian Passage</a>
             <a href="fixes.html" class="nav-menu-item">Fixes</a>
             <a href="planning.html" class="nav-menu-item">Planning</a>
             <a href="drleg.html" class="nav-menu-item">DR Leg</a>
@@ -156,6 +156,18 @@
       </div>
     </div>
 
+    <div class="card" id="availableMeridiansCard">
+      <div class="section-title">Add a Meridian Passage</div>
+      <p class="cache-blurb" style="margin-top:0;">
+        Represented in this Fix as a line of constant latitude (an east-west LOP) crossed with
+        your other LOPs the same way any Fix is.
+      </p>
+      <div class="saved-list" id="availableMeridiansList"></div>
+      <div class="empty-note" id="availableMeridiansEmpty">
+        No resolved Meridian Passage sights available. Take one on the Meridian Passage page first.
+      </div>
+    </div>
+
     <div class="card" id="fixPlotCard">
       <div class="section-title">Plot</div>
       <div class="cache-progress" id="fixPlotStatus"></div>
@@ -209,6 +221,7 @@
 <script src="js/chartInteraction.js"></script>
 <script src="js/fixStorage.js"></script>
 <script src="js/drlegStorage.js"></script>
+<script src="js/meridianStorage.js"></script>
 <script src="js/nav.js"></script>
 <script src="js/version.js"></script>
 <script src="js/fixes.js"></script>

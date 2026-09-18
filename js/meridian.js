@@ -27,10 +27,13 @@
  * solved position, only where it's drawn on the chart). Rather than teach
  * FixStorage/fixes.js/chart.js about a second kind of fix member, this
  * creates/updates one ordinary SightStorage record mirroring that
- * degenerate LOP (buildMirrorSightRecord/ensureMirrorSight) and adds THAT
- * record's id to the Fix's sightIds, same as any other sight -- see
- * meridianStorage.js's own header for the mirrorSightId/mirrorLon
- * bookkeeping this relies on.
+ * degenerate LOP (see meridianStorage.js's buildMirrorSightRecord, the
+ * single shared definition -- ensureMirrorSight here just supplies the
+ * longitude and persists it) and adds THAT record's id to the Fix's
+ * sightIds, same as any other sight. fixes.js's own "Add a Meridian
+ * Passage" reuses the exact same buildMirrorSightRecord for an
+ * already-saved Meridian Passage sight, triggered from the Fixes page
+ * instead of from here.
  *
  * mirrorLon itself (see averageLonOfOtherFixMembers) is the average
  * longitude of the target Fix's OTHER members, not a fixed placeholder --
@@ -107,12 +110,42 @@ function applyPendingHandoff() {
   showToast('Date and time zone filled in from Planning.');
 }
 
+/**
+ * Consumes a one-time "load this saved Meridian Passage" handoff via
+ * sessionStorage key 'ocsrLoadMeridianId' -- sent by fixes.js's chart
+ * "Open Meridian Passage" action (see getFixSelectionDetail), the one place
+ * outside this page that can reach a Meridian Passage record (through its
+ * Fix mirror). Mirrors app.js's applyPendingSightLoad, but loads into this
+ * page's own form via MeridianStorage, never into New Sight.
+ */
+function applyPendingMeridianLoad() {
+  var id;
+  try {
+    id = sessionStorage.getItem('ocsrLoadMeridianId');
+  } catch (e) {
+    return;
+  }
+  if (!id) return;
+  sessionStorage.removeItem('ocsrLoadMeridianId'); // one-time consume
+
+  MeridianStorage.get(id).then(function (record) {
+    if (!record) { showToast('Could not find that saved Meridian Passage sight.', true); return; }
+    applyFormState(record);
+    _currentRecordId = record.id;
+    showToast('Loaded "' + (record.title || 'sight') + '".');
+  }).catch(function (err) {
+    console.error(err);
+    showToast('Could not load that saved Meridian Passage sight.', true);
+  });
+}
+
 function initApp() {
   try {
     document.getElementById('meridianDate').value = new Date().toISOString().split('T')[0];
   } catch (e) {}
 
   applyPendingHandoff();
+  applyPendingMeridianLoad(); // may override the handoff above if a Fix's chart just sent one
   initNavMenu();
 
   document.getElementById('sunBears').addEventListener('change', function () {
@@ -935,62 +968,6 @@ function clearAllData() {
 // ---------------------------------------------------------------------
 
 /**
- * Builds the ordinary SightStorage-shaped record that represents this
- * Meridian Passage result as a degenerate east-west LOP: AP latitude is
- * the calculated latitude itself, interceptNM is forced to exactly 0 by
- * setting hc = ho, and zn is the true direction to the Sun (000° if it
- * bore North of the observer, 180° if South) -- perpendicular to either
- * is the same east-west line, so this doesn't change the solved LOP, but it
- * does determine which way the chart's azimuth-line indicator points, which
- * should match what was actually observed. mirrorLon only places the AP on
- * a chart -- see the file header on why it cannot affect the solved fix.
- */
-function buildMirrorSightRecord(meridianState, result, mirrorLon) {
-  var latAbs = SightCalc.decimalToDM(Math.abs(result.latitude));
-  var lonAbs = SightCalc.decimalToDM(Math.abs(mirrorLon));
-  var zn = meridianState.sunBearsSouth ? 180 : 0;
-
-  return {
-    schemaVersion: 1,
-    title: 'Meridian Passage — ' + (meridianState.date || '') + ' latitude line',
-    notes: 'Auto-generated from a Meridian Passage sight, to represent it as a line of constant latitude in this Fix. Editing this record directly will not update the original Meridian Passage sight.',
-    date: meridianState.date,
-    body: { type: 'sun', name: null, limb: 'lower' },
-    position: {
-      latDeg: latAbs.deg, latMin: latAbs.min, latNS: result.latitude < 0 ? 'S' : 'N',
-      lonDeg: lonAbs.deg, lonMin: lonAbs.min, lonEW: mirrorLon < 0 ? 'W' : 'E',
-      tzOffset: meridianState.tzOffset
-    },
-    observations: [{ h: meridianState.time.h, m: meridianState.time.m, s: 0, heightDeg: meridianState.hs.deg, heightMin: meridianState.hs.min }],
-    corrections: {
-      ieMin: meridianState.corrections.ieMin, ieSign: meridianState.corrections.ieSign,
-      dipMin: meridianState.corrections.dipMin,
-      altCorrMin: meridianState.corrections.altCorrMin, altCorrSign: meridianState.corrections.altCorrSign,
-      addAltCorrMin: meridianState.corrections.addAltCorrMin, addAltCorrSign: meridianState.corrections.addAltCorrSign,
-      clockErrorSec: meridianState.corrections.clockErrorSec, clockErrorDirection: meridianState.corrections.clockErrorDirection
-    },
-    almanac: {
-      nonStar: {
-        ghaBaseDeg: 0, ghaBaseMin: 0, ghaNextDeg: 0, ghaNextMin: 0,
-        decBaseDeg: meridianState.almanac.decBaseDeg, decBaseMin: meridianState.almanac.decBaseMin, decBaseNS: meridianState.almanac.decBaseNS,
-        decNextDeg: meridianState.almanac.decNextDeg, decNextMin: meridianState.almanac.decNextMin, decNextNS: meridianState.almanac.decNextNS
-      }
-    },
-    results: {
-      interpolatedGha: 0,
-      interpolatedDec: result.interpolatedDec,
-      lha: 0,
-      hc: result.ho,
-      zn: zn,
-      interceptNM: 0,
-      interceptDirection: 'TOWARD',
-      ho: result.ho,
-      observationTime: result.observationTime
-    }
-  };
-}
-
-/**
  * Longitude to place the mirror's AP at -- averaged from the target Fix's
  * OTHER members (excluding this same meridian sight's own prior mirror, if
  * it's already a member) so the LOP lands visually where the rest of that
@@ -1013,12 +990,16 @@ function averageLonOfOtherFixMembers(fix) {
   });
 }
 
-/** Creates/updates the mirror Sight (see file header) at the given longitude and returns a Promise<mirrorSightId>. */
+/** Creates/updates the mirror Sight (see meridianStorage.js's buildMirrorSightRecord) at the given longitude and returns a Promise<mirrorSightId>. */
 function ensureMirrorSight(mirrorLon) {
   if (!_currentRecordId) return Promise.reject(new Error('Save this Meridian Passage sight first, then add it to a Fix.'));
   if (!_lastResult) return Promise.reject(new Error('Calculate a latitude first, then add it to a Fix.'));
 
-  var mirror = buildMirrorSightRecord(collectFormState(), _lastResult, mirrorLon);
+  var record = collectFormState();
+  record.id = _currentRecordId;
+  record.results = _lastResult;
+
+  var mirror = MeridianStorage.buildMirrorSightRecord(record, mirrorLon);
   if (_currentMirrorSightId) mirror.id = _currentMirrorSightId;
 
   return SightStorage.save(mirror).then(function (saved) {

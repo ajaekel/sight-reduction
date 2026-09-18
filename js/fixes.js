@@ -245,6 +245,7 @@ function openFix(id) {
 
     renderFixSights(myToken);
     renderAvailableSights(myToken);
+    renderAvailableMeridians(myToken);
     autoPlotFix();
   }).catch(function (err) {
     console.error(err);
@@ -377,7 +378,12 @@ function renderAvailableSights(token) {
   SightStorage.list().then(function (entries) {
     if (token !== fixRenderToken) return; // a newer render superseded this one
 
-    var available = entries.filter(function (e) { return currentFix.sightIds.indexOf(e.id) === -1; });
+    // Excludes internal records (currently: Meridian Passage's own Fix
+    // mirror -- see storage.js's save()) -- that record already gets added
+    // to its own originating fix automatically via "Add to a Fix" on the
+    // Meridian Passage page; it shouldn't also be manually pickable here as
+    // if it were an ordinary saved Sight.
+    var available = entries.filter(function (e) { return currentFix.sightIds.indexOf(e.id) === -1 && !e.internal; });
 
     if (!available.length) {
       emptyEl.style.display = 'block';
@@ -407,6 +413,104 @@ function renderAvailableSights(token) {
 
       listEl.appendChild(item);
     });
+  });
+}
+
+/**
+ * "Add a Meridian Passage" -- lists saved, already-resolved Meridian
+ * Passage sights (MeridianStorage, a separate module from SightStorage --
+ * see meridianStorage.js's own header) that can be added to this Fix, and
+ * "Add" triggers the same mirror-building "Add to a Fix" uses from
+ * Meridian Passage's own page (see onAddMeridianToFix below), just
+ * initiated here instead. Only resolved ones (a calculated latitude)
+ * make sense to add -- there's nothing to represent as an LOP otherwise.
+ */
+function renderAvailableMeridians(token) {
+  var listEl = document.getElementById('availableMeridiansList');
+  var emptyEl = document.getElementById('availableMeridiansEmpty');
+  listEl.innerHTML = '';
+
+  if (!window.MeridianStorage) { emptyEl.style.display = 'block'; return; }
+
+  MeridianStorage.list().then(function (entries) {
+    if (token !== fixRenderToken) return; // a newer render superseded this one
+
+    var available = entries.filter(function (e) { return typeof e.latitude === 'number'; });
+
+    if (!available.length) {
+      emptyEl.style.display = 'block';
+      return;
+    }
+    emptyEl.style.display = 'none';
+
+    available.forEach(function (entry) {
+      var item = document.createElement('div');
+      item.className = 'saved-item';
+      item.innerHTML =
+        '<div class="saved-item-info"><div class="saved-item-title"></div><div class="saved-item-meta"></div></div>' +
+        '<div class="saved-item-actions"><button class="btn-mini btn-mini-load">Add</button></div>';
+
+      item.querySelector('.saved-item-title').textContent = entry.title || 'Untitled';
+      item.querySelector('.saved-item-meta').textContent =
+        SightCalc.formatLat(entry.latitude) + ' · saved ' + new Date(entry.savedAt).toLocaleString();
+
+      item.querySelector('.btn-mini-load').addEventListener('click', function () {
+        onAddMeridianToFix(entry.id);
+      });
+
+      listEl.appendChild(item);
+    });
+  });
+}
+
+/**
+ * Adds an already-saved Meridian Passage sight to the currently-open Fix,
+ * triggered from the Fixes page. Builds/updates the same mirror Sight
+ * meridian.js's own "Add to a Fix" would (see meridianStorage.js's
+ * buildMirrorSightRecord, the single shared definition), placing its AP
+ * longitude at the average of this Fix's other members (same reasoning as
+ * meridian.js's averageLonOfOtherFixMembers) since there's no live form
+ * state here to carry a handed-off longitude from.
+ */
+function onAddMeridianToFix(meridianId) {
+  MeridianStorage.get(meridianId).then(function (record) {
+    if (!record || !record.results) throw new Error('That Meridian Passage sight has no calculated latitude yet.');
+
+    var otherIds = currentFix.sightIds.filter(function (id) { return id !== record.mirrorSightId; });
+    var lonPromise = !otherIds.length
+      ? Promise.resolve(null)
+      : Promise.all(otherIds.map(function (id) { return SightStorage.get(id); })).then(function (records) {
+          var lons = [];
+          records.forEach(function (r) { if (r && r.position) lons.push(SightCalc.signedPositionFromRecord(r.position).lon); });
+          return lons.length ? (lons.reduce(function (a, b) { return a + b; }, 0) / lons.length) : null;
+        });
+
+    return lonPromise.then(function (avgLon) {
+      var usingFallback = avgLon === null;
+      var mirrorLon = usingFallback ? 0 : avgLon;
+      var mirror = MeridianStorage.buildMirrorSightRecord(record, mirrorLon);
+      if (record.mirrorSightId) mirror.id = record.mirrorSightId;
+
+      return SightStorage.save(mirror).then(function (saved) {
+        record.mirrorSightId = saved.id;
+        record.mirrorLon = mirrorLon;
+        return MeridianStorage.save(record).then(function () {
+          if (currentFix.sightIds.indexOf(saved.id) === -1) currentFix.sightIds.push(saved.id);
+          if (currentFix.activeSightIds && currentFix.activeSightIds.indexOf(saved.id) === -1) currentFix.activeSightIds.push(saved.id);
+          return FixStorage.save(currentFix).then(function (savedFix) {
+            if (usingFallback) {
+              showToast('Added — no other sights in this Fix yet to align with, so it’s placed at longitude 0° for now; add it again once this Fix has other sights, to re-center it.', true);
+            } else {
+              showToast('Added to "' + savedFix.name + '".');
+            }
+            openFix(savedFix.id);
+          });
+        });
+      });
+    });
+  }).catch(function (err) {
+    console.error(err);
+    showToast(err && err.message ? err.message : 'Could not add that Meridian Passage sight.', true);
   });
 }
 
@@ -502,6 +606,7 @@ function setDetailCardsForType(type) {
   document.getElementById('knownFixCard').style.display = isKnown ? 'block' : 'none';
   document.getElementById('fixSightsCard').style.display = isKnown ? 'none' : 'block';
   document.getElementById('availableSightsCard').style.display = isKnown ? 'none' : 'block';
+  document.getElementById('availableMeridiansCard').style.display = isKnown ? 'none' : 'block';
   document.getElementById('fixPlotCard').style.display = isKnown ? 'none' : 'block';
   // The "Save Position" button here is specifically for committing whichever
   // LOP-solver method is currently selected -- meaningless for a Known Fix,
@@ -779,6 +884,7 @@ function autoPlotFix() {
           interceptNM: record.results.interceptNM,
           observationTime: observationTime, // ISO UTC -- used to timestamp the Fix's cached resolvedPosition
           tzOffset: record.position.tzOffset, // carried alongside, for handoffs built from the resolved position (see onFixToSight/onFixToDrLeg)
+          derivedFromMeridianId: record.derivedFromMeridianId || null, // see getFixSelectionDetail's 'lop'/'sight' case -- routes "Open" back to Meridian Passage instead of New Sight for one of these
           label: labels.title,
           color: SightCalc.paletteColor(i),
           badgeNumber: i + 1
@@ -1048,13 +1154,22 @@ function getFixSelectionDetail(candidate) {
     if (!item) return null;
     var lines = [formatZnBadge(item.zn) + ' \u00B7 ' + formatInterceptBadge(item.interceptNM)];
     if (item.transferLabel) lines.push('Advanced \u2014 ' + item.transferLabel);
+    // A Meridian Passage's own Fix mirror (see meridian.js's
+    // buildMirrorSightRecord) isn't a real Sight -- "Open" for one of these
+    // goes back to Meridian Passage and its own record, never to New Sight.
+    var isMeridian = !!item.derivedFromMeridianId;
     return {
       title: item.chartLabel || item.label,
       lines: lines,
-      openLabel: 'Open Sight',
+      openLabel: isMeridian ? 'Open Meridian Passage' : 'Open Sight',
       onOpen: function () {
-        sessionStorage.setItem('ocsrLoadSightId', item.id);
-        location.href = 'index.html';
+        if (isMeridian) {
+          sessionStorage.setItem('ocsrLoadMeridianId', item.derivedFromMeridianId);
+          location.href = 'meridian.html';
+        } else {
+          sessionStorage.setItem('ocsrLoadSightId', item.id);
+          location.href = 'index.html';
+        }
       }
     };
   }

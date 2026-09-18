@@ -20,7 +20,8 @@
 
 * [X] Known Fix – position coordinate and datetime from any source, e.g., via VHF radio from a passing ship
   * [ ] Add optional Notes field to Known Fix for provenance/confidence/context.
-* [ ] Meridian Passage – User enters sextant height (+corrections) and gets Latitude
+* [X] Meridian Passage – User enters sextant height (+corrections) and gets Latitude
+  * [ ] If included in a Fix, modify plot legend notes to remove " — Zn 180° (0.0 nm TOWARD)" – irrelevant to a noon sight
 
 ## Planning page
 

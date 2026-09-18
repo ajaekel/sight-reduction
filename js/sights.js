@@ -125,6 +125,12 @@ function onSendToDrLeg(sightId) {
 
 function refreshSavedList() {
   SightStorage.list().then(function (entries) {
+    // Excludes internal records (currently: Meridian Passage's Fix mirror --
+    // see storage.js's save()) -- this is the ordinary Sights list, and a
+    // record generated purely to let something participate in the Fix
+    // solver isn't a Sight the user created or should see/load/edit as one.
+    entries = entries.filter(function (e) { return !e.internal; });
+
     var listEl = document.getElementById('savedList');
     var emptyEl = document.getElementById('savedListEmpty');
     listEl.innerHTML = '';

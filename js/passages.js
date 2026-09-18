@@ -270,10 +270,18 @@ function drLegSummary(record, whichEnd) {
   return record.name + ' ends \u00B7 ' + SightCalc.formatLat(pos.lat) + ', ' + SightCalc.formatLon(pos.lon);
 }
 
+/** Same idea as sightSummary -- a Meridian Passage sight has no AP/lon of its own (see meridianStorage.js), so only the resolved latitude is shown, never a full lat/lon pair. */
+function meridianSummary(record) {
+  var lat = record.results ? record.results.latitude : null;
+  var latText = (typeof lat === 'number') ? SightCalc.formatLat(lat) : 'not yet resolved';
+  return (record.title || 'Meridian Passage') + ' \u00B7 ' + latText;
+}
+
 /** Resolves a timeline entry's underlying record through the appropriate storage module, using entry.type to pick which one -- exactly the "thin timeline entry" design in passageStorage.js. */
 function resolveTimelineEntry(entry) {
   if (entry.type === 'sight') return SightStorage.get(entry.recordId).then(function (r) { return { record: r, summary: r ? sightSummary(r) : null }; });
   if (entry.type === 'fix') return FixStorage.get(entry.recordId).then(function (r) { return { record: r, summary: r ? fixSummary(r) : null }; });
+  if (entry.type === 'meridian') return MeridianStorage.get(entry.recordId).then(function (r) { return { record: r, summary: r ? meridianSummary(r) : null }; });
   if (entry.type === 'drleg-start') return DrLegStorage.get(entry.recordId).then(function (r) { return { record: r, summary: r ? drLegSummary(r, 'start') : null }; });
   if (entry.type === 'drleg-end') return DrLegStorage.get(entry.recordId).then(function (r) { return { record: r, summary: r ? drLegSummary(r, 'end') : null }; });
   return Promise.resolve({ record: null, summary: null }); // 'position'
@@ -285,13 +293,16 @@ function openUnderlyingRecord(entry) {
     location.href = 'index.html';
   } else if (entry.type === 'fix') {
     location.href = 'fixes.html#fix=' + encodeURIComponent(entry.recordId);
+  } else if (entry.type === 'meridian') {
+    try { sessionStorage.setItem('ocsrLoadMeridianId', entry.recordId); } catch (e) {}
+    location.href = 'meridian.html';
   } else if (entry.type === 'drleg-start' || entry.type === 'drleg-end') {
     location.href = 'drleg.html#leg=' + encodeURIComponent(entry.recordId);
   }
 }
 
 function removeFromPassage(entry) {
-  var storage = entry.type === 'sight' ? SightStorage : entry.type === 'fix' ? FixStorage : DrLegStorage;
+  var storage = entry.type === 'sight' ? SightStorage : entry.type === 'fix' ? FixStorage : entry.type === 'meridian' ? MeridianStorage : DrLegStorage;
   storage.setPassageId(entry.recordId, null).then(function () {
     return PassageStorage.refreshDates(currentPassage.id);
   }).then(function (updated) {
@@ -574,11 +585,19 @@ function refreshAvailableRecords() {
   PassageStorage.getUnassignedRecords().then(function (records) {
     if (myToken !== passageRenderToken) return;
 
-    renderAvailableList('availableSightsList', 'availableSightsEmpty', records.sights, sightSummary, function (record) {
+    // Excludes internal records (currently: Meridian Passage's own Fix
+    // mirror -- see storage.js's save()) -- it isn't a Sight the user
+    // created, so it shouldn't be independently assignable to a Passage.
+    var sights = records.sights.filter(function (r) { return !r.internal; });
+
+    renderAvailableList('availableSightsList', 'availableSightsEmpty', sights, sightSummary, function (record) {
       assignToPassage(SightStorage, record.id, 'sight');
     });
     renderAvailableList('availableFixesList', 'availableFixesEmpty', records.fixes, fixSummary, function (record) {
       assignToPassage(FixStorage, record.id, 'fix');
+    });
+    renderAvailableList('availableMeridiansList', 'availableMeridiansEmpty', records.meridians, meridianSummary, function (record) {
+      assignToPassage(MeridianStorage, record.id, 'Meridian Passage sight');
     });
     renderAvailableList('availableLegsList', 'availableLegsEmpty', records.drLegs, function (r) { return r.name; }, function (record) {
       assignToPassage(DrLegStorage, record.id, 'DR leg');

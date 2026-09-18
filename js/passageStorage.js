@@ -2,18 +2,20 @@
  * passageStorage.js
  * A Passage's own record is deliberately small: {id, name, notes,
  * startingPosition, startedAt, endedAt, createdAt}. It does NOT hold a list
- * of member ids. Membership lives entirely on each Sight/Fix/DrLeg's own
- * passageId field (added to their respective storage modules alongside
- * this file) -- a Passage's members are found by querying for that field,
- * not by maintaining a second, separate list that could drift out of sync
- * with what those records actually say about themselves.
+ * of member ids. Membership lives entirely on each Sight/Fix/DrLeg/Meridian
+ * Passage sight's own passageId field (added to their respective storage
+ * modules alongside this file) -- a Passage's members are found by
+ * querying for that field, not by maintaining a second, separate list that
+ * could drift out of sync with what those records actually say about
+ * themselves.
  *
  * That's possible in the first place because every candidate record already
- * carries its own timestamp (a Sight's observationTime, a Fix's
- * resolvedPosition.time, a DR Leg's start/endPosition.time -- a DR Leg has
- * two, since it represents an interval, not an instant; see
- * getPassageTimeline's own comment) -- chronological order is therefore a
- * query (sort by time), not something that needs its own storage.
+ * carries its own timestamp (a Sight's or Meridian Passage sight's
+ * observationTime, a Fix's resolvedPosition.time, a DR Leg's
+ * start/endPosition.time -- a DR Leg has two, since it represents an
+ * interval, not an instant; see getPassageTimeline's own comment) --
+ * chronological order is therefore a query (sort by time), not something
+ * that needs its own storage.
  * getPassageTimeline() below is exactly that query, computed fresh every
  * time it's called -- a VIEW over the other stores, not stored data of its
  * own.
@@ -121,36 +123,42 @@
   }
 
   /**
-   * Every Sight, Fix, and DR Leg belonging to this passage -- i.e. the
-   * membership query described in the file header. Returns
-   * { sights, fixes, drLegs }, each a plain array of full records.
+   * Every Sight, Fix, DR Leg, and Meridian Passage sight belonging to this
+   * passage -- i.e. the membership query described in the file header.
+   * Returns { sights, fixes, drLegs, meridians }, each a plain array of
+   * full records. Meridian Passage records live in their own module
+   * (meridianStorage.js) rather than SightStorage -- see its own header --
+   * but follow the exact same passageId membership convention, so they're
+   * queried the same way as every other record type here.
    */
   function getPassageRecords(passageId) {
     var belongsToThis = function (r) { return r.passageId === passageId; };
     return Promise.all([
       filteredRecords(global.SightStorage, belongsToThis),
       filteredRecords(global.FixStorage, belongsToThis),
-      filteredRecords(global.DrLegStorage, belongsToThis)
+      filteredRecords(global.DrLegStorage, belongsToThis),
+      filteredRecords(global.MeridianStorage, belongsToThis)
     ]).then(function (results) {
-      return { sights: results[0], fixes: results[1], drLegs: results[2] };
+      return { sights: results[0], fixes: results[1], drLegs: results[2], meridians: results[3] };
     });
   }
 
   /**
-   * Every Sight, Fix, and DR Leg NOT currently in any passage -- the pool
-   * available to assign to one. Same shape as getPassageRecords(). A record
-   * belongs to at most one Passage (see file header), so this is exactly
-   * "everyone eligible to be added, to any passage" system-wide, not scoped
-   * to a particular one.
+   * Every Sight, Fix, DR Leg, and Meridian Passage sight NOT currently in
+   * any passage -- the pool available to assign to one. Same shape as
+   * getPassageRecords(). A record belongs to at most one Passage (see file
+   * header), so this is exactly "everyone eligible to be added, to any
+   * passage" system-wide, not scoped to a particular one.
    */
   function getUnassignedRecords() {
     var isUnassigned = function (r) { return r.passageId === null || r.passageId === undefined; };
     return Promise.all([
       filteredRecords(global.SightStorage, isUnassigned),
       filteredRecords(global.FixStorage, isUnassigned),
-      filteredRecords(global.DrLegStorage, isUnassigned)
+      filteredRecords(global.DrLegStorage, isUnassigned),
+      filteredRecords(global.MeridianStorage, isUnassigned)
     ]).then(function (results) {
-      return { sights: results[0], fixes: results[1], drLegs: results[2] };
+      return { sights: results[0], fixes: results[1], drLegs: results[2], meridians: results[3] };
     });
   }
 
@@ -187,6 +195,9 @@
    *  - 'sight': results.observationTime -- skipped if the sight has never
    *    actually been reduced, since there's no real instant to place it at.
    *  - 'fix': resolvedPosition.time -- skipped if never resolved.
+   *  - 'meridian': results.observationTime, same convention as 'sight' --
+   *    skipped if the Meridian Passage sight has never been resolved to a
+   *    latitude.
    *  - 'drleg-start' / 'drleg-end': startPosition.time / endPosition.time
    *    respectively -- see above.
    *
@@ -205,7 +216,7 @@
    * start of the story) and Fix/Sight in between, arbitrarily but
    * deterministically ordered relative to each other.
    */
-  var TYPE_SORT_WEIGHT = { position: 0, 'drleg-end': 1, fix: 2, sight: 2, 'drleg-start': 3 };
+  var TYPE_SORT_WEIGHT = { position: 0, 'drleg-end': 1, fix: 2, sight: 2, meridian: 2, 'drleg-start': 3 };
 
   function getPassageTimeline(passageId) {
     return Promise.all([get(passageId), getPassageRecords(passageId)]).then(function (results) {
@@ -224,6 +235,11 @@
       records.fixes.forEach(function (f) {
         if (f.resolvedPosition && f.resolvedPosition.time) {
           entries.push({ type: 'fix', time: f.resolvedPosition.time, recordId: f.id });
+        }
+      });
+      records.meridians.forEach(function (m) {
+        if (m.results && m.results.observationTime) {
+          entries.push({ type: 'meridian', time: m.results.observationTime, recordId: m.id });
         }
       });
       records.drLegs.forEach(function (leg) {
