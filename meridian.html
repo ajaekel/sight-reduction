@@ -217,46 +217,31 @@
 
     <div class="form-group" style="margin-top: 12px;">
       <div class="sub-title">SUN DECLINATION</div>
+      <p class="cache-blurb" style="margin-top:0;">
+        Nearest UTC hour to the observation -- the Sun's declination barely moves within an hour,
+        so no interpolation is needed here (unlike Section 3 on the New Sight page).
+      </p>
       <div class="almanac-table">
-        <div class="almanac-header-row" style="grid-template-columns: 1fr 1fr;">
-          <div class="col-header-box almanac-col-border">
-            <span class="col-time"><span class="lblBaseHour">0</span>h UTC, <span class="lblBaseDate">Jun 2</span></span>
-            <span class="col-sub">Base (Deg / Min)</span>
-          </div>
+        <div class="almanac-header-row" style="grid-template-columns: 1fr;">
           <div class="col-header-box">
-            <span class="col-time"><span class="lblNextHour">1</span>h UTC, <span class="lblNextDate">Jun 2</span></span>
-            <span class="col-sub">Next (Deg / Min)</span>
+            <span class="col-time"><span class="lblHour">0</span>h UTC, <span class="lblDate">Jun 2</span></span>
+            <span class="col-sub">Closest hour (Deg / Min)</span>
           </div>
         </div>
 
         <div class="almanac-row-block">
           <div class="side-label">Declination <span style="font-size:0.75rem; color:#888;">(Deg / Min / N-S)</span></div>
-          <div class="almanac-inputs-grid">
-            <div class="almanac-col-border">
-              <div class="input-row input-row-3">
-                <input type="text" inputmode="decimal" class="deg-box" id="decBaseDeg" placeholder="15" onfocus="this.select()">
-                <input type="text" inputmode="decimal" class="min-box" id="decBaseMin" placeholder="00.0" onfocus="this.select()">
-                <select id="decBaseNS" class="select-compact">
-                  <option value="N">N</option>
-                  <option value="S">S</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <div class="input-row input-row-3">
-                <input type="text" inputmode="decimal" class="deg-box" id="decNextDeg" placeholder="15" onfocus="this.select()">
-                <input type="text" inputmode="decimal" class="min-box" id="decNextMin" placeholder="01.2" onfocus="this.select()">
-                <select id="decNextNS" class="select-compact">
-                  <option value="N">N</option>
-                  <option value="S">S</option>
-                </select>
-              </div>
-            </div>
+          <div class="input-row input-row-3">
+            <input type="text" inputmode="decimal" class="deg-box" id="decDeg" placeholder="15" onfocus="this.select()">
+            <input type="text" inputmode="decimal" class="min-box" id="decMin" placeholder="00.0" onfocus="this.select()">
+            <select id="decNS" class="select-compact">
+              <option value="N">N</option>
+              <option value="S">S</option>
+            </select>
           </div>
         </div>
       </div>
-      <div class="error-msg" id="errDecBase"></div>
-      <div class="error-msg" id="errDecNext"></div>
+      <div class="error-msg" id="errDec"></div>
     </div>
   </div>
 

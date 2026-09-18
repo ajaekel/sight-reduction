@@ -287,6 +287,36 @@
     });
   }
 
+  /**
+   * Single-hour versions of getAlmanacFillWithCache/getAlmanacFillFromCacheOnly,
+   * for a caller (Meridian Passage) that only needs the value at the
+   * NEAREST almanac hour, not interpolated between two bracketing ones --
+   * see calc.js's reduceMeridianSight for why that's correct here (the
+   * Sun's declination barely moves within an hour). Reuses assembleFill
+   * with the SAME data map passed as both "base" and "next" -- harmless,
+   * since interpolating a value with itself just returns that value -- so
+   * exactly one cache lookup / one live fetch happens for this hour, never
+   * two.
+   */
+  function getAlmanacFillWithCacheSingleHour(body, hourUtcDate, latDecimal, lonDecimal) {
+    return global.AlmanacCache.getHour(hourUtcDate).then(function (cached) {
+      var mapPromise = cached ? Promise.resolve(cached) : fetchCelnavAt(hourUtcDate, latDecimal, lonDecimal).then(function (raw) {
+        var map = normalizeUsnoData(raw);
+        return global.AlmanacCache.setHour(hourUtcDate, map).catch(function () {}).then(function () { return map; });
+      });
+      return mapPromise.then(function (map) {
+        return { fill: assembleFill(body, map, map), fromCache: !!cached };
+      });
+    });
+  }
+
+  function getAlmanacFillFromCacheOnlySingleHour(body, hourUtcDate) {
+    return global.AlmanacCache.getHour(hourUtcDate).then(function (map) {
+      if (!map) return null;
+      return { fill: assembleFill(body, map, map), fromCache: true };
+    });
+  }
+
   var REQUEST_DELAY_MS = 200;          // polite pacing between consecutive requests in a batch
   var MAX_RETRIES_PER_HOUR = 2;        // for transient (5xx/timeout/network) failures
   var RETRY_BACKOFF_MS = 1000;
@@ -459,6 +489,8 @@
     fetchAlmanacFill: fetchAlmanacFill,
     getAlmanacFillWithCache: getAlmanacFillWithCache,
     getAlmanacFillFromCacheOnly: getAlmanacFillFromCacheOnly,
+    getAlmanacFillWithCacheSingleHour: getAlmanacFillWithCacheSingleHour,
+    getAlmanacFillFromCacheOnlySingleHour: getAlmanacFillFromCacheOnlySingleHour,
     fetchRiseSetTransit: fetchRiseSetTransit,
     fetchAndCacheRange: fetchAndCacheRange,
     assembleFill: assembleFill,             // exported for unit testing

@@ -205,17 +205,11 @@ function initApp() {
     refreshLiveCalculations();
   });
 
-  var errDecBase = document.getElementById('errDecBase');
-  var errDecNext = document.getElementById('errDecNext');
-  var validateDecBase = function () { validateDegMinPair(document.getElementById('decBaseDeg'), document.getElementById('decBaseMin'), 90, 'Declination Base', errDecBase); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
-  var validateDecNext = function () { validateDegMinPair(document.getElementById('decNextDeg'), document.getElementById('decNextMin'), 90, 'Declination Next', errDecNext); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
-  document.getElementById('decBaseDeg').addEventListener('input', validateDecBase);
-  document.getElementById('decBaseMin').addEventListener('input', validateDecBase);
-  document.getElementById('decNextDeg').addEventListener('input', validateDecNext);
-  document.getElementById('decNextMin').addEventListener('input', validateDecNext);
-  ['decBaseNS', 'decNextNS'].forEach(function (id) {
-    document.getElementById(id).addEventListener('change', function () { markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); });
-  });
+  var errDec = document.getElementById('errDec');
+  var validateDec = function () { validateDegMinPair(document.getElementById('decDeg'), document.getElementById('decMin'), 90, 'Declination', errDec); markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); };
+  document.getElementById('decDeg').addEventListener('input', validateDec);
+  document.getElementById('decMin').addEventListener('input', validateDec);
+  document.getElementById('decNS').addEventListener('change', function () { markAlmanacFieldsManuallyEdited(); refreshLiveCalculations(); });
 
   renderSavedMeridianList();
   refreshLiveCalculations();
@@ -351,22 +345,45 @@ function currentUtcContext() {
   return { baseUtcDate: baseUtcDate, avgUtcSec: avgUtcSec, localSec: localSec };
 }
 
-function updateAlmanacHourLabels(baseUtcDate) {
-  if (!baseUtcDate || isNaN(baseUtcDate.getTime())) return;
-  var hourFloor = new Date(baseUtcDate.getTime());
-  hourFloor.setUTCMinutes(0, 0, 0);
-  var baseHour = hourFloor.getUTCHours();
-  var nextUtcDate = new Date(hourFloor.getTime() + 3600 * 1000);
-  var nextHour = nextUtcDate.getUTCHours();
+/**
+ * The single UTC almanac hour Section 3 looks up -- nearest to the
+ * observation instant, not the bracketing floor hour reduceSight's
+ * interpolation would use (see calc.js's reduceMeridianSight: no
+ * interpolation here, the Sun's declination barely moves within an hour).
+ * Rounding the raw milliseconds (rather than seconds-of-day) handles an
+ * hour/day rollover as ordinary arithmetic, same reasoning as
+ * SightCalc.roundUpToMinuteMs.
+ */
+function closestUtcHour(utcDate) {
+  var hourMs = 3600 * 1000;
+  return new Date(Math.round(utcDate.getTime() / hourMs) * hourMs);
+}
 
+/**
+ * Rough estimate (ignoring the equation of time, accurate to within a few
+ * degrees -- plenty for this purpose) of the sub-solar point's longitude
+ * at a given UTC instant: the Sun transits the Greenwich meridian near UTC
+ * 12:00 and appears to drift west about 15°/hour from there. Used only
+ * as a fallback coordinate for onFetchUsno's live USNO lookup when no real
+ * position has been handed off -- paired with latitude 0, it keeps the Sun
+ * close to zenith wherever it points, so the API reports it as visible
+ * (see onFetchUsno's own comment on why that matters). Never shown to the
+ * user or treated as this sight's actual position.
+ */
+function estimateSubsolarLon(utcDate) {
+  var utcHours = utcDate.getUTCHours() + utcDate.getUTCMinutes() / 60;
+  var lon = (12 - utcHours) * 15;
+  return ((lon + 180) % 360 + 360) % 360 - 180;
+}
+
+function updateAlmanacHourLabel(hourUtcDate) {
+  if (!hourUtcDate || isNaN(hourUtcDate.getTime())) return;
   var options = { month: 'short', day: 'numeric', timeZone: 'UTC' };
-  var baseDateStr = hourFloor.toLocaleDateString('en-US', options);
-  var nextDateStr = nextUtcDate.toLocaleDateString('en-US', options);
+  var hour = hourUtcDate.getUTCHours();
+  var dateStr = hourUtcDate.toLocaleDateString('en-US', options);
 
-  document.querySelectorAll('.lblBaseHour').forEach(function (el) { el.innerText = baseHour; });
-  document.querySelectorAll('.lblNextHour').forEach(function (el) { el.innerText = nextHour; });
-  document.querySelectorAll('.lblBaseDate').forEach(function (el) { el.innerText = baseDateStr; });
-  document.querySelectorAll('.lblNextDate').forEach(function (el) { el.innerText = nextDateStr; });
+  document.querySelectorAll('.lblHour').forEach(function (el) { el.innerText = hour; });
+  document.querySelectorAll('.lblDate').forEach(function (el) { el.innerText = dateStr; });
 }
 
 // ---------------------------------------------------------------------
@@ -396,8 +413,7 @@ function collectFormState() {
       clockErrorSec: num('clockErrorSec'), clockErrorDirection: _clockErrorDirection
     },
     almanac: {
-      decBaseDeg: num('decBaseDeg'), decBaseMin: num('decBaseMin'), decBaseNS: g('decBaseNS').value,
-      decNextDeg: num('decNextDeg'), decNextMin: num('decNextMin'), decNextNS: g('decNextNS').value
+      decDeg: num('decDeg'), decMin: num('decMin'), decNS: g('decNS').value
     },
     mirrorSightId: _currentMirrorSightId,
     mirrorLon: _handoffLon
@@ -432,8 +448,7 @@ function applyFormState(state) {
   setClockErrorDirection(c.clockErrorDirection === 'slow' ? 'slow' : 'fast');
 
   var a = state.almanac || {};
-  setVal('decBaseDeg', a.decBaseDeg); setVal('decBaseMin', a.decBaseMin); setVal('decBaseNS', a.decBaseNS || 'N');
-  setVal('decNextDeg', a.decNextDeg); setVal('decNextMin', a.decNextMin); setVal('decNextNS', a.decNextNS || 'N');
+  setVal('decDeg', a.decDeg); setVal('decMin', a.decMin); setVal('decNS', a.decNS || 'N');
 
   _handoffLon = (state.mirrorLon !== undefined) ? state.mirrorLon : null;
   _currentMirrorSightId = state.mirrorSightId || null;
@@ -474,7 +489,7 @@ function updateObservationSummary() {
   document.getElementById('computedHa').innerText = SightCalc.formatDegMin(ha);
   document.getElementById('computedHo').innerText = SightCalc.formatDegMin(ho);
 
-  updateAlmanacHourLabels(ctx.baseUtcDate);
+  updateAlmanacHourLabel(closestUtcHour(ctx.baseUtcDate));
 }
 
 function resetObservationDisplay() {
@@ -486,7 +501,7 @@ function resetObservationDisplay() {
 }
 
 function getAlmanacFieldIds() {
-  return ['decBaseDeg', 'decBaseMin', 'decNextDeg', 'decNextMin'];
+  return ['decDeg', 'decMin'];
 }
 
 function almanacFieldsAnyFilled() {
@@ -496,9 +511,7 @@ function almanacFieldsAnyFilled() {
 function currentAlmanacContextKey() {
   var ctx = currentUtcContext();
   if (!ctx) return null;
-  var hourFloor = new Date(ctx.baseUtcDate.getTime());
-  hourFloor.setUTCMinutes(0, 0, 0);
-  return 'sun|' + hourFloor.toISOString();
+  return 'sun|' + closestUtcHour(ctx.baseUtcDate).toISOString();
 }
 
 function getAlmanacFetchReadiness() {
@@ -557,11 +570,9 @@ function tryAutoFillAlmanacFromCache() {
   }
 
   var ctx = currentUtcContext();
-  var hourFloor = new Date(ctx.baseUtcDate.getTime());
-  hourFloor.setUTCMinutes(0, 0, 0);
-  var nextUtcDate = new Date(hourFloor.getTime() + 3600 * 1000);
+  var hourDate = closestUtcHour(ctx.baseUtcDate);
 
-  SightUsno.getAlmanacFillFromCacheOnly({ type: 'sun', name: null }, hourFloor, nextUtcDate)
+  SightUsno.getAlmanacFillFromCacheOnlySingleHour({ type: 'sun', name: null }, hourDate)
     .then(function (result) {
       if (!getAlmanacFetchReadiness()) return;
 
@@ -613,10 +624,10 @@ function tryAutoFillAlmanacFromCache() {
 /** Defaults Sun Bears from an incoming DR/Fix handoff latitude compared against declination -- see reduceMeridianSight's comment. Never overrides a choice the user (or a loaded record) already made. */
 function maybeSetSunBearsDefault() {
   if (_sunBearsUserTouched || _handoffApLat === null) return;
-  var degVal = document.getElementById('decBaseDeg').value;
+  var degVal = document.getElementById('decDeg').value;
   if (degVal.trim() === '') return;
-  var dec = SightCalc.dmToDecimal(parseFloat(degVal) || 0, parseFloat(document.getElementById('decBaseMin').value) || 0);
-  if (document.getElementById('decBaseNS').value === 'S') dec = -dec;
+  var dec = SightCalc.dmToDecimal(parseFloat(degVal) || 0, parseFloat(document.getElementById('decMin').value) || 0);
+  if (document.getElementById('decNS').value === 'S') dec = -dec;
   document.getElementById('sunBears').value = (dec < _handoffApLat) ? 'S' : 'N';
 }
 
@@ -629,16 +640,12 @@ function tryAutoCalculateReduction() {
   var hs = SightCalc.dmToDecimal(parseFloat(document.getElementById('meridianHsDeg').value) || 0, parseFloat(document.getElementById('meridianHsMin').value) || 0);
   var ho = SightCalc.computeHo(hs, collectCorrections());
   var ctx = currentUtcContext();
-  var utcFractionOfHour = (ctx.avgUtcSec % 3600) / 3600;
 
-  var decBase = SightCalc.dmToDecimal(parseFloat(document.getElementById('decBaseDeg').value) || 0, parseFloat(document.getElementById('decBaseMin').value) || 0);
-  if (document.getElementById('decBaseNS').value === 'S') decBase = -decBase;
-  var decNext = SightCalc.dmToDecimal(parseFloat(document.getElementById('decNextDeg').value) || 0, parseFloat(document.getElementById('decNextMin').value) || 0);
-  if (document.getElementById('decNextNS').value === 'S') decNext = -decNext;
+  var dec = SightCalc.dmToDecimal(parseFloat(document.getElementById('decDeg').value) || 0, parseFloat(document.getElementById('decMin').value) || 0);
+  if (document.getElementById('decNS').value === 'S') dec = -dec;
 
   var result = SightCalc.reduceMeridianSight({
-    nonStar: { decBase: decBase, decNext: decNext },
-    utcFractionOfHour: utcFractionOfHour,
+    dec: dec,
     ho: ho,
     sunBearsSouth: document.getElementById('sunBears').value === 'S'
   });
@@ -649,7 +656,7 @@ function tryAutoCalculateReduction() {
   var obsUtcDate = new Date(ctx.baseUtcDate.getTime());
 
   _lastResult = {
-    interpolatedDec: result.interpolatedDec,
+    dec: result.dec,
     zenithDistance: result.zenithDistance,
     latitude: result.latitude,
     ho: ho,
@@ -666,9 +673,13 @@ function refreshLiveCalculations() {
 }
 
 // ---------------------------------------------------------------------
-// USNO AUTOFILL (declination only -- see usno.js: GHA/Dec are geocentric,
-// position-independent, so this reuses the exact same cache/fetch plumbing
-// as New Sight, just applying only the Declination half of the fill)
+// USNO AUTOFILL (declination only -- see usno.js: GHA/Dec themselves are
+// geocentric/position-independent, so this reuses the exact same cache/
+// fetch plumbing as New Sight, just applying only the Declination half of
+// the fill -- but see onFetchUsno's own comment: a LIVE fetch still needs a
+// real position, since the API can omit a body below the horizon there,
+// and AlmanacCache's hour-only key means a bad fetch at a fabricated
+// position would silently poison that hour for every other page too)
 // ---------------------------------------------------------------------
 
 function setUsnoStatus(msg, kind) {
@@ -695,8 +706,7 @@ function fillDegMin(degId, minId, signId, decimalDeg, signValue) {
 }
 
 function applyUsnoFill(fill) {
-  fillDegMin('decBaseDeg', 'decBaseMin', 'decBaseNS', fill.decBaseDeg, fill.decBaseSign);
-  fillDegMin('decNextDeg', 'decNextMin', 'decNextNS', fill.decNextDeg, fill.decNextSign);
+  fillDegMin('decDeg', 'decMin', 'decNS', fill.decBaseDeg, fill.decBaseSign);
   _almanacFieldsContext = currentAlmanacContextKey();
   refreshLiveCalculations();
 }
@@ -714,27 +724,33 @@ function onFetchUsno() {
   }
 
   var ctx = currentUtcContext();
-  var hourFloor = new Date(ctx.baseUtcDate.getTime());
-  hourFloor.setUTCMinutes(0, 0, 0);
-  var nextUtcDate = new Date(hourFloor.getTime() + 3600 * 1000);
+  var hourDate = closestUtcHour(ctx.baseUtcDate);
 
   btn.disabled = true;
   setUsnoStatus('Checking cache…', 'loading');
 
-  // GHA/Dec are geocentric (see usno.js) -- coords are a required API param
-  // but don't affect the returned declination, so a handed-off DR/Fix
-  // position is used opportunistically and 0,0 otherwise; never shown or
-  // treated as this sight's own position.
+  // The coords param is required by the USNO API, but unlike GHA/Dec
+  // themselves (geocentric, truly position-independent), the API appears
+  // to OMIT a body's almanac_data entirely when it's below the horizon AT
+  // THE QUERIED COORDS -- so an arbitrary fallback like (0,0) risks a live
+  // fetch legitimately coming back without Sun there, which then gets
+  // cached under AlmanacCache's hour-only key (no position component) and
+  // silently poisons every OTHER page's lookup of that same UTC hour, at
+  // whatever real position they're actually at. A handed-off DR/Fix
+  // position is used when available; otherwise latitude 0 paired with the
+  // Sun's own approximate sub-solar longitude at this instant (see
+  // estimateSubsolarLon) keeps the Sun close to zenith wherever this
+  // points -- comfortably above the horizon -- without ever requiring a
+  // real position, which a Meridian Passage sight has no other need for.
   var lat = _handoffApLat !== null ? _handoffApLat : 0;
-  var lon = _handoffLon !== null ? _handoffLon : 0;
+  var lon = _handoffLon !== null ? _handoffLon : estimateSubsolarLon(hourDate);
 
-  SightUsno.getAlmanacFillWithCache({ type: 'sun', name: null }, hourFloor, nextUtcDate, lat, lon)
+  SightUsno.getAlmanacFillWithCacheSingleHour({ type: 'sun', name: null }, hourDate, lat, lon)
     .then(function (result) {
       applyUsnoFill(result.fill);
       var msg = 'Filled declination ' + (result.fromCache ? 'from cache' : 'from USNO') + ' for hour ' +
-        String(hourFloor.getUTCHours()).padStart(2, '0') + '–' +
-        String(nextUtcDate.getUTCHours()).padStart(2, '0') + 'z on ' +
-        hourFloor.toISOString().split('T')[0] + '.';
+        String(hourDate.getUTCHours()).padStart(2, '0') + 'z on ' +
+        hourDate.toISOString().split('T')[0] + '.';
       setUsnoStatus(msg, 'ok');
       showToast('Almanac data filled' + (result.fromCache ? ' (from cache).' : '.'));
     })

@@ -17,9 +17,11 @@
  *
  * Shape: { id, schemaVersion, savedAt, title, notes, date, body,
  *   tzOffset, time: {h, m}, hs: {deg, min}, corrections, sunBearsSouth,
- *   almanac: {decBaseDeg, decBaseMin, decBaseNS, decNextDeg, decNextMin,
- *   decNextNS}, results: {interpolatedDec, zenithDistance, latitude, ho,
- *   observationTime} | null, mirrorSightId, mirrorLon }
+ *   almanac: {decDeg, decMin, decNS} -- the NEAREST UTC hour's declination,
+ *   not interpolated between two bracketing hours (see calc.js's
+ *   reduceMeridianSight for why that's correct here), results:
+ *   {dec, zenithDistance, latitude, ho, observationTime} | null,
+ *   mirrorSightId, mirrorLon }
  *
  * mirrorSightId/mirrorLon: bookkeeping for "Add to a Fix", triggerable both
  * from meridian.js's own page and from fixes.js's "Add a Meridian Passage"
@@ -191,16 +193,22 @@
         addAltCorrMin: record.corrections.addAltCorrMin, addAltCorrSign: record.corrections.addAltCorrSign,
         clockErrorSec: record.corrections.clockErrorSec, clockErrorDirection: record.corrections.clockErrorDirection
       },
+      // A real Sight's almanac shape is always a base/next pair for
+      // interpolation (see calc.js's reduceSight) -- this mirror has only
+      // one nearest-hour declination (see this module's own header), so
+      // the same value fills both slots. Zero-width interpolation of a
+      // value with itself just returns that value, so this is a purely
+      // structural adapter, not a precision change.
       almanac: {
         nonStar: {
           ghaBaseDeg: 0, ghaBaseMin: 0, ghaNextDeg: 0, ghaNextMin: 0,
-          decBaseDeg: record.almanac.decBaseDeg, decBaseMin: record.almanac.decBaseMin, decBaseNS: record.almanac.decBaseNS,
-          decNextDeg: record.almanac.decNextDeg, decNextMin: record.almanac.decNextMin, decNextNS: record.almanac.decNextNS
+          decBaseDeg: record.almanac.decDeg, decBaseMin: record.almanac.decMin, decBaseNS: record.almanac.decNS,
+          decNextDeg: record.almanac.decDeg, decNextMin: record.almanac.decMin, decNextNS: record.almanac.decNS
         }
       },
       results: {
         interpolatedGha: 0,
-        interpolatedDec: result.interpolatedDec,
+        interpolatedDec: result.dec,
         lha: 0,
         hc: result.ho,
         zn: zn,

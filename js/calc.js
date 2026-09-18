@@ -389,10 +389,17 @@
    * the sight, so it's supplied directly as sunBearsSouth rather than
    * derived here.
    *
+   * Deliberately NOT interpolated between two bracketing almanac hours the
+   * way reduceSight's LHA/Hc calculation is: the Sun's declination moves at
+   * most about 1' per hour, so the nearest tabulated hour is already well
+   * within the precision this method (and a hand sextant reading) supports
+   * -- interpolating it would be spurious precision, not real accuracy.
+   * The caller (meridian.js) is responsible for picking the nearest hour's
+   * value; this function just uses whatever declination it's given as-is.
+   *
    * input = {
-   *   nonStar: { decBase, decNext } -- signed decimal degrees, same shape
-   *     reduceSight's non-star path uses,
-   *   utcFractionOfHour: 0..1,
+   *   dec: signed decimal degrees -- declination at the nearest almanac
+   *     hour to the observation, N positive,
    *   ho: decimal degrees, already-corrected Observed Altitude,
    *   sunBearsSouth: boolean -- true if the Sun bore south of the
    *     observer at meridian passage (equivalent to declination < the
@@ -400,16 +407,15 @@
    *     north.
    * }
    *
-   * Returns { interpolatedDec, zenithDistance, latitude }
+   * Returns { dec, zenithDistance, latitude }
    */
   function reduceMeridianSight(input) {
-    var ns = input.nonStar;
-    var interpolatedDec = interpolateLinear(ns.decBase, ns.decNext, input.utcFractionOfHour);
+    var dec = input.dec;
     var zenithDistance = 90 - input.ho;
-    var latitude = input.sunBearsSouth ? (zenithDistance + interpolatedDec) : (interpolatedDec - zenithDistance);
+    var latitude = input.sunBearsSouth ? (zenithDistance + dec) : (dec - zenithDistance);
 
     return {
-      interpolatedDec: interpolatedDec,
+      dec: dec,
       zenithDistance: zenithDistance,
       latitude: latitude
     };
