@@ -181,9 +181,9 @@
           <label>IE (Min / On-Off Arc)</label>
           <div class="input-row">
             <input type="text" inputmode="decimal" id="ieMin" placeholder="2.0" value="0.0" onfocus="this.select()">
-            <select id="ieSign">
-              <option value="on">On the Arc (-)</option>
-              <option value="off">Off the Arc (+)</option>
+            <select id="ieSign" class="select-compact">
+              <option value="on">On (-)</option>
+              <option value="off">Off (+)</option>
             </select>
           </div>
         </div>
@@ -196,15 +196,16 @@
           </div>
         </div>
         <div class="body-inline-col" id="dipAutoCol" style="display:none;">
-          <label>Height of Eye (always &minus;)</label>
+          <label>Height of Eye</label>
           <div class="input-row">
-            <input type="text" inputmode="decimal" id="heightEyeValue" placeholder="9" onfocus="this.select()">
-            <select id="heightEyeUnit">
+            <input type="text" inputmode="decimal" id="heightEyeValue" class="narrow-input" placeholder="9" onfocus="this.select()">
+            <select id="heightEyeUnit" class="select-compact">
               <option value="ft">ft</option>
               <option value="m">m</option>
             </select>
+            <label style="font-size: 0.75rem; color: #aaa; margin: 0 2px 0 6px;">Dip</label>
+            <input type="text" id="computedDipDisplay" class="narrow-input" value="--.-'" disabled>
           </div>
-          <label style="font-size: 0.7rem; margin-top: 2px;">Computed Dip: <span id="computedDipDisplay">--.-'</span></label>
         </div>
       </div>
     </div>
@@ -213,11 +214,12 @@
       <div><strong>H (Apparent Altitude):</strong> <span id="computedHa">--&deg; --.-'</span></div>
     </div>
 
-    <!-- 2. Alt Corr (refraction + semi-diameter) -->
-    <div class="form-group" id="altCorrManualGroup">
+    <!-- 2. Altitude Correction (refraction + semi-diameter, where applicable -- always relevant, never hidden) -->
+    <div class="form-group">
       <div class="body-inline-row">
         <div class="body-inline-col almanac-col-border">
-          <label>Alt Corr (Min / +/-)</label>
+          <label class="composition-label">Refraction, and semi-diameter where applicable</label>
+          <label>Altitude Correction (Min / +/-)</label>
           <div class="input-row">
             <input type="text" inputmode="decimal" id="altCorrMin" placeholder="12.4" value="0.0" onfocus="this.select()">
             <select id="altCorrSign">
@@ -225,22 +227,13 @@
               <option value="-">-</option>
             </select>
           </div>
+          <div class="error-msg" id="altCorrAutoNote" style="display:none;"></div>
         </div>
-        <div class="body-inline-col" id="altCorrLimbReminderCol" style="display:none;">
-          <label>Limb (from Section 1)</label>
-          <div class="cache-summary-text" id="altCorrLimbReminder" style="margin-top: 6px;">--</div>
-        </div>
-      </div>
-    </div>
-    <div class="form-group" id="altCorrAutoGroup" style="display:none;">
-      <div class="cache-summary-text" id="altCorrAutoBreakdown">--</div>
-    </div>
 
-    <!-- 3. Add'l Corr (horizontal/altitude parallax) -- Moon and Venus only -->
-    <div class="form-group" id="addAltCorrCard" style="display:none;">
-      <div class="body-inline-row" id="addAltCorrManualRow">
-        <div class="body-inline-col">
-          <label>Add'l Corr (Min / +/-)</label>
+        <!-- 3. Additional Alt Corr (horizontal/altitude parallax) -- Moon and Venus only -->
+        <div class="body-inline-col" id="addAltCorrCol" style="display:none;">
+          <label class="composition-label">Parallax, where applicable</label>
+          <label>Additional Alt Corr (Min / +/-)</label>
           <div class="input-row">
             <input type="text" inputmode="decimal" id="addAltCorrMin" placeholder="0.2" value="0.0" onfocus="this.select()">
             <select id="addAltCorrSign">
@@ -248,9 +241,9 @@
               <option value="-">-</option>
             </select>
           </div>
+          <div class="error-msg" id="addAltCorrAutoNote" style="display:none;"></div>
         </div>
       </div>
-      <div class="cache-summary-text" id="addAltCorrAutoDisplay" style="display:none;">--</div>
     </div>
 
     <!-- 4. Moon Upper-Limb Correction -- manual mode, Moon + upper limb only -->

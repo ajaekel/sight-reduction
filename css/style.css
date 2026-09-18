@@ -329,6 +329,28 @@ label {
   gap: 4px;
 }
 
+/* A short numeric field that shouldn't stretch to fill its .input-row the
+   way most fields here deliberately do (e.g. Height of Eye, its computed
+   Dip readout) -- content-sized instead of flex:1. */
+.narrow-input {
+  flex: 0 0 56px;
+  width: 56px;
+  min-width: 0;
+  text-align: center;
+  padding: 8px 4px;
+  font-size: 0.92rem;
+}
+
+/* Small static caption above a corrections field explaining what it's
+   composed of (e.g. "Refraction, and semi-diameter where applicable"). */
+.composition-label {
+  font-weight: normal;
+  font-size: 0.75rem;
+  color: #aaa;
+  display: block;
+  margin-bottom: 2px;
+}
+
 
 input, select {
   background: #2a2a2a;
