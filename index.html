@@ -181,10 +181,14 @@
           <label>IE (Min / On-Off Arc)</label>
           <div class="input-row">
             <input type="text" inputmode="decimal" id="ieMin" placeholder="2.0" value="0.0" onfocus="this.select()">
-            <select id="ieSign" class="select-fit">
+            <select id="ieSign" style="display:none;">
               <option value="on">On (-)</option>
               <option value="off">Off (+)</option>
             </select>
+            <div class="method-picker" role="group" aria-label="Index Error sign">
+              <button type="button" class="method-btn" id="ieOnBtn" aria-pressed="true">On (-)</button>
+              <button type="button" class="method-btn" id="ieOffBtn" aria-pressed="false">Off (+)</button>
+            </div>
           </div>
         </div>
 
@@ -201,10 +205,14 @@
               <label>Height of Eye</label>
               <div class="input-row">
                 <input type="text" inputmode="decimal" id="heightEyeValue" class="narrow-input" placeholder="9" onfocus="this.select()">
-                <select id="heightEyeUnit" class="select-fit">
+                <select id="heightEyeUnit" style="display:none;">
                   <option value="ft">ft</option>
                   <option value="m">m</option>
                 </select>
+                <div class="method-picker" role="group" aria-label="Height of eye unit">
+                  <button type="button" class="method-btn" id="heightEyeFtBtn" aria-pressed="true">ft</button>
+                  <button type="button" class="method-btn" id="heightEyeMBtn" aria-pressed="false">m</button>
+                </div>
               </div>
             </div>
             <div class="body-inline-col">
@@ -229,10 +237,14 @@
           <label>Altitude Correction (Min / +/-)</label>
           <div class="input-row">
             <input type="text" inputmode="decimal" id="altCorrMin" placeholder="12.4" value="0.0" onfocus="this.select()">
-            <select id="altCorrSign">
+            <select id="altCorrSign" style="display:none;">
               <option value="+">+</option>
               <option value="-">-</option>
             </select>
+            <div class="method-picker" role="group" aria-label="Altitude Correction sign">
+              <button type="button" class="method-btn" id="altCorrPlusBtn" aria-pressed="true">+</button>
+              <button type="button" class="method-btn" id="altCorrMinusBtn" aria-pressed="false">&minus;</button>
+            </div>
           </div>
           <div class="error-msg" id="altCorrAutoNote" style="display:none;"></div>
         </div>
@@ -243,10 +255,14 @@
           <label>Additional Alt Corr (Min / +/-)</label>
           <div class="input-row">
             <input type="text" inputmode="decimal" id="addAltCorrMin" placeholder="0.2" value="0.0" onfocus="this.select()">
-            <select id="addAltCorrSign">
+            <select id="addAltCorrSign" style="display:none;">
               <option value="+">+</option>
               <option value="-">-</option>
             </select>
+            <div class="method-picker" role="group" aria-label="Additional Alt Corr sign">
+              <button type="button" class="method-btn" id="addAltCorrPlusBtn" aria-pressed="true">+</button>
+              <button type="button" class="method-btn" id="addAltCorrMinusBtn" aria-pressed="false">&minus;</button>
+            </div>
           </div>
           <div class="error-msg" id="addAltCorrAutoNote" style="display:none;"></div>
         </div>

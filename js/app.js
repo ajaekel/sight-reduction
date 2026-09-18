@@ -166,10 +166,16 @@ function initApp() {
 
   document.getElementById('corrModeManual').addEventListener('click', function () { setCorrectionsMode('manual'); });
   document.getElementById('corrModeAuto').addEventListener('click', function () { setCorrectionsMode('auto'); });
-  ['heightEyeValue', 'heightEyeUnit'].forEach(function (id) {
-    document.getElementById(id).addEventListener('input', refreshLiveCalculations);
-    document.getElementById(id).addEventListener('change', refreshLiveCalculations);
-  });
+  document.getElementById('heightEyeValue').addEventListener('input', refreshLiveCalculations);
+
+  document.getElementById('ieOnBtn').addEventListener('click', function () { setToggleUI('ieSign', 'ieOnBtn', 'on', 'ieOffBtn', 'on'); refreshLiveCalculations(); });
+  document.getElementById('ieOffBtn').addEventListener('click', function () { setToggleUI('ieSign', 'ieOnBtn', 'on', 'ieOffBtn', 'off'); refreshLiveCalculations(); });
+  document.getElementById('heightEyeFtBtn').addEventListener('click', function () { setToggleUI('heightEyeUnit', 'heightEyeFtBtn', 'ft', 'heightEyeMBtn', 'ft'); refreshLiveCalculations(); });
+  document.getElementById('heightEyeMBtn').addEventListener('click', function () { setToggleUI('heightEyeUnit', 'heightEyeFtBtn', 'ft', 'heightEyeMBtn', 'm'); refreshLiveCalculations(); });
+  document.getElementById('altCorrPlusBtn').addEventListener('click', function () { setToggleUI('altCorrSign', 'altCorrPlusBtn', '+', 'altCorrMinusBtn', '+'); refreshLiveCalculations(); });
+  document.getElementById('altCorrMinusBtn').addEventListener('click', function () { setToggleUI('altCorrSign', 'altCorrPlusBtn', '+', 'altCorrMinusBtn', '-'); refreshLiveCalculations(); });
+  document.getElementById('addAltCorrPlusBtn').addEventListener('click', function () { setToggleUI('addAltCorrSign', 'addAltCorrPlusBtn', '+', 'addAltCorrMinusBtn', '+'); refreshLiveCalculations(); });
+  document.getElementById('addAltCorrMinusBtn').addEventListener('click', function () { setToggleUI('addAltCorrSign', 'addAltCorrPlusBtn', '+', 'addAltCorrMinusBtn', '-'); refreshLiveCalculations(); });
 
   document.getElementById('btnAddSight').addEventListener('click', function () {
     addObservationLine(true);
@@ -212,9 +218,10 @@ function initApp() {
   ['tzOffset', 'ieMin', 'dipMin', 'altCorrMin', 'addAltCorrMin'].forEach(function (id) {
     document.getElementById(id).addEventListener('input', refreshLiveCalculations);
   });
-  ['ieSign', 'altCorrSign', 'addAltCorrSign'].forEach(function (id) {
-    document.getElementById(id).addEventListener('change', refreshLiveCalculations);
-  });
+  // ieSign/altCorrSign/addAltCorrSign are now hidden value-holders behind
+  // method-picker button pairs (see setToggleUI) -- their own 'change'
+  // event never fires from user interaction, only the buttons' 'click'
+  // handlers above do, each already calling refreshLiveCalculations itself.
 
   // --- SECTION 1: AP POSITION VALIDATION ---
   var errLat = document.getElementById('errLat');
@@ -413,7 +420,8 @@ function updateCorrectionsVisibility() {
   // visible, still showing the computed value) rather than hiding them,
   // same treatment as the computed Dip readout.
   document.getElementById('altCorrMin').disabled = isAuto;
-  document.getElementById('altCorrSign').disabled = isAuto;
+  document.getElementById('altCorrPlusBtn').disabled = isAuto;
+  document.getElementById('altCorrMinusBtn').disabled = isAuto;
   if (!isAuto) document.getElementById('altCorrAutoNote').style.display = 'none';
 
   // 3. Additional Alt Corr -- Moon/Venus only, either mode; Automatic mode
@@ -422,7 +430,8 @@ function updateCorrectionsVisibility() {
   // used to -- Venus has no limb concept, so nothing shows there for it.
   document.getElementById('addAltCorrCol').style.display = needsAddl ? 'block' : 'none';
   document.getElementById('addAltCorrMin').disabled = isAuto;
-  document.getElementById('addAltCorrSign').disabled = isAuto;
+  document.getElementById('addAltCorrPlusBtn').disabled = isAuto;
+  document.getElementById('addAltCorrMinusBtn').disabled = isAuto;
   if (!isAuto || !needsAddl) document.getElementById('addAltCorrAutoNote').style.display = 'none';
 
   var limbReminderEl = document.getElementById('addAltCorrLimbReminder');
@@ -489,7 +498,7 @@ function tryComputeAutomaticCorrections() {
     var refraction = SightCalc.computeRefractionArcmin(ha);
     var combined = SightCalc.combineRefractionAndSemiDiameter(refraction, sd, limb);
     document.getElementById('altCorrMin').value = combined.altCorrMin.toFixed(1);
-    document.getElementById('altCorrSign').value = combined.altCorrSign;
+    setToggleUI('altCorrSign', 'altCorrPlusBtn', '+', 'altCorrMinusBtn', combined.altCorrSign);
 
     if (moonNeedsFetch) {
       altCorrNoteEl.textContent = 'Section 3’s almanac data is required to calculate semi-diameter (currently treated as 0).';
@@ -512,11 +521,11 @@ function tryComputeAutomaticCorrections() {
       var hp = SightCalc.deriveMoonHorizontalParallaxArcmin(_lastAlmanacExtra.paArcmin, _lastAlmanacExtra.hcDeg);
       var paAtHa = SightCalc.computeParallaxInAltitudeArcmin(hp, ha);
       document.getElementById('addAltCorrMin').value = paAtHa.toFixed(1);
-      document.getElementById('addAltCorrSign').value = '+'; // parallax always raises the observed altitude toward Ho -- see calc.js's own comment
+      setToggleUI('addAltCorrSign', 'addAltCorrPlusBtn', '+', 'addAltCorrMinusBtn', '+'); // parallax always raises the observed altitude toward Ho -- see calc.js's own comment
       addAltCorrNoteEl.style.display = 'none';
     } else {
       document.getElementById('addAltCorrMin').value = '0.0';
-      document.getElementById('addAltCorrSign').value = '+';
+      setToggleUI('addAltCorrSign', 'addAltCorrPlusBtn', '+', 'addAltCorrMinusBtn', '+');
       // Moon needs Section 3's data for BOTH parallax and semi-diameter
       // (see moonNeedsFetch above); Venus never has a semi-diameter
       // correction in this app (USNO itself returns sd=0 for planets), so
@@ -929,15 +938,15 @@ function applyFormState(state) {
   setVal('tzOffset', p.tzOffset);
 
   var c = state.corrections || {};
-  setVal('ieMin', c.ieMin); setVal('ieSign', c.ieSign || 'on');
+  setVal('ieMin', c.ieMin); setToggleUI('ieSign', 'ieOnBtn', 'on', 'ieOffBtn', c.ieSign || 'on');
   setVal('dipMin', c.dipMin);
-  setVal('altCorrMin', c.altCorrMin); setVal('altCorrSign', c.altCorrSign || '+');
-  setVal('addAltCorrMin', c.addAltCorrMin); setVal('addAltCorrSign', c.addAltCorrSign || '+');
+  setVal('altCorrMin', c.altCorrMin); setToggleUI('altCorrSign', 'altCorrPlusBtn', '+', 'altCorrMinusBtn', c.altCorrSign || '+');
+  setVal('addAltCorrMin', c.addAltCorrMin); setToggleUI('addAltCorrSign', 'addAltCorrPlusBtn', '+', 'addAltCorrMinusBtn', c.addAltCorrSign || '+');
   setVal('clockErrorSec', c.clockErrorSec || 0);
   setClockErrorDirection(c.clockErrorDirection === 'slow' ? 'slow' : 'fast'); // older saved records have neither field -- default matches a fresh page
 
   setVal('heightEyeValue', c.heightEyeValue);
-  setVal('heightEyeUnit', c.heightEyeUnit || 'ft');
+  setToggleUI('heightEyeUnit', 'heightEyeFtBtn', 'ft', 'heightEyeMBtn', c.heightEyeUnit || 'ft');
   // Older saved records have no correctionsMode at all -- default to manual
   // so a record saved before this feature existed keeps showing exactly
   // the typed dipMin/altCorrMin/addAltCorrMin values it was saved with,
@@ -1003,6 +1012,25 @@ function updateAlmanacHourLabels(baseUtcDate) {
   document.querySelectorAll('.lblNextHour').forEach(function (el) { el.innerText = nextHour; });
   document.querySelectorAll('.lblBaseDate').forEach(function (el) { el.innerText = baseDateStr; });
   document.querySelectorAll('.lblNextDate').forEach(function (el) { el.innerText = nextDateStr; });
+}
+
+/**
+ * Sets a two-option toggle's underlying value AND its visible button pair's
+ * aria-pressed state, in one call -- used for IE sign / Alt Corr sign /
+ * Add'l Corr sign / Height of Eye unit, each of which is still, underneath
+ * the visible method-picker buttons, a plain hidden <select id=selectId>
+ * (display:none) so every existing reader (collectFormState,
+ * applyFormState, tryComputeAutomaticCorrections, updateAverages) keeps
+ * working against that same element/value unchanged -- only how the value
+ * gets SET by the user is new. Call this instead of setting the hidden
+ * select's .value directly, whether from a button click or from restoring
+ * a saved value (applyFormState) or a programmatic write (Automatic mode
+ * computing a sign), so the buttons never go visually stale.
+ */
+function setToggleUI(selectId, btnAId, valueA, btnBId, value) {
+  document.getElementById(selectId).value = value;
+  document.getElementById(btnAId).setAttribute('aria-pressed', value === valueA ? 'true' : 'false');
+  document.getElementById(btnBId).setAttribute('aria-pressed', value === valueA ? 'false' : 'true');
 }
 
 var _clockErrorDirection = 'fast'; // 'fast' or 'slow' -- see getClockErrorCorrectedLocalSec
