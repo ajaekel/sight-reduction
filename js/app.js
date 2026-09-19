@@ -470,7 +470,7 @@ function tryComputeAutomaticCorrections() {
   var heightUnit = document.getElementById('heightEyeUnit').value;
   var dip = SightCalc.computeDipFromHeight(heightVal, heightUnit);
   document.getElementById('dipMin').value = dip.toFixed(1);
-  document.getElementById('computedDipDisplay').value = dip.toFixed(1) + "'";
+  document.getElementById('computedDipDisplay').textContent = dip.toFixed(1) + "'";
 
   // 2. Altitude Correction = refraction (always -) combined with
   // semi-diameter (Sun: a flat mean; Moon: from the most recent Section 3

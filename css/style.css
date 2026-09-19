@@ -361,13 +361,14 @@ label {
   font-size: 0.92rem;
 }
 
-/* A field whose value is computed, not typed -- disabled already blocks
-   editing, but browsers' own disabled styling is subtle; this makes it
-   unmistakable at a glance. */
-.readonly-display {
-  font-style: italic;
-  opacity: 0.75;
-  cursor: default;
+/* A calculated value that reads like a normal field's value (same size,
+   color and vertical rhythm as an <input>) but without the box styling
+   that would suggest it's editable. */
+.computed-value-inline {
+  font-size: 1rem;
+  color: #fff;
+  padding: 8px 0;
+  white-space: nowrap;
 }
 
 
